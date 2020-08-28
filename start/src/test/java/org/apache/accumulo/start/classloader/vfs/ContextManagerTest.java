@@ -27,6 +27,7 @@ import static org.junit.Assert.assertSame;
 import java.io.File;
 import java.util.HashSet;
 
+import org.apache.accumulo.classloader.vfs.AccumuloVFSClassLoader;
 import org.apache.accumulo.start.classloader.vfs.ContextManager.ContextConfig;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.vfs2.FileObject;

@@ -16,37 +16,109 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.accumulo.start.classloader;
+package org.apache.accumulo.classloader;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Map;
+import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.apache.commons.configuration2.PropertiesConfiguration;
-import org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder;
-import org.apache.commons.configuration2.builder.fluent.Parameters;
+import org.apache.accumulo.classloader.vfs.ReloadingVFSClassLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
-public class AccumuloClassLoader {
+/**
+ * <p>ClassLoader that implements the approach documented in 
+ * <a href="https://accumulo.apache.org/blog/2014/05/03/accumulo-classloader.html">The Accumulo ClassLoader</a>
+ * 
+ * <p>This classloader can be used as the 
+ * <a href="https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/lang/ClassLoader.html#getSystemClassLoader()">JVM System ClassLoader</a>
+ * by setting the system property <b>java.system.class.loader</b> to the name of this class.
+ * 
+ * <p>This class first creates a classloader that is configured to load resources from <b>java.class.path</b>
+ *  and <b>general.classpaths</b> (Deprecated) if specified. Next, this class will create a {@link ReloadingVFSClassLoader}
+ *  that is configured to load the resources at <b>general.vfs.classpaths</b>, if specified, or 
+ *  <b>general.dynamic.classpaths</b>, if specified. If neither of these properties are specified the {@link ReloadingVFSClassLoader}
+ *  uses the default path of $ACCUMULO_HOME/lib/ext.
+ *
+ */
+public class AccumuloClassLoader extends URLClassLoader {
 
   public static final String GENERAL_CLASSPATHS = "general.classpaths";
+  public static final String DYNAMIC_CLASSPATH_PROPERTY_NAME = "general.dynamic.classpaths";
+  public static final String VFS_CLASSLOADER_SYSTEM_CLASSPATH_PROPERTY = "general.vfs.classpaths";
+  public static final String DEFAULT_DYNAMIC_CLASSPATH_VALUE = "$ACCUMULO_HOME/lib/ext";
 
-  private static URL accumuloConfigUrl;
-  private static URLClassLoader classloader;
   private static final Logger log = LoggerFactory.getLogger(AccumuloClassLoader.class);
-
+  private static URL accumuloConfigUrl;
+  private static URL[] classpath = null;
+  
   static {
+    ClassLoader.registerAsParallelCapable();
+    
+    String cp = System.getProperty("java.class.path");
+    String[] cpElements = cp.split(File.pathSeparator);
+    ArrayList<URL> urls = new ArrayList<>();
+    for (String element : cpElements) {
+      if (null != element && !element.isEmpty()) {
+        try {
+          urls.add(new URL("file", "", new File(element).getCanonicalFile().getAbsolutePath()));
+        } catch (IOException e) {
+          log.error("Error adding classpath element {}, error: {}", element, e.getMessage());
+        }
+      }
+    }
+    
+    //Handle Deprecated GENERAL_CLASSPATHS property
+    try {
+      ArrayList<URL> genClassPathUrls = findAccumuloURLs();
+      if (null != genClassPathUrls) {
+        urls.addAll(genClassPathUrls);
+      }
+    } catch (IOException e) {
+      log.warn("IOException processing {} property: {}", GENERAL_CLASSPATHS, e.getMessage());
+    }
+    classpath = urls.toArray(new URL[urls.size()]);
+  }
+
+  public AccumuloClassLoader(ClassLoader parent) throws IOException {
+    super(classpath, parent);
+    Thread.currentThread().setContextClassLoader(this);
+    
+    try {
+      this.loadClass("org.apache.accumulo.classloader.vfs.ReloadingVFSClassLoader");
+    } catch (ClassNotFoundException |  IllegalArgumentException | SecurityException e1) {
+      log.error("Problem initializing the VFS class loader", e1);
+      System.exit(1);
+    }
+
+    ReloadingVFSClassLoader dynamicClassLoader = null;
+    String vfsDynamicClassPath = AccumuloClassLoader.getAccumuloProperty(VFS_CLASSLOADER_SYSTEM_CLASSPATH_PROPERTY, "");
+    if (null != vfsDynamicClassPath && !vfsDynamicClassPath.isBlank()) {
+      vfsDynamicClassPath = replaceEnvVars(vfsDynamicClassPath, System.getenv());
+      dynamicClassLoader = new ReloadingVFSClassLoader(this, vfsDynamicClassPath, true);
+    } else {
+      String dynamicClassPath = AccumuloClassLoader.getAccumuloProperty(DYNAMIC_CLASSPATH_PROPERTY_NAME,
+          DEFAULT_DYNAMIC_CLASSPATH_VALUE);
+      dynamicClassPath = replaceEnvVars(dynamicClassPath, System.getenv());
+      dynamicClassLoader = new ReloadingVFSClassLoader(this, dynamicClassPath, true);
+    }
+    Thread.currentThread().setContextClassLoader(dynamicClassLoader);
+    
     String configFile = System.getProperty("accumulo.properties", "accumulo.properties");
     if (configFile.startsWith("file://")) {
       try {
@@ -60,14 +132,16 @@ public class AccumuloClassLoader {
         log.warn("Failed to load Accumulo configuration from " + configFile, e);
       }
     } else {
-      accumuloConfigUrl = AccumuloClassLoader.class.getClassLoader().getResource(configFile);
+      accumuloConfigUrl = this.getResource(configFile);
       if (accumuloConfigUrl == null)
         log.warn("Failed to load Accumulo configuration '{}' from classpath", configFile);
     }
-    if (accumuloConfigUrl != null)
+    if (accumuloConfigUrl != null) {
       log.debug("Using Accumulo configuration at {}", accumuloConfigUrl.getFile());
+    }
   }
-
+  
+  
   /**
    * Returns value of property in accumulo.properties file, otherwise default value
    *
@@ -84,15 +158,13 @@ public class AccumuloClassLoader {
           defaultValue, propertyName);
       return defaultValue;
     }
-    try {
-      FileBasedConfigurationBuilder<PropertiesConfiguration> propsBuilder =
-          new FileBasedConfigurationBuilder<>(PropertiesConfiguration.class)
-              .configure(new Parameters().properties().setURL(accumuloConfigUrl));
-      PropertiesConfiguration config = propsBuilder.getConfiguration();
-      String value = config.getString(propertyName);
-      if (value != null)
-        return value;
-      return defaultValue;
+    try (InputStream is = Files.newInputStream(Paths.get(accumuloConfigUrl.toURI()), 
+        StandardOpenOption.READ)) {
+      // Not using FileBasedConfigurationBuilder here as we would need commons-configuration
+      // on the classpath
+      Properties config = new Properties();
+      config.load(is);
+      return config.getProperty(propertyName, defaultValue);
     } catch (Exception e) {
       throw new IllegalStateException(
           "Failed to look up property " + propertyName + " in " + accumuloConfigUrl.getFile(), e);
@@ -100,11 +172,11 @@ public class AccumuloClassLoader {
   }
 
   /**
-   * Replace environment variables in the classpath string with their actual value
+   * Replace environment variables in a string with their actual value
    */
-  public static String replaceEnvVars(String classpath, Map<String,String> env) {
+  public static String replaceEnvVars(String input, Map<String,String> env) {
     Pattern envPat = Pattern.compile("\\$[A-Za-z][a-zA-Z0-9_]*");
-    Matcher envMatcher = envPat.matcher(classpath);
+    Matcher envMatcher = envPat.matcher(input);
     while (envMatcher.find(0)) {
       // name comes after the '$'
       String varName = envMatcher.group().substring(1);
@@ -112,11 +184,11 @@ public class AccumuloClassLoader {
       if (varValue == null) {
         varValue = "";
       }
-      classpath = (classpath.substring(0, envMatcher.start()) + varValue
-          + classpath.substring(envMatcher.end()));
-      envMatcher.reset(classpath);
+      input = (input.substring(0, envMatcher.start()) + varValue
+          + input.substring(envMatcher.end()));
+      envMatcher.reset(input);
     }
-    return classpath;
+    return input;
   }
 
   /**
@@ -180,34 +252,5 @@ public class AccumuloClassLoader {
       }
     }
     return urls;
-  }
-
-  public static synchronized ClassLoader getClassLoader() throws IOException {
-    if (classloader == null) {
-      ArrayList<URL> urls = findAccumuloURLs();
-
-      ClassLoader parentClassLoader = AccumuloClassLoader.class.getClassLoader();
-
-      log.debug("Create 2nd tier ClassLoader using URLs: {}", urls);
-      classloader = new URLClassLoader(urls.toArray(new URL[urls.size()]), parentClassLoader) {
-        @Override
-        protected synchronized Class<?> loadClass(String name, boolean resolve)
-            throws ClassNotFoundException {
-
-          if (name.startsWith("org.apache.accumulo.start.classloader.vfs")) {
-            Class<?> c = findLoadedClass(name);
-            if (c == null) {
-              try {
-                // try finding this class here instead of parent
-                findClass(name);
-              } catch (ClassNotFoundException e) {}
-            }
-          }
-          return super.loadClass(name, resolve);
-        }
-      };
-    }
-
-    return classloader;
   }
 }

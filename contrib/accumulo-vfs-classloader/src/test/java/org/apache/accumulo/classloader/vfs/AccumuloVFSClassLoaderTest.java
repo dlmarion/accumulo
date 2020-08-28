@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.accumulo.start.classloader.vfs;
+package org.apache.accumulo.classloader.vfs;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -25,7 +25,7 @@ import java.io.File;
 import java.io.FileWriter;
 import java.net.URLClassLoader;
 
-import org.apache.accumulo.start.classloader.AccumuloClassLoader;
+import org.apache.accumulo.classloader.AccumuloClassLoader;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.vfs2.FileSystemManager;
 import org.apache.commons.vfs2.impl.VFSClassLoader;
@@ -44,7 +44,7 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 @SuppressFBWarnings(value = "PATH_TRAVERSAL_IN", justification = "paths not set by user input")
 @RunWith(PowerMockRunner.class)
-@PrepareForTest(AccumuloVFSClassLoader.class)
+@PrepareForTest(AccumuloVFSManager.class)
 @SuppressStaticInitializationFor({"org.apache.accumulo.start.classloader.AccumuloVFSClassLoader",
     "org.apache.log4j.LogManager"})
 @PowerMockIgnore({"org.apache.log4j.*", "org.apache.hadoop.log.metrics",
@@ -62,7 +62,7 @@ public class AccumuloVFSClassLoaderTest {
   @Test
   public void testDefaultConfig() throws Exception {
 
-    Whitebox.setInternalState(AccumuloVFSClassLoader.class, "loader",
+    Whitebox.setInternalState(AccumuloVFSManager.class, "loader",
         (AccumuloReloadingVFSClassLoader) null);
 
     File conf = folder1.newFile("accumulo.properties");
@@ -72,8 +72,8 @@ public class AccumuloVFSClassLoaderTest {
     out.close();
 
     Whitebox.setInternalState(AccumuloClassLoader.class, "accumuloConfigUrl", conf.toURI().toURL());
-    Whitebox.setInternalState(AccumuloVFSClassLoader.class, "lock", new Object());
-    ClassLoader acl = AccumuloVFSClassLoader.getClassLoader();
+    Whitebox.setInternalState(AccumuloVFSManager.class, "lock", new Object());
+    ClassLoader acl = AccumuloVFSManager.getClassLoader();
     assertTrue((acl instanceof URLClassLoader));
     // no second level means the parent is the system loader (in this case, PowerMock's loader)
     assertTrue((acl.getParent() instanceof MockClassLoader));
@@ -85,7 +85,7 @@ public class AccumuloVFSClassLoaderTest {
   @Test
   public void testDynamicConfig() throws Exception {
 
-    Whitebox.setInternalState(AccumuloVFSClassLoader.class, "loader",
+    Whitebox.setInternalState(AccumuloVFSManager.class, "loader",
         (AccumuloReloadingVFSClassLoader) null);
 
     File conf = folder1.newFile("accumulo.properties");
@@ -96,8 +96,8 @@ public class AccumuloVFSClassLoaderTest {
     out.close();
 
     Whitebox.setInternalState(AccumuloClassLoader.class, "accumuloConfigUrl", conf.toURI().toURL());
-    Whitebox.setInternalState(AccumuloVFSClassLoader.class, "lock", new Object());
-    ClassLoader acl = AccumuloVFSClassLoader.getClassLoader();
+    Whitebox.setInternalState(AccumuloVFSManager.class, "lock", new Object());
+    ClassLoader acl = AccumuloVFSManager.getClassLoader();
     assertTrue((acl instanceof VFSClassLoader));
     assertTrue((acl.getParent() instanceof URLClassLoader));
   }
@@ -108,7 +108,7 @@ public class AccumuloVFSClassLoaderTest {
   @Test
   public void testDefaultContextConfigured() throws Exception {
 
-    Whitebox.setInternalState(AccumuloVFSClassLoader.class, "loader",
+    Whitebox.setInternalState(AccumuloVFSManager.class, "loader",
         (AccumuloReloadingVFSClassLoader) null);
 
     // Copy jar file to TEST_DIR
@@ -124,8 +124,8 @@ public class AccumuloVFSClassLoaderTest {
     out.close();
 
     Whitebox.setInternalState(AccumuloClassLoader.class, "accumuloConfigUrl", conf.toURI().toURL());
-    Whitebox.setInternalState(AccumuloVFSClassLoader.class, "lock", new Object());
-    ClassLoader acl = AccumuloVFSClassLoader.getClassLoader();
+    Whitebox.setInternalState(AccumuloVFSManager.class, "lock", new Object());
+    ClassLoader acl = AccumuloVFSManager.getClassLoader();
     assertTrue((acl instanceof VFSClassLoader));
     assertTrue((acl.getParent() instanceof VFSClassLoader));
     VFSClassLoader arvcl = (VFSClassLoader) acl.getParent();
@@ -135,14 +135,14 @@ public class AccumuloVFSClassLoaderTest {
     Class<?> clazz1 = arvcl.loadClass("test.HelloWorld");
     Object o1 = clazz1.getDeclaredConstructor().newInstance();
     assertEquals("Hello World!", o1.toString());
-    Whitebox.setInternalState(AccumuloVFSClassLoader.class, "loader",
+    Whitebox.setInternalState(AccumuloVFSManager.class, "loader",
         (AccumuloReloadingVFSClassLoader) null);
   }
 
   @Test
   public void testDefaultCacheDirectory() throws Exception {
 
-    Whitebox.setInternalState(AccumuloVFSClassLoader.class, "loader",
+    Whitebox.setInternalState(AccumuloVFSManager.class, "loader",
         (AccumuloReloadingVFSClassLoader) null);
 
     File conf = folder1.newFile("accumulo.properties");
@@ -152,9 +152,9 @@ public class AccumuloVFSClassLoaderTest {
     out.close();
 
     Whitebox.setInternalState(AccumuloClassLoader.class, "accumuloConfigUrl", conf.toURI().toURL());
-    Whitebox.setInternalState(AccumuloVFSClassLoader.class, "lock", new Object());
-    AccumuloVFSClassLoader.getClassLoader();
-    FileSystemManager manager = AccumuloVFSClassLoader.generateVfs();
+    Whitebox.setInternalState(AccumuloVFSManager.class, "lock", new Object());
+    AccumuloVFSManager.getClassLoader();
+    FileSystemManager manager = AccumuloVFSManager.generateVfs();
     UniqueFileReplicator replicator = Whitebox.getInternalState(manager, "fileReplicator");
     File tempDir = Whitebox.getInternalState(replicator, "tempDir");
     String tempDirParent = tempDir.getParent();
@@ -170,27 +170,27 @@ public class AccumuloVFSClassLoaderTest {
     assertTrue(tempDirName.startsWith("accumulo-vfs-cache-"));
     assertTrue(tempDirName.endsWith(System.getProperty("user.name", "nouser")));
 
-    Whitebox.setInternalState(AccumuloVFSClassLoader.class, "loader",
+    Whitebox.setInternalState(AccumuloVFSManager.class, "loader",
         (AccumuloReloadingVFSClassLoader) null);
   }
 
   @Test
   public void testCacheDirectoryConfigured() throws Exception {
 
-    Whitebox.setInternalState(AccumuloVFSClassLoader.class, "loader",
+    Whitebox.setInternalState(AccumuloVFSManager.class, "loader",
         (AccumuloReloadingVFSClassLoader) null);
     String cacheDir = "/some/random/cache/dir";
 
     File conf = folder1.newFile("accumulo.properties");
     FileWriter out = new FileWriter(conf);
     out.append("general.classpaths=\n");
-    out.append(AccumuloVFSClassLoader.VFS_CACHE_DIR + "=" + cacheDir + "\n");
+    out.append(AccumuloVFSManager.VFS_CACHE_DIR + "=" + cacheDir + "\n");
     out.close();
 
     Whitebox.setInternalState(AccumuloClassLoader.class, "accumuloConfigUrl", conf.toURI().toURL());
-    Whitebox.setInternalState(AccumuloVFSClassLoader.class, "lock", new Object());
-    AccumuloVFSClassLoader.getClassLoader();
-    FileSystemManager manager = AccumuloVFSClassLoader.generateVfs();
+    Whitebox.setInternalState(AccumuloVFSManager.class, "lock", new Object());
+    AccumuloVFSManager.getClassLoader();
+    FileSystemManager manager = AccumuloVFSManager.generateVfs();
     UniqueFileReplicator replicator = Whitebox.getInternalState(manager, "fileReplicator");
     File tempDir = Whitebox.getInternalState(replicator, "tempDir");
     String tempDirParent = tempDir.getParent();
@@ -199,7 +199,7 @@ public class AccumuloVFSClassLoaderTest {
     assertTrue(tempDirName.startsWith("accumulo-vfs-cache-"));
     assertTrue(tempDirName.endsWith(System.getProperty("user.name", "nouser")));
 
-    Whitebox.setInternalState(AccumuloVFSClassLoader.class, "loader",
+    Whitebox.setInternalState(AccumuloVFSManager.class, "loader",
         (AccumuloReloadingVFSClassLoader) null);
   }
 }

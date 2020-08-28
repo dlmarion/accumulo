@@ -24,7 +24,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-import org.apache.accumulo.start.classloader.vfs.AccumuloVFSClassLoader;
+import org.apache.accumulo.core.spi.common.ContextClassLoaderFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -202,9 +202,13 @@ public class ConfigurationTypeHelper {
 
     Class<? extends T> clazz;
     if (context != null && !context.isEmpty()) {
-      clazz = AccumuloVFSClassLoader.getContextManager().loadClass(context, clazzName, base);
+      ClassLoader cl = ContextClassLoaderFactory.getClassLoader(context);
+      if (null == cl) {
+        throw new RuntimeException("Context " + context + " is not configured.");
+      }
+      clazz = cl.loadClass(clazzName).asSubclass(base);
     } else {
-      clazz = AccumuloVFSClassLoader.loadClass(clazzName, base);
+      clazz = Thread.currentThread().getContextClassLoader().loadClass(clazzName).asSubclass(base);
     }
 
     instance = clazz.getDeclaredConstructor().newInstance();

@@ -16,9 +16,9 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.accumulo.start.classloader.vfs;
+package org.apache.accumulo.classloader.vfs;
 
-import static org.apache.accumulo.start.classloader.vfs.AccumuloVFSClassLoader.getClassPath;
+import static org.apache.accumulo.classloader.vfs.AccumuloVFSManager.getClassPath;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 

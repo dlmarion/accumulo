@@ -43,7 +43,7 @@ public class Version implements KeywordExecutable {
 
   @Override
   public void execute(final String[] args) throws Exception {
-    Class<?> runTMP = Main.getClassLoader().loadClass("org.apache.accumulo.core.Constants");
+    Class<?> runTMP = Main.class.getClassLoader().loadClass("org.apache.accumulo.core.Constants");
     System.out.println(runTMP.getField("VERSION").get(null));
   }
 

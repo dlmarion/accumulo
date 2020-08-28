@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.accumulo.start.classloader.vfs;
+package org.apache.accumulo.classloader.vfs;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -26,6 +26,8 @@ import static org.junit.Assert.assertTrue;
 
 import java.io.File;
 
+import org.apache.accumulo.classloader.vfs.AccumuloReloadingVFSClassLoader;
+import org.apache.accumulo.start.classloader.vfs.ContextManagerTest;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.vfs2.FileObject;
 import org.apache.commons.vfs2.FileSystemException;

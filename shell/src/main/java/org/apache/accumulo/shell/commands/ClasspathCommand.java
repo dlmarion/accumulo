@@ -21,9 +21,9 @@ package org.apache.accumulo.shell.commands;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 
+import org.apache.accumulo.classloader.vfs.AccumuloVFSClassLoader;
 import org.apache.accumulo.shell.Shell;
 import org.apache.accumulo.shell.Shell.Command;
-import org.apache.accumulo.start.classloader.vfs.AccumuloVFSClassLoader;
 import org.apache.commons.cli.CommandLine;
 
 import jline.console.ConsoleReader;

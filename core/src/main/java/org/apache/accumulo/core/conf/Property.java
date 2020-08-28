@@ -25,6 +25,8 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Map.Entry;
 
+import org.apache.accumulo.classloader.AccumuloClassLoader;
+import org.apache.accumulo.classloader.vfs.AccumuloVFSClassLoader;
 import org.apache.accumulo.core.Constants;
 import org.apache.accumulo.core.client.security.tokens.PasswordToken;
 import org.apache.accumulo.core.constraints.NoDeleteConstraint;
@@ -32,6 +34,7 @@ import org.apache.accumulo.core.file.rfile.RFile;
 import org.apache.accumulo.core.iterators.IteratorUtil.IteratorScope;
 import org.apache.accumulo.core.iteratorsImpl.system.DeletingIterator;
 import org.apache.accumulo.core.metadata.MetadataTable;
+import org.apache.accumulo.core.spi.common.ContextClassLoaderFactory;
 import org.apache.accumulo.core.spi.compaction.DefaultCompactionPlanner;
 import org.apache.accumulo.core.spi.compaction.SimpleCompactionDispatcher;
 import org.apache.accumulo.core.spi.scan.ScanDispatcher;
@@ -39,8 +42,6 @@ import org.apache.accumulo.core.spi.scan.ScanPrioritizer;
 import org.apache.accumulo.core.spi.scan.SimpleScanDispatcher;
 import org.apache.accumulo.core.util.format.DefaultFormatter;
 import org.apache.accumulo.core.util.interpret.DefaultScanInterpreter;
-import org.apache.accumulo.start.classloader.AccumuloClassLoader;
-import org.apache.accumulo.start.classloader.vfs.AccumuloVFSClassLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -191,6 +192,7 @@ public enum Property {
           + "Additionally, this property no longer does property interpolation of environment "
           + "variables, such as '$ACCUMULO_HOME'. Use commons-configuration syntax,"
           + "'${env:ACCUMULO_HOME}' instead."),
+  GENERAL_CLASSPATH_CONTEXT(ContextClassLoaderFactory.CONTEXT_PREFIX, "", PropertyType.PREFIX, "TODO"),
   GENERAL_RPC_TIMEOUT("general.rpc.timeout", "120s", PropertyType.TIMEDURATION,
       "Time to wait on I/O for simple, short RPC calls"),
   @Experimental
@@ -903,10 +905,10 @@ public enum Property {
   // this property shouldn't be used directly; it exists solely to document the default value
   // defined by its use in AccumuloVFSClassLoader when generating the property documentation
   VFS_CLASSLOADER_SYSTEM_CLASSPATH_PROPERTY(
-      AccumuloVFSClassLoader.VFS_CLASSLOADER_SYSTEM_CLASSPATH_PROPERTY, "", PropertyType.STRING,
+      AccumuloClassLoader.VFS_CLASSLOADER_SYSTEM_CLASSPATH_PROPERTY, "", PropertyType.STRING,
       "Configuration for a system level vfs classloader. Accumulo jar can be"
           + " configured here and loaded out of HDFS."),
-  VFS_CONTEXT_CLASSPATH_PROPERTY(AccumuloVFSClassLoader.VFS_CONTEXT_CLASSPATH_PROPERTY, null,
+  VFS_CONTEXT_CLASSPATH_PROPERTY(ContextClassLoaderFactory.VFS_CONTEXT_CLASSPATH_PROPERTY, null,
       PropertyType.PREFIX,
       "Properties in this category are define a classpath. These properties"
           + " start  with the category prefix, followed by a context name. The value is"
@@ -920,7 +922,7 @@ public enum Property {
 
   // this property shouldn't be used directly; it exists solely to document the default value
   // defined by its use in AccumuloVFSClassLoader when generating the property documentation
-  VFS_CLASSLOADER_CACHE_DIR(AccumuloVFSClassLoader.VFS_CACHE_DIR, "${java.io.tmpdir}",
+  VFS_CLASSLOADER_CACHE_DIR(AccumuloVFSManager.VFS_CACHE_DIR, "${java.io.tmpdir}",
       PropertyType.ABSOLUTEPATH,
       "The base directory to use for the vfs cache. The actual cached files will be located"
           + " in a subdirectory, `accumulo-vfs-cache-<jvmProcessName>-${user.name}`, where"
