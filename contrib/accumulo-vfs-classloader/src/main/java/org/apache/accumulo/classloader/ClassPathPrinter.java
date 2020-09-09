@@ -1,3 +1,21 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
 package org.apache.accumulo.classloader;
 
 import java.net.URL;
@@ -5,9 +23,12 @@ import java.net.URLClassLoader;
 import java.util.ArrayList;
 import java.util.Collections;
 
+import org.apache.accumulo.classloader.vfs.ReloadingVFSClassLoader;
+import org.apache.accumulo.classloader.vfs.VFSClassLoaderWrapper;
 import org.apache.commons.vfs2.FileObject;
 import org.apache.commons.vfs2.impl.VFSClassLoader;
 
+@Deprecated
 public class ClassPathPrinter {
 
   public interface Printer {
@@ -61,31 +82,20 @@ public class ClassPathPrinter {
           continue;
         }
 
-        String classLoaderDescription;
-        switch (level) {
-          case 1:
-            classLoaderDescription =
-                level + ": Bootstrap Classloader";
-            break;
-          case 2:
-            classLoaderDescription =
-                level + ": Platform Classloader";
-            break;
-          case 3:
-            classLoaderDescription =
-                level + ": System Classloader (loads everything defined by java.class.path and general.classpaths)";
-            break;
-          case 4:
-            classLoaderDescription = level + ": Accumulo Dynamic Classloader "
-                + "(loads everything defined by general.dynamic.classpaths)";
-            break;
-          default:
-            classLoaderDescription = level + ": Mystery Classloader ("
-                + "someone probably added a classloader and didn't update the switch statement in "
-                + ClassPathPrinter.class.getName() + ")";
-            break;
+        StringBuilder buffer = new StringBuilder();
+        buffer.append(level);
+        buffer.append(": ");
+        buffer.append(classLoader.getName());
+        buffer.append(" Classloader ");
+        if (classLoader.getClass().getName().startsWith("jdk.internal")) {
+          // do nothing, not able to get classpath information
+        } else if (classLoader instanceof ClassLoaderDescription) {
+          buffer.append(((ClassLoaderDescription) classLoader).getDescription());
+        } else {
+          buffer.append(" (DESCRIPTION MISSING) ");
         }
 
+        String classLoaderDescription = buffer.toString();
         boolean sawFirst = false;
         if (classLoader.getClass().getName().startsWith("jdk.internal")) {
           if (debug) {
@@ -94,15 +104,26 @@ public class ClassPathPrinter {
           }
         } else if (classLoader instanceof URLClassLoader) {
           if (debug) {
-            out.print("Level " + classLoaderDescription + " URL classpath items are:\n");
+            out.print("Level " + classLoaderDescription + " URL classpath, items are:\n");
           }
           for (URL u : ((URLClassLoader) classLoader).getURLs()) {
             printJar(out, u.getFile(), debug, sawFirst);
             sawFirst = true;
           }
+        } else if (classLoader instanceof ReloadingVFSClassLoader) {
+          if (debug) {
+            out.print("Level " + classLoaderDescription + " VFS classpaths, items are:\n");
+          }
+          ReloadingVFSClassLoader vcl = (ReloadingVFSClassLoader) classLoader;
+          VFSClassLoaderWrapper wrapper = vcl.getWrapper();
+          for (FileObject f : wrapper.getFileObjects()) {
+            printJar(out, f.getURL().getFile(), debug, sawFirst);
+            sawFirst = true;
+          }
+          vcl.close();
         } else if (classLoader instanceof VFSClassLoader) {
           if (debug) {
-            out.print("Level " + classLoaderDescription + " VFS classpaths items are:\n");
+            out.print("Level " + classLoaderDescription + " VFS classpaths, items are:\n");
           }
           VFSClassLoader vcl = (VFSClassLoader) classLoader;
           for (FileObject f : vcl.getFileObjects()) {

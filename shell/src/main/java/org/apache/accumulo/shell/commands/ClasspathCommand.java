@@ -21,7 +21,7 @@ package org.apache.accumulo.shell.commands;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 
-import org.apache.accumulo.classloader.vfs.AccumuloVFSClassLoader;
+import org.apache.accumulo.classloader.ClassPathPrinter;
 import org.apache.accumulo.shell.Shell;
 import org.apache.accumulo.shell.Shell.Command;
 import org.apache.commons.cli.CommandLine;
@@ -32,7 +32,7 @@ public class ClasspathCommand extends Command {
   @Override
   public int execute(final String fullCommand, final CommandLine cl, final Shell shellState) {
     final ConsoleReader reader = shellState.getReader();
-    AccumuloVFSClassLoader.printClassPath(s -> {
+    ClassPathPrinter.printClassPath(Thread.currentThread().getContextClassLoader(), s -> {
       try {
         reader.print(s);
       } catch (IOException ex) {

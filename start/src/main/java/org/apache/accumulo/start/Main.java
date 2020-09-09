@@ -45,8 +45,7 @@ public class Main {
       ClassLoader loader = Thread.currentThread().getContextClassLoader();
       Class<?> confClass = null;
       try {
-        confClass =
-            Main.class.getClassLoader().loadClass("org.apache.hadoop.conf.Configuration");
+        confClass = Main.class.getClassLoader().loadClass("org.apache.hadoop.conf.Configuration");
       } catch (ClassNotFoundException e) {
         log.error("Unable to find Hadoop Configuration class on classpath, check configuration.",
             e);

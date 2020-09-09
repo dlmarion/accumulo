@@ -26,7 +26,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 
 import org.apache.accumulo.classloader.AccumuloClassLoader;
-import org.apache.accumulo.classloader.vfs.AccumuloVFSClassLoader;
+import org.apache.accumulo.classloader.vfs.AccumuloVFSManager;
 import org.apache.accumulo.core.Constants;
 import org.apache.accumulo.core.client.security.tokens.PasswordToken;
 import org.apache.accumulo.core.constraints.NoDeleteConstraint;
@@ -34,12 +34,12 @@ import org.apache.accumulo.core.file.rfile.RFile;
 import org.apache.accumulo.core.iterators.IteratorUtil.IteratorScope;
 import org.apache.accumulo.core.iteratorsImpl.system.DeletingIterator;
 import org.apache.accumulo.core.metadata.MetadataTable;
-import org.apache.accumulo.core.spi.common.ContextClassLoaderFactory;
 import org.apache.accumulo.core.spi.compaction.DefaultCompactionPlanner;
 import org.apache.accumulo.core.spi.compaction.SimpleCompactionDispatcher;
 import org.apache.accumulo.core.spi.scan.ScanDispatcher;
 import org.apache.accumulo.core.spi.scan.ScanPrioritizer;
 import org.apache.accumulo.core.spi.scan.SimpleScanDispatcher;
+import org.apache.accumulo.core.table.ContextClassLoaderFactory;
 import org.apache.accumulo.core.util.format.DefaultFormatter;
 import org.apache.accumulo.core.util.interpret.DefaultScanInterpreter;
 import org.slf4j.Logger;
@@ -182,8 +182,8 @@ public enum Property {
       "Properties in this category affect the behavior of accumulo overall, but"
           + " do not have to be consistent throughout a cloud."),
   @Deprecated(since = "2.0.0")
-  GENERAL_DYNAMIC_CLASSPATHS(AccumuloVFSClassLoader.DYNAMIC_CLASSPATH_PROPERTY_NAME,
-      AccumuloVFSClassLoader.DEFAULT_DYNAMIC_CLASSPATH_VALUE, PropertyType.STRING,
+  GENERAL_DYNAMIC_CLASSPATHS(AccumuloClassLoader.DYNAMIC_CLASSPATH_PROPERTY_NAME,
+      AccumuloClassLoader.DEFAULT_DYNAMIC_CLASSPATH_VALUE, PropertyType.STRING,
       "This property is deprecated since 2.0.0. A list of all of the places where changes "
           + "in jars or classes will force a reload of the classloader. Built-in dynamic class "
           + "loading will be removed in a future version. If this is needed, consider overriding "
@@ -192,7 +192,8 @@ public enum Property {
           + "Additionally, this property no longer does property interpolation of environment "
           + "variables, such as '$ACCUMULO_HOME'. Use commons-configuration syntax,"
           + "'${env:ACCUMULO_HOME}' instead."),
-  GENERAL_CLASSPATH_CONTEXT(ContextClassLoaderFactory.CONTEXT_PREFIX, "", PropertyType.PREFIX, "TODO"),
+  GENERAL_CLASSPATH_CONTEXT(ContextClassLoaderFactory.CONTEXT_PREFIX, null, PropertyType.PREFIX,
+      "Prefix to be used for defining classloader factories for contexts and their properties."),
   GENERAL_RPC_TIMEOUT("general.rpc.timeout", "120s", PropertyType.TIMEDURATION,
       "Time to wait on I/O for simple, short RPC calls"),
   @Experimental
@@ -904,10 +905,12 @@ public enum Property {
 
   // this property shouldn't be used directly; it exists solely to document the default value
   // defined by its use in AccumuloVFSClassLoader when generating the property documentation
+  @Deprecated
   VFS_CLASSLOADER_SYSTEM_CLASSPATH_PROPERTY(
       AccumuloClassLoader.VFS_CLASSLOADER_SYSTEM_CLASSPATH_PROPERTY, "", PropertyType.STRING,
       "Configuration for a system level vfs classloader. Accumulo jar can be"
           + " configured here and loaded out of HDFS."),
+  @Deprecated
   VFS_CONTEXT_CLASSPATH_PROPERTY(ContextClassLoaderFactory.VFS_CONTEXT_CLASSPATH_PROPERTY, null,
       PropertyType.PREFIX,
       "Properties in this category are define a classpath. These properties"
@@ -922,6 +925,7 @@ public enum Property {
 
   // this property shouldn't be used directly; it exists solely to document the default value
   // defined by its use in AccumuloVFSClassLoader when generating the property documentation
+  @Deprecated
   VFS_CLASSLOADER_CACHE_DIR(AccumuloVFSManager.VFS_CACHE_DIR, "${java.io.tmpdir}",
       PropertyType.ABSOLUTEPATH,
       "The base directory to use for the vfs cache. The actual cached files will be located"

@@ -28,23 +28,36 @@
   </parent>
   <artifactId>accumulo-vfs-classloader</artifactId>
   <name>Apache Accumulo VFS ClassLoader</name>
+  <properties>
+    <eclipseFormatterStyle>${project.parent.basedir}/Eclipse-Accumulo-Codestyle.xml</eclipseFormatterStyle>
+  </properties>
   <dependencies>
+    <dependency>
+      <groupId>org.apache.accumulo</groupId>
+      <artifactId>accumulo-start</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-vfs2</artifactId>
+    </dependency>
     <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
-      <groupId>org.apache.commons</groupId>
-      <artifactId>commons-vfs2</artifactId>
-    </dependency>  
-    <dependency>
-      <groupId>org.apache.accumulo</groupId>
-      <artifactId>accumulo-start</artifactId>
-    </dependency>    
-    <dependency>
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-client-minicluster</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-1.2-api</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-slf4j-impl</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -58,4 +71,34 @@
       <scope>test</scope>
     </dependency>
   </dependencies>
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>Build Test jars</id>
+            <goals>
+              <goal>exec</goal>
+            </goals>
+            <phase>process-test-classes</phase>
+            <configuration>
+              <executable>${project.basedir}/src/test/shell/makeTestJars.sh</executable>
+            </configuration>
+          </execution>
+          <execution>
+            <id>Build HelloWorld jars</id>
+            <goals>
+              <goal>exec</goal>
+            </goals>
+            <phase>process-test-classes</phase>
+            <configuration>
+              <executable>${project.basedir}/src/test/shell/makeHelloWorldJars.sh</executable>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
 </project>

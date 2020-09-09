@@ -44,7 +44,6 @@ import javax.crypto.Cipher;
 import javax.crypto.NoSuchPaddingException;
 import javax.crypto.spec.SecretKeySpec;
 
-import org.apache.accumulo.classloader.vfs.AccumuloVFSClassLoader;
 import org.apache.accumulo.core.client.Scanner;
 import org.apache.accumulo.core.client.rfile.RFile;
 import org.apache.accumulo.core.client.rfile.RFileWriter;
@@ -270,8 +269,8 @@ public class CryptoTest {
     aconf.set(Property.INSTANCE_CRYPTO_SERVICE,
         "org.apache.accumulo.core.cryptoImpl.AESCryptoService");
     String configuredClass = aconf.get(Property.INSTANCE_CRYPTO_SERVICE.getKey());
-    Class<? extends CryptoService> clazz =
-        AccumuloVFSClassLoader.loadClass(configuredClass, CryptoService.class);
+    Class<? extends CryptoService> clazz = Thread.currentThread().getContextClassLoader()
+        .loadClass(configuredClass).asSubclass(CryptoService.class);
     CryptoService cs = clazz.getDeclaredConstructor().newInstance();
 
     assertEquals(AESCryptoService.class, cs.getClass());

@@ -23,7 +23,6 @@ import java.io.Writer;
 import java.lang.reflect.Field;
 import java.util.EnumSet;
 
-import org.apache.accumulo.classloader.vfs.AccumuloVFSClassLoader;
 import org.apache.accumulo.core.client.AccumuloClient;
 import org.apache.accumulo.core.client.IteratorSetting;
 import org.apache.accumulo.core.client.admin.TableOperations;
@@ -76,7 +75,7 @@ public class SetIterCommandTest {
 
     // Loading the class
     EasyMock.expect(shellState.getClassLoader(cli, shellState))
-        .andReturn(AccumuloVFSClassLoader.getClassLoader());
+        .andReturn(Thread.currentThread().getContextClassLoader());
 
     // Set the output object
     Field field = reader.getClass().getSuperclass().getDeclaredField("out");

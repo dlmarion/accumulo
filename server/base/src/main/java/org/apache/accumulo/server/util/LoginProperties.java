@@ -18,7 +18,6 @@
  */
 package org.apache.accumulo.server.util;
 
-import org.apache.accumulo.classloader.vfs.AccumuloVFSClassLoader;
 import org.apache.accumulo.core.client.security.tokens.AuthenticationToken;
 import org.apache.accumulo.core.client.security.tokens.AuthenticationToken.TokenProperty;
 import org.apache.accumulo.core.conf.AccumuloConfiguration;
@@ -47,7 +46,7 @@ public class LoginProperties implements KeywordExecutable {
   public void execute(String[] args) throws Exception {
     try (var context = new ServerContext(SiteConfiguration.auto())) {
       AccumuloConfiguration config = context.getConfiguration();
-      Authenticator authenticator = AccumuloVFSClassLoader.getClassLoader()
+      Authenticator authenticator = Thread.currentThread().getContextClassLoader()
           .loadClass(config.get(Property.INSTANCE_SECURITY_AUTHENTICATOR))
           .asSubclass(Authenticator.class).getDeclaredConstructor().newInstance();
 

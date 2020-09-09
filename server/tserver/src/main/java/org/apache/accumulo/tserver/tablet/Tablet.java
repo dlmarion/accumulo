@@ -45,7 +45,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 
-import org.apache.accumulo.classloader.vfs.AccumuloVFSClassLoader;
 import org.apache.accumulo.core.Constants;
 import org.apache.accumulo.core.client.Durability;
 import org.apache.accumulo.core.client.admin.CompactionConfig;
@@ -81,6 +80,7 @@ import org.apache.accumulo.core.replication.ReplicationConfigurationUtil;
 import org.apache.accumulo.core.security.Authorizations;
 import org.apache.accumulo.core.security.ColumnVisibility;
 import org.apache.accumulo.core.spi.scan.ScanDirectives;
+import org.apache.accumulo.core.table.ContextClassLoaderFactory;
 import org.apache.accumulo.core.tabletserver.log.LogEntry;
 import org.apache.accumulo.core.tabletserver.thrift.TabletStats;
 import org.apache.accumulo.core.util.LocalityGroupUtil;
@@ -413,7 +413,12 @@ public class Tablet {
     if (contextName != null && !contextName.equals("")) {
       // initialize context classloader, instead of possibly waiting for it to initialize for a scan
       // TODO this could hang, causing other tablets to fail to load - ACCUMULO-1292
-      AccumuloVFSClassLoader.getContextManager().getClassLoader(contextName);
+      try {
+        ContextClassLoaderFactory.createContexts(tabletServer.getConfiguration());
+      } catch (Exception e1) {
+        log.error("Error configuring ContextClassLoaderFactory", e1);
+        throw new RuntimeException("Error configuring ContextClassLoaderFactory", e1);
+      }
     }
 
     // do this last after tablet is completely setup because it

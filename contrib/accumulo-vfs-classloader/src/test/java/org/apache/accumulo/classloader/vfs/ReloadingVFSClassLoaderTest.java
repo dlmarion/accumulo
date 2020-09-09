@@ -26,13 +26,10 @@ import static org.junit.Assert.assertTrue;
 
 import java.io.File;
 
-import org.apache.accumulo.classloader.vfs.AccumuloReloadingVFSClassLoader;
-import org.apache.accumulo.start.classloader.vfs.ContextManagerTest;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.vfs2.FileObject;
 import org.apache.commons.vfs2.FileSystemException;
 import org.apache.commons.vfs2.FileSystemManager;
-import org.apache.commons.vfs2.impl.VFSClassLoader;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -41,7 +38,7 @@ import org.junit.rules.TemporaryFolder;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 @SuppressFBWarnings(value = "PATH_TRAVERSAL_IN", justification = "paths not set by user input")
-public class AccumuloReloadingVFSClassLoaderTest {
+public class ReloadingVFSClassLoaderTest {
 
   @Rule
   public TemporaryFolder folder1 =
@@ -51,7 +48,8 @@ public class AccumuloReloadingVFSClassLoaderTest {
 
   @Before
   public void setup() throws Exception {
-    vfs = ContextManagerTest.getVFS();
+    System.setProperty(ReloadingVFSClassLoader.VFS_CLASSPATH_MONITOR_INTERVAL, "1");
+    vfs = AccumuloVFSManager.generateVfs();
 
     folderPath = folder1.getRoot().toURI() + ".*";
 
@@ -77,12 +75,10 @@ public class AccumuloReloadingVFSClassLoaderTest {
     FileObject testDir = vfs.resolveFile(folder1.getRoot().toURI().toString());
     FileObject[] dirContents = testDir.getChildren();
 
-    AccumuloReloadingVFSClassLoader arvcl = new AccumuloReloadingVFSClassLoader(folderPath, vfs,
-        ClassLoader::getSystemClassLoader, true);
+    ReloadingVFSClassLoader arvcl = new ReloadingVFSClassLoader("testConstructor",
+        "testConstructor", ClassLoader.getSystemClassLoader(), folderPath, true, vfs);
 
-    VFSClassLoader cl = (VFSClassLoader) arvcl.getClassLoader();
-
-    FileObject[] files = cl.getFileObjects();
+    FileObject[] files = arvcl.getWrapper().getFileObjects();
     assertArrayEquals(createFileSystems(dirContents), files);
 
     arvcl.close();
@@ -93,37 +89,35 @@ public class AccumuloReloadingVFSClassLoaderTest {
     FileObject testDir = vfs.resolveFile(folder1.getRoot().toURI().toString());
     FileObject[] dirContents = testDir.getChildren();
 
-    AccumuloReloadingVFSClassLoader arvcl = new AccumuloReloadingVFSClassLoader(folderPath, vfs,
-        ClassLoader::getSystemClassLoader, 1000, true);
+    ReloadingVFSClassLoader arvcl = new ReloadingVFSClassLoader("testReloading", "testReloading",
+        ClassLoader.getSystemClassLoader(), folderPath, true, vfs);
 
-    FileObject[] files = ((VFSClassLoader) arvcl.getClassLoader()).getFileObjects();
+    FileObject[] files = arvcl.getWrapper().getFileObjects();
     assertArrayEquals(createFileSystems(dirContents), files);
 
     // set retry settings sufficiently low that not everything is reloaded in the first round
     arvcl.setMaxRetries(1);
 
-    Class<?> clazz1 = arvcl.getClassLoader().loadClass("test.HelloWorld");
+    Class<?> clazz1 = arvcl.loadClass("test.HelloWorld");
     Object o1 = clazz1.getDeclaredConstructor().newInstance();
     assertEquals("Hello World!", o1.toString());
 
     // Check that the class is the same before the update
-    Class<?> clazz1_5 = arvcl.getClassLoader().loadClass("test.HelloWorld");
+    Class<?> clazz1_5 = arvcl.loadClass("test.HelloWorld");
     assertEquals(clazz1, clazz1_5);
 
     assertTrue(new File(folder1.getRoot(), "HelloWorld.jar").delete());
 
-    // VFS-487 significantly wait to avoid failure
-    Thread.sleep(7000);
+    Thread.sleep(2000);
 
     // Update the class
     FileUtils.copyURLToFile(this.getClass().getResource("/HelloWorld.jar"),
         folder1.newFile("HelloWorld2.jar"));
 
     // Wait for the monitor to notice
-    // VFS-487 significantly wait to avoid failure
-    Thread.sleep(7000);
+    Thread.sleep(2000);
 
-    Class<?> clazz2 = arvcl.getClassLoader().loadClass("test.HelloWorld");
+    Class<?> clazz2 = arvcl.loadClass("test.HelloWorld");
     Object o2 = clazz2.getDeclaredConstructor().newInstance();
     assertEquals("Hello World!", o2.toString());
 
@@ -139,37 +133,35 @@ public class AccumuloReloadingVFSClassLoaderTest {
     FileObject testDir = vfs.resolveFile(folder1.getRoot().toURI().toString());
     FileObject[] dirContents = testDir.getChildren();
 
-    AccumuloReloadingVFSClassLoader arvcl = new AccumuloReloadingVFSClassLoader(folderPath, vfs,
-        ClassLoader::getSystemClassLoader, 1000, true);
+    ReloadingVFSClassLoader arvcl = new ReloadingVFSClassLoader("testReloadingTimeout",
+        "testReloadingTimeout", ClassLoader.getSystemClassLoader(), folderPath, true, vfs);
 
-    FileObject[] files = ((VFSClassLoader) arvcl.getClassLoader()).getFileObjects();
+    FileObject[] files = arvcl.getWrapper().getFileObjects();
     assertArrayEquals(createFileSystems(dirContents), files);
 
     // set retry settings sufficiently high such that reloading happens in the first rounds
     arvcl.setMaxRetries(3);
 
-    Class<?> clazz1 = arvcl.getClassLoader().loadClass("test.HelloWorld");
+    Class<?> clazz1 = arvcl.loadClass("test.HelloWorld");
     Object o1 = clazz1.getDeclaredConstructor().newInstance();
     assertEquals("Hello World!", o1.toString());
 
     // Check that the class is the same before the update
-    Class<?> clazz1_5 = arvcl.getClassLoader().loadClass("test.HelloWorld");
+    Class<?> clazz1_5 = arvcl.loadClass("test.HelloWorld");
     assertEquals(clazz1, clazz1_5);
 
     assertTrue(new File(folder1.getRoot(), "HelloWorld.jar").delete());
 
-    // VFS-487 significantly wait to avoid failure
-    Thread.sleep(7000);
+    Thread.sleep(2000);
 
     // Update the class
     FileUtils.copyURLToFile(this.getClass().getResource("/HelloWorld.jar"),
         folder1.newFile("HelloWorld2.jar"));
 
     // Wait for the monitor to notice
-    // VFS-487 significantly wait to avoid failure
-    Thread.sleep(7000);
+    Thread.sleep(2000);
 
-    Class<?> clazz2 = arvcl.getClassLoader().loadClass("test.HelloWorld");
+    Class<?> clazz2 = arvcl.loadClass("test.HelloWorld");
     Object o2 = clazz2.getDeclaredConstructor().newInstance();
     assertEquals("Hello World!", o2.toString());
 

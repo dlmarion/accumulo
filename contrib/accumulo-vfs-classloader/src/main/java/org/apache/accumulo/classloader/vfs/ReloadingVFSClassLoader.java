@@ -1,3 +1,21 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
 package org.apache.accumulo.classloader.vfs;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -19,9 +37,11 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
+import org.apache.accumulo.classloader.ClassLoaderDescription;
 import org.apache.commons.vfs2.FileChangeEvent;
 import org.apache.commons.vfs2.FileListener;
 import org.apache.commons.vfs2.FileObject;
+import org.apache.commons.vfs2.FileSystemException;
 import org.apache.commons.vfs2.FileSystemManager;
 import org.apache.commons.vfs2.impl.DefaultFileMonitor;
 import org.apache.commons.vfs2.provider.hdfs.HdfsFileObject;
@@ -38,9 +58,12 @@ import org.slf4j.LoggerFactory;
  * The filesystem monitor will look for changes in the classpath at 5 minute interval, unless the
  * system property <b>general.vfs.classpath.monitor.seconds</b> is defined.
  */
-public class ReloadingVFSClassLoader extends ClassLoader implements Closeable, FileListener {
+@Deprecated
+public class ReloadingVFSClassLoader extends ClassLoader
+    implements ClassLoaderDescription, Closeable, FileListener {
 
-  public static final String VFS_CLASSPATH_MONITOR_INTERVAL = "general.vfs.classpath.monitor.seconds";
+  public static final String VFS_CLASSPATH_MONITOR_INTERVAL =
+      "general.vfs.classpath.monitor.seconds";
 
   private static final Logger LOG = LoggerFactory.getLogger(ReloadingVFSClassLoader.class);
 
@@ -51,7 +74,7 @@ public class ReloadingVFSClassLoader extends ClassLoader implements Closeable, F
   private volatile long maxWaitInterval = 60000;
   private volatile long maxRetries = -1;
   private volatile long sleepInterval = 5000;
-  
+
   private final DefaultFileMonitor monitor;
   private final ThreadPoolExecutor executor;
   private FileObject[] files;
@@ -60,7 +83,9 @@ public class ReloadingVFSClassLoader extends ClassLoader implements Closeable, F
   private final boolean preDelegate;
   private VFSClassLoaderWrapper cl = null;
   private final ReentrantReadWriteLock updateLock = new ReentrantReadWriteLock(true);
-  
+  private final String name;
+  private final String description;
+
   {
     BlockingQueue<Runnable> queue = new ArrayBlockingQueue<>(2);
     ThreadFactory factory = r -> {
@@ -70,7 +95,7 @@ public class ReloadingVFSClassLoader extends ClassLoader implements Closeable, F
     };
     executor = new ThreadPoolExecutor(1, 1, 1, SECONDS, queue, factory);
   }
-  
+
   private static long getMonitorInterval() {
     String interval = System.getProperty(VFS_CLASSPATH_MONITOR_INTERVAL);
     if (null != interval && !interval.isBlank()) {
@@ -82,7 +107,7 @@ public class ReloadingVFSClassLoader extends ClassLoader implements Closeable, F
     }
     return DEFAULT_TIMEOUT;
   }
-  
+
   private final Runnable refresher = new Runnable() {
     @Override
     public void run() {
@@ -163,8 +188,11 @@ public class ReloadingVFSClassLoader extends ClassLoader implements Closeable, F
     }
   };
 
-  public ReloadingVFSClassLoader(ClassLoader parent, String classpath, boolean preDelegation) throws IOException {
-    
+  public ReloadingVFSClassLoader(String name, String description, ClassLoader parent,
+      String classpath, boolean preDelegation, FileSystemManager vfs) throws IOException {
+    super(name, parent);
+    this.name = name;
+    this.description = description;
     this.parent = parent;
     this.uris = classpath;
 
@@ -175,16 +203,15 @@ public class ReloadingVFSClassLoader extends ClassLoader implements Closeable, F
     }
 
     ArrayList<FileObject> pathsToMonitor = new ArrayList<>();
-    FileSystemManager vfs = AccumuloVFSManager.generateVfs();
     this.files = AccumuloVFSManager.resolve(vfs, uris, pathsToMonitor);
     this.cl = new VFSClassLoaderWrapper(files, vfs, parent);
-    
+
     // An HDFS FileSystem and Configuration object were created for each unique HDFS namespace
     // in the call to resolve above. The HDFS Client did us a favor and cached these objects
-    // so that the next time someone calls FileSystem.get(uri), they get the cached object. 
-    // However, these objects were created not with the system VFS classloader, but the 
+    // so that the next time someone calls FileSystem.get(uri), they get the cached object.
+    // However, these objects were created not with the system VFS classloader, but the
     // classloader above it. We need to override the classloader on the Configuration objects.
-    // Ran into an issue were log recovery was being attempted and SequenceFile$Reader was 
+    // Ran into an issue were log recovery was being attempted and SequenceFile$Reader was
     // trying to instantiate the key class via WritableName.getClass(String, Configuration)
     for (FileObject fo : this.files) {
       if (fo instanceof HdfsFileObject) {
@@ -196,7 +223,6 @@ public class ReloadingVFSClassLoader extends ClassLoader implements Closeable, F
       }
     }
 
-    
     this.monitor = new DefaultFileMonitor(this);
     monitor.setDelay(getMonitorInterval());
     monitor.setRecursive(false);
@@ -207,7 +233,7 @@ public class ReloadingVFSClassLoader extends ClassLoader implements Closeable, F
     });
     monitor.start();
   }
-  
+
   private void addFileToMonitor(FileObject file) throws RuntimeException {
     try {
       if (monitor != null)
@@ -222,7 +248,7 @@ public class ReloadingVFSClassLoader extends ClassLoader implements Closeable, F
       throw re;
     }
   }
-  
+
   private synchronized void updateClassloader(FileObject[] files, VFSClassLoaderWrapper cl) {
     this.files = files;
     try {
@@ -271,7 +297,7 @@ public class ReloadingVFSClassLoader extends ClassLoader implements Closeable, F
       LOG.trace("Ignoring refresh request (already refreshing)");
     }
   }
-  
+
   @Override
   public void close() {
 
@@ -300,9 +326,9 @@ public class ReloadingVFSClassLoader extends ClassLoader implements Closeable, F
       throw e;
     });
   }
-  
-  // VisibleForTesting intentionally not using annotation from Guava because it adds unwanted
-  // dependency
+
+  // VisibleForTesting intentionally not using annotation from Guava
+  // because it adds unwanted dependency
   void setMaxRetries(long maxRetries) {
     this.maxRetries = maxRetries;
   }
@@ -310,7 +336,7 @@ public class ReloadingVFSClassLoader extends ClassLoader implements Closeable, F
   private boolean retryPermitted(long retries) {
     return (maxRetries < 0 || retries < maxRetries);
   }
-  
+
   public String stringify(FileObject[] files) {
     StringBuilder sb = new StringBuilder();
     sb.append('[');
@@ -323,7 +349,7 @@ public class ReloadingVFSClassLoader extends ClassLoader implements Closeable, F
     sb.append(']');
     return sb.toString();
   }
-  
+
   private VFSClassLoaderWrapper getClassLoader() {
     try {
       updateLock.readLock().lock();
@@ -331,6 +357,10 @@ public class ReloadingVFSClassLoader extends ClassLoader implements Closeable, F
     } finally {
       updateLock.readLock().unlock();
     }
+  }
+
+  public VFSClassLoaderWrapper getWrapper() {
+    return getClassLoader();
   }
 
   @Override
@@ -360,12 +390,21 @@ public class ReloadingVFSClassLoader extends ClassLoader implements Closeable, F
 
   @Override
   public String toString() {
-    return getClassLoader().toString();
+    StringBuilder buf = new StringBuilder();
+
+    for (FileObject f : files) {
+      try {
+        buf.append("\t").append(f.getURL()).append("\n");
+      } catch (FileSystemException e) {
+        LOG.error("Error getting URL for file", e);
+      }
+    }
+    return buf.toString();
   }
 
   @Override
   public String getName() {
-    return getClassLoader().getName();
+    return name;
   }
 
   @Override
@@ -411,6 +450,11 @@ public class ReloadingVFSClassLoader extends ClassLoader implements Closeable, F
   @Override
   public void clearAssertionStatus() {
     getClassLoader().clearAssertionStatus();
+  }
+
+  @Override
+  public String getDescription() {
+    return this.description;
   }
 
 }

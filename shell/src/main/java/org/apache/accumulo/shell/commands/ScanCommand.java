@@ -26,7 +26,6 @@ import java.util.List;
 import java.util.Map.Entry;
 import java.util.concurrent.TimeUnit;
 
-import org.apache.accumulo.classloader.vfs.AccumuloVFSClassLoader;
 import org.apache.accumulo.core.client.AccumuloException;
 import org.apache.accumulo.core.client.AccumuloSecurityException;
 import org.apache.accumulo.core.client.IteratorSetting;
@@ -223,14 +222,16 @@ public class ScanCommand extends Command {
         Shell.log
             .warn("Scan Interpreter option is deprecated and will be removed in a future version.");
 
-        clazz = AccumuloVFSClassLoader.loadClass(cl.getOptionValue(interpreterOpt.getOpt()),
-            ScanInterpreter.class);
+        clazz = Thread.currentThread().getContextClassLoader()
+            .loadClass(cl.getOptionValue(interpreterOpt.getOpt()))
+            .asSubclass(ScanInterpreter.class);
       } else if (cl.hasOption(formatterInterpeterOpt.getOpt())) {
         Shell.log
             .warn("Scan Interpreter option is deprecated and will be removed in a future version.");
 
-        clazz = AccumuloVFSClassLoader.loadClass(cl.getOptionValue(formatterInterpeterOpt.getOpt()),
-            ScanInterpreter.class);
+        clazz = Thread.currentThread().getContextClassLoader()
+            .loadClass(cl.getOptionValue(formatterInterpeterOpt.getOpt()))
+            .asSubclass(ScanInterpreter.class);
       }
     } catch (ClassNotFoundException e) {
       Shell.log.error("Interpreter class could not be loaded.", e);

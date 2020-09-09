@@ -45,7 +45,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-import org.apache.accumulo.classloader.vfs.AccumuloVFSClassLoader;
 import org.apache.accumulo.core.Constants;
 import org.apache.accumulo.core.client.AccumuloClient;
 import org.apache.accumulo.core.client.Scanner;
@@ -76,6 +75,7 @@ import org.apache.accumulo.core.metadata.schema.Ample.DataLevel;
 import org.apache.accumulo.core.metadata.schema.MetadataSchema.TabletsSection;
 import org.apache.accumulo.core.replication.thrift.ReplicationCoordinator;
 import org.apache.accumulo.core.security.Authorizations;
+import org.apache.accumulo.core.table.ContextClassLoaderFactory;
 import org.apache.accumulo.core.tabletserver.thrift.TUnloadTabletGoal;
 import org.apache.accumulo.core.trace.TraceUtil;
 import org.apache.accumulo.core.util.Daemon;
@@ -134,7 +134,6 @@ import org.apache.accumulo.server.util.Halt;
 import org.apache.accumulo.server.util.ServerBulkImportStatus;
 import org.apache.accumulo.server.util.TableInfoUtil;
 import org.apache.accumulo.server.util.time.SimpleTimer;
-import org.apache.accumulo.start.classloader.vfs.ContextManager;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
@@ -384,14 +383,12 @@ public class Master extends AbstractServer
         Property.MASTER_TABLET_BALANCER, TabletBalancer.class, new DefaultLoadBalancer());
     this.tabletBalancer.init(context);
 
-    AccumuloVFSClassLoader.getContextManager()
-        .setContextConfig(new ContextManager.DefaultContextsConfig() {
-          @Override
-          public Map<String,String> getVfsContextClasspathProperties() {
-            return getConfiguration()
-                .getAllPropertiesWithPrefix(Property.VFS_CONTEXT_CLASSPATH_PROPERTY);
-          }
-        });
+    try {
+      ContextClassLoaderFactory.createContexts(aconf);
+    } catch (Exception e1) {
+      log.error("Error configuring ContextClassLoaderFactory", e1);
+      throw new RuntimeException("Error configuring ContextClassLoaderFactory", e1);
+    }
 
     this.security = AuditedSecurityOperation.getInstance(context);
 

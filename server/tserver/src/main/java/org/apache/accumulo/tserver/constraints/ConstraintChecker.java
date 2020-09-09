@@ -23,7 +23,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map.Entry;
 
-import org.apache.accumulo.classloader.vfs.AccumuloVFSClassLoader;
 import org.apache.accumulo.core.conf.AccumuloConfiguration;
 import org.apache.accumulo.core.conf.Property;
 import org.apache.accumulo.core.constraints.Constraint;
@@ -32,6 +31,7 @@ import org.apache.accumulo.core.constraints.Violations;
 import org.apache.accumulo.core.data.ConstraintViolationSummary;
 import org.apache.accumulo.core.data.Mutation;
 import org.apache.accumulo.core.dataImpl.ComparableBytes;
+import org.apache.accumulo.core.table.ContextClassLoaderFactory;
 import org.apache.accumulo.server.conf.TableConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,9 +52,9 @@ public class ConstraintChecker {
       ClassLoader loader;
 
       if (context != null && !context.equals("")) {
-        loader = AccumuloVFSClassLoader.getContextManager().getClassLoader(context);
+        loader = ContextClassLoaderFactory.getClassLoader(context);
       } else {
-        loader = AccumuloVFSClassLoader.getClassLoader();
+        loader = ConstraintChecker.class.getClassLoader();
       }
 
       for (Entry<String,String> entry : conf

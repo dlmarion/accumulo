@@ -29,7 +29,6 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeSet;
 
-import org.apache.accumulo.classloader.vfs.AccumuloVFSClassLoader;
 import org.apache.accumulo.core.client.AccumuloSecurityException;
 import org.apache.accumulo.core.client.NamespaceNotFoundException;
 import org.apache.accumulo.core.client.TableNotFoundException;
@@ -59,6 +58,7 @@ import org.apache.accumulo.core.security.NamespacePermission;
 import org.apache.accumulo.core.security.SystemPermission;
 import org.apache.accumulo.core.security.TablePermission;
 import org.apache.accumulo.core.securityImpl.thrift.TCredentials;
+import org.apache.accumulo.core.table.ContextClassLoaderFactory;
 import org.apache.accumulo.core.trace.thrift.TInfo;
 import org.apache.accumulo.server.ServerContext;
 import org.apache.accumulo.server.fs.VolumeManager;
@@ -367,7 +367,8 @@ public class ClientServiceHandler implements ClientService.Iface {
     Class shouldMatch;
     try {
       shouldMatch = loader.loadClass(interfaceMatch);
-      Class test = AccumuloVFSClassLoader.loadClass(className, shouldMatch);
+      Class test = Thread.currentThread().getContextClassLoader().loadClass(className)
+          .asSubclass(shouldMatch);
       test.getDeclaredConstructor().newInstance();
       return true;
     } catch (ClassCastException | ReflectiveOperationException e) {
@@ -397,9 +398,9 @@ public class ClientServiceHandler implements ClientService.Iface {
       ClassLoader currentLoader;
 
       if (context != null && !context.equals("")) {
-        currentLoader = AccumuloVFSClassLoader.getContextManager().getClassLoader(context);
+        currentLoader = ContextClassLoaderFactory.getClassLoader(context);
       } else {
-        currentLoader = AccumuloVFSClassLoader.getClassLoader();
+        currentLoader = Thread.currentThread().getContextClassLoader();
       }
 
       Class<?> test = currentLoader.loadClass(className).asSubclass(shouldMatch);
@@ -432,9 +433,9 @@ public class ClientServiceHandler implements ClientService.Iface {
       ClassLoader currentLoader;
 
       if (context != null && !context.equals("")) {
-        currentLoader = AccumuloVFSClassLoader.getContextManager().getClassLoader(context);
+        currentLoader = ContextClassLoaderFactory.getClassLoader(context);
       } else {
-        currentLoader = AccumuloVFSClassLoader.getClassLoader();
+        currentLoader = Thread.currentThread().getContextClassLoader();
       }
 
       Class<?> test = currentLoader.loadClass(className).asSubclass(shouldMatch);

@@ -43,6 +43,7 @@ import org.slf4j.LoggerFactory;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
+@Deprecated
 public class AccumuloVFSManager {
 
   public static class AccumuloVFSManagerShutdownThread implements Runnable {
@@ -56,7 +57,7 @@ public class AccumuloVFSManager {
       }
     }
   }
-  
+
   public static final String VFS_CACHE_DIR = "general.vfs.cache.dir";
 
   private static final Logger LOG = LoggerFactory.getLogger(AccumuloVFSManager.class);
@@ -68,7 +69,8 @@ public class AccumuloVFSManager {
     Runtime.getRuntime().addShutdownHook(new Thread(new AccumuloVFSManagerShutdownThread()));
   }
 
-  public static FileObject[] resolve(FileSystemManager vfs, String uris) throws FileSystemException {
+  public static FileObject[] resolve(FileSystemManager vfs, String uris)
+      throws FileSystemException {
     return resolve(vfs, uris, new ArrayList<>());
   }
 

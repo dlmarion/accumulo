@@ -18,7 +18,6 @@
  */
 package org.apache.accumulo.core.file.blockfile.cache.impl;
 
-import org.apache.accumulo.classloader.vfs.AccumuloVFSClassLoader;
 import org.apache.accumulo.core.conf.AccumuloConfiguration;
 import org.apache.accumulo.core.conf.Property;
 import org.apache.accumulo.core.spi.cache.BlockCacheManager;
@@ -42,8 +41,8 @@ public class BlockCacheManagerFactory {
   public static synchronized BlockCacheManager getInstance(AccumuloConfiguration conf)
       throws Exception {
     String impl = conf.get(Property.TSERV_CACHE_MANAGER_IMPL);
-    Class<? extends BlockCacheManager> clazz =
-        AccumuloVFSClassLoader.loadClass(impl, BlockCacheManager.class);
+    Class<? extends BlockCacheManager> clazz = Thread.currentThread().getContextClassLoader()
+        .loadClass(impl).asSubclass(BlockCacheManager.class);
     LOG.info("Created new block cache manager of type: {}", clazz.getSimpleName());
     return clazz.getDeclaredConstructor().newInstance();
   }
