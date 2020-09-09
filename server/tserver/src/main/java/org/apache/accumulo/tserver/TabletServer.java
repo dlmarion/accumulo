@@ -1032,7 +1032,7 @@ public class TabletServer extends AbstractServer {
     final Map<String,TableInfo> tables = new HashMap<>();
 
     getOnlineTablets().forEach((ke, tablet) -> {
-      String tableId = ke.getTableId().canonical();
+      String tableId = ke.tableId().canonical();
       TableInfo table = tables.get(tableId);
       if (table == null) {
         table = new TableInfo();
@@ -1092,7 +1092,7 @@ public class TabletServer extends AbstractServer {
     }
 
     for (KeyExtent extent : offlineTabletsCopy) {
-      String tableId = extent.getTableId().canonical();
+      String tableId = extent.tableId().canonical();
       TableInfo table = tables.get(tableId);
       if (table == null) {
         table = new TableInfo();
@@ -1176,7 +1176,7 @@ public class TabletServer extends AbstractServer {
   }
 
   public TableConfiguration getTableConfiguration(KeyExtent extent) {
-    return getContext().getTableConfiguration(extent.getTableId());
+    return getContext().getTableConfiguration(extent.tableId());
   }
 
   public DfsLogger.ServerResources getServerConfig() {

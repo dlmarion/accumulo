@@ -56,7 +56,6 @@ public class MasterAssignmentIT extends AccumuloClusterHarness {
         UtilWaitThread.sleep(250);
         newTablet = getTabletLocationState(c, tableId);
       } while (newTablet.current == null);
-      assertNull(newTablet.last);
       assertNull(newTablet.future);
 
       // put something in it
@@ -91,7 +90,7 @@ public class MasterAssignmentIT extends AccumuloClusterHarness {
 
   private TabletLocationState getTabletLocationState(AccumuloClient c, String tableId) {
     try (MetaDataTableScanner s = new MetaDataTableScanner((ClientContext) c,
-        new Range(TabletsSection.getRow(TableId.of(tableId), null)), MetadataTable.NAME)) {
+        new Range(TabletsSection.encodeRow(TableId.of(tableId), null)), MetadataTable.NAME)) {
       return s.next();
     }
   }

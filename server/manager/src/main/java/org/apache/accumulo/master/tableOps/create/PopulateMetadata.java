@@ -31,8 +31,8 @@ import org.apache.accumulo.core.data.Mutation;
 import org.apache.accumulo.core.data.TableId;
 import org.apache.accumulo.core.data.Value;
 import org.apache.accumulo.core.dataImpl.KeyExtent;
-import org.apache.accumulo.core.metadata.schema.MetadataSchema;
 import org.apache.accumulo.core.metadata.schema.MetadataSchema.TabletsSection.ServerColumnFamily;
+import org.apache.accumulo.core.metadata.schema.MetadataSchema.TabletsSection.TabletColumnFamily;
 import org.apache.accumulo.core.metadata.schema.MetadataTime;
 import org.apache.accumulo.fate.Repo;
 import org.apache.accumulo.fate.zookeeper.ZooLock;
@@ -88,12 +88,12 @@ class PopulateMetadata extends MasterRepo {
     Text prevSplit = null;
     Value dirValue;
     for (Text split : Iterables.concat(splits, Collections.singleton(null))) {
-      Mutation mut = new KeyExtent(tableId, split, prevSplit).getPrevRowUpdateMutation();
+      Mutation mut =
+          TabletColumnFamily.createPrevRowMutation(new KeyExtent(tableId, split, prevSplit));
       dirValue = (split == null) ? new Value(ServerColumnFamily.DEFAULT_TABLET_DIR_NAME)
           : new Value(data.get(split));
-      MetadataSchema.TabletsSection.ServerColumnFamily.DIRECTORY_COLUMN.put(mut, dirValue);
-      MetadataSchema.TabletsSection.ServerColumnFamily.TIME_COLUMN.put(mut,
-          new Value(new MetadataTime(0, timeType).encode()));
+      ServerColumnFamily.DIRECTORY_COLUMN.put(mut, dirValue);
+      ServerColumnFamily.TIME_COLUMN.put(mut, new Value(new MetadataTime(0, timeType).encode()));
       MetadataTableUtil.putLockID(ctx, lock, mut);
       prevSplit = split;
       bw.addMutation(mut);

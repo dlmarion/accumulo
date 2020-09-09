@@ -29,7 +29,7 @@ import org.apache.accumulo.core.client.MutationsRejectedException;
 import org.apache.accumulo.core.clientImpl.ClientContext;
 import org.apache.accumulo.core.data.Mutation;
 import org.apache.accumulo.core.metadata.MetadataTable;
-import org.apache.accumulo.core.metadata.schema.MetadataSchema;
+import org.apache.accumulo.core.metadata.schema.MetadataSchema.TabletsSection;
 import org.apache.accumulo.core.tabletserver.log.LogEntry;
 import org.apache.hadoop.fs.Path;
 
@@ -55,8 +55,7 @@ class MetaDataStateStore implements TabletStateStore {
 
   @Override
   public ClosableIterator<TabletLocationState> iterator() {
-    return new MetaDataTableScanner(context, MetadataSchema.TabletsSection.getRange(), state,
-        targetTableName);
+    return new MetaDataTableScanner(context, TabletsSection.getRange(), state, targetTableName);
   }
 
   @Override
@@ -64,8 +63,9 @@ class MetaDataStateStore implements TabletStateStore {
     BatchWriter writer = createBatchWriter();
     try {
       for (Assignment assignment : assignments) {
-        Mutation m = new Mutation(assignment.tablet.getMetadataEntry());
+        Mutation m = new Mutation(assignment.tablet.toMetaRow());
         assignment.server.putLocation(m);
+        assignment.server.putLastLocation(m);
         assignment.server.clearFutureLocation(m);
         SuspendingTServer.clearSuspension(m);
         writer.addMutation(m);
@@ -97,7 +97,7 @@ class MetaDataStateStore implements TabletStateStore {
     BatchWriter writer = createBatchWriter();
     try {
       for (Assignment assignment : assignments) {
-        Mutation m = new Mutation(assignment.tablet.getMetadataEntry());
+        Mutation m = new Mutation(assignment.tablet.toMetaRow());
         SuspendingTServer.clearSuspension(m);
         assignment.server.putFutureLocation(m);
         writer.addMutation(m);
@@ -132,7 +132,7 @@ class MetaDataStateStore implements TabletStateStore {
     BatchWriter writer = createBatchWriter();
     try {
       for (TabletLocationState tls : tablets) {
-        Mutation m = new Mutation(tls.extent.getMetadataEntry());
+        Mutation m = new Mutation(tls.extent.toMetaRow());
         if (tls.current != null) {
           tls.current.clearLocation(m);
           if (logsForDeadServers != null) {
@@ -178,7 +178,7 @@ class MetaDataStateStore implements TabletStateStore {
         if (tls.suspend != null) {
           continue;
         }
-        Mutation m = new Mutation(tls.extent.getMetadataEntry());
+        Mutation m = new Mutation(tls.extent.toMetaRow());
         SuspendingTServer.clearSuspension(m);
         writer.addMutation(m);
       }

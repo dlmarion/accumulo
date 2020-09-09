@@ -65,6 +65,7 @@ import org.apache.accumulo.core.metadata.schema.MetadataSchema.TabletsSection.Cu
 import org.apache.accumulo.core.metadata.schema.MetadataSchema.TabletsSection.DataFileColumnFamily;
 import org.apache.accumulo.core.metadata.schema.MetadataSchema.TabletsSection.FutureLocationColumnFamily;
 import org.apache.accumulo.core.metadata.schema.MetadataSchema.TabletsSection.ServerColumnFamily;
+import org.apache.accumulo.core.metadata.schema.MetadataSchema.TabletsSection.TabletColumnFamily;
 import org.apache.accumulo.core.metadata.schema.MetadataTime;
 import org.apache.accumulo.core.security.Authorizations;
 import org.apache.accumulo.core.tabletserver.thrift.NotServingTabletException;
@@ -152,7 +153,7 @@ abstract class TabletGroupWatcher extends Daemon {
         Map<TableId,MergeStats> currentMerges = new HashMap<>();
         for (MergeInfo merge : master.merges()) {
           if (merge.getExtent() != null) {
-            currentMerges.put(merge.getExtent().getTableId(), new MergeStats(merge));
+            currentMerges.put(merge.getExtent().tableId(), new MergeStats(merge));
           }
         }
 
@@ -194,7 +195,7 @@ abstract class TabletGroupWatcher extends Daemon {
           }
 
           // ignore entries for tables that do not exist in zookeeper
-          if (master.getTableManager().getTableState(tls.extent.getTableId()) == null)
+          if (master.getTableManager().getTableState(tls.extent.tableId()) == null)
             continue;
 
           // Don't overwhelm the tablet servers with work
@@ -210,7 +211,7 @@ abstract class TabletGroupWatcher extends Daemon {
             unloaded = 0;
             eventListener.waitForEvents(Master.TIME_TO_WAIT_BETWEEN_SCANS);
           }
-          TableId tableId = tls.extent.getTableId();
+          TableId tableId = tls.extent.tableId();
           TableConfiguration tableConf = this.master.getContext().getTableConfiguration(tableId);
 
           MergeStats mergeStats = mergeStatsCache.get(tableId);
@@ -401,7 +402,7 @@ abstract class TabletGroupWatcher extends Daemon {
 
   private void cancelOfflineTableMigrations(TabletLocationState tls) {
     TServerInstance dest = this.master.migrations.get(tls.extent);
-    TableState tableState = master.getTableManager().getTableState(tls.extent.getTableId());
+    TableState tableState = master.getTableManager().getTableState(tls.extent.tableId());
     if (dest != null && tableState == TableState.OFFLINE) {
       this.master.migrations.remove(tls.extent);
     }
@@ -415,7 +416,7 @@ abstract class TabletGroupWatcher extends Daemon {
     try {
       Map<Key,Value> future = new HashMap<>();
       Map<Key,Value> assigned = new HashMap<>();
-      KeyExtent extent = new KeyExtent(row, new Value(new byte[] {0}));
+      KeyExtent extent = KeyExtent.fromMetaRow(row);
       String table = MetadataTable.NAME;
       if (extent.isMeta())
         table = RootTable.NAME;
@@ -486,14 +487,14 @@ abstract class TabletGroupWatcher extends Daemon {
     // Does this extent cover the end points of the delete?
     KeyExtent range = info.getExtent();
     if (tls.extent.overlaps(range)) {
-      for (Text splitPoint : new Text[] {range.getPrevEndRow(), range.getEndRow()}) {
+      for (Text splitPoint : new Text[] {range.prevEndRow(), range.endRow()}) {
         if (splitPoint == null)
           continue;
         if (!tls.extent.contains(splitPoint))
           continue;
-        if (splitPoint.equals(tls.extent.getEndRow()))
+        if (splitPoint.equals(tls.extent.endRow()))
           continue;
-        if (splitPoint.equals(tls.extent.getPrevEndRow()))
+        if (splitPoint.equals(tls.extent.prevEndRow()))
           continue;
         try {
           TServerConnection conn;
@@ -580,27 +581,27 @@ abstract class TabletGroupWatcher extends Daemon {
     Master.log.debug("Deleting tablets for {}", extent);
     MetadataTime metadataTime = null;
     KeyExtent followingTablet = null;
-    if (extent.getEndRow() != null) {
-      Key nextExtent = new Key(extent.getEndRow()).followingKey(PartialKey.ROW);
-      followingTablet = getHighTablet(
-          new KeyExtent(extent.getTableId(), nextExtent.getRow(), extent.getEndRow()));
+    if (extent.endRow() != null) {
+      Key nextExtent = new Key(extent.endRow()).followingKey(PartialKey.ROW);
+      followingTablet =
+          getHighTablet(new KeyExtent(extent.tableId(), nextExtent.getRow(), extent.endRow()));
       Master.log.debug("Found following tablet {}", followingTablet);
     }
     try {
       AccumuloClient client = this.master.getContext();
-      Text start = extent.getPrevEndRow();
+      Text start = extent.prevEndRow();
       if (start == null) {
         start = new Text();
       }
       Master.log.debug("Making file deletion entries for {}", extent);
-      Range deleteRange = new Range(TabletsSection.getRow(extent.getTableId(), start), false,
-          TabletsSection.getRow(extent.getTableId(), extent.getEndRow()), true);
+      Range deleteRange = new Range(TabletsSection.encodeRow(extent.tableId(), start), false,
+          TabletsSection.encodeRow(extent.tableId(), extent.endRow()), true);
       Scanner scanner = client.createScanner(targetSystemTable, Authorizations.EMPTY);
       scanner.setRange(deleteRange);
-      TabletsSection.ServerColumnFamily.DIRECTORY_COLUMN.fetch(scanner);
-      TabletsSection.ServerColumnFamily.TIME_COLUMN.fetch(scanner);
+      ServerColumnFamily.DIRECTORY_COLUMN.fetch(scanner);
+      ServerColumnFamily.TIME_COLUMN.fetch(scanner);
       scanner.fetchColumnFamily(DataFileColumnFamily.NAME);
-      scanner.fetchColumnFamily(TabletsSection.CurrentLocationColumnFamily.NAME);
+      scanner.fetchColumnFamily(CurrentLocationColumnFamily.NAME);
       Set<String> datafiles = new TreeSet<>();
       for (Entry<Key,Value> entry : scanner) {
         Key key = entry.getKey();
@@ -610,13 +611,13 @@ abstract class TabletGroupWatcher extends Daemon {
             MetadataTableUtil.addDeleteEntries(extent, datafiles, master.getContext());
             datafiles.clear();
           }
-        } else if (TabletsSection.ServerColumnFamily.TIME_COLUMN.hasColumns(key)) {
+        } else if (ServerColumnFamily.TIME_COLUMN.hasColumns(key)) {
           metadataTime = MetadataTime.parse(entry.getValue().toString());
-        } else if (key.compareColumnFamily(TabletsSection.CurrentLocationColumnFamily.NAME) == 0) {
+        } else if (key.compareColumnFamily(CurrentLocationColumnFamily.NAME) == 0) {
           throw new IllegalStateException(
               "Tablet " + key.getRow() + " is assigned during a merge!");
-        } else if (TabletsSection.ServerColumnFamily.DIRECTORY_COLUMN.hasColumns(key)) {
-          String path = GcVolumeUtil.getDeleteTabletOnAllVolumesUri(extent.getTableId(),
+        } else if (ServerColumnFamily.DIRECTORY_COLUMN.hasColumns(key)) {
+          String path = GcVolumeUtil.getDeleteTabletOnAllVolumesUri(extent.tableId(),
               entry.getValue().toString());
           datafiles.add(path);
           if (datafiles.size() > 1000) {
@@ -634,12 +635,12 @@ abstract class TabletGroupWatcher extends Daemon {
       }
 
       if (followingTablet != null) {
-        Master.log.debug("Updating prevRow of {} to {}", followingTablet, extent.getPrevEndRow());
+        Master.log.debug("Updating prevRow of {} to {}", followingTablet, extent.prevEndRow());
         bw = client.createBatchWriter(targetSystemTable, new BatchWriterConfig());
         try {
-          Mutation m = new Mutation(followingTablet.getMetadataEntry());
-          TabletsSection.TabletColumnFamily.PREV_ROW_COLUMN.put(m,
-              KeyExtent.encodePrevEndRow(extent.getPrevEndRow()));
+          Mutation m = new Mutation(followingTablet.toMetaRow());
+          TabletColumnFamily.PREV_ROW_COLUMN.put(m,
+              TabletColumnFamily.encodePrevEndRow(extent.prevEndRow()));
           ChoppedColumnFamily.CHOPPED_COLUMN.putDelete(m);
           bw.addMutation(m);
           bw.flush();
@@ -648,8 +649,7 @@ abstract class TabletGroupWatcher extends Daemon {
         }
       } else {
         // Recreate the default tablet to hold the end of the table
-        MetadataTableUtil.addTablet(
-            new KeyExtent(extent.getTableId(), null, extent.getPrevEndRow()),
+        MetadataTableUtil.addTablet(new KeyExtent(extent.tableId(), null, extent.prevEndRow()),
             ServerColumnFamily.DEFAULT_TABLET_DIR_NAME, master.getContext(), metadataTime.getType(),
             this.master.masterLock);
       }
@@ -664,13 +664,13 @@ abstract class TabletGroupWatcher extends Daemon {
     KeyExtent stop = getHighTablet(range);
     Master.log.debug("Highest tablet is {}", stop);
     Value firstPrevRowValue = null;
-    Text stopRow = stop.getMetadataEntry();
-    Text start = range.getPrevEndRow();
+    Text stopRow = stop.toMetaRow();
+    Text start = range.prevEndRow();
     if (start == null) {
       start = new Text();
     }
     Range scanRange =
-        new Range(TabletsSection.getRow(range.getTableId(), start), false, stopRow, false);
+        new Range(TabletsSection.encodeRow(range.tableId(), start), false, stopRow, false);
     String targetSystemTable = MetadataTable.NAME;
     if (range.isMeta()) {
       targetSystemTable = RootTable.NAME;
@@ -683,9 +683,9 @@ abstract class TabletGroupWatcher extends Daemon {
       // Make file entries in highest tablet
       Scanner scanner = client.createScanner(targetSystemTable, Authorizations.EMPTY);
       scanner.setRange(scanRange);
-      TabletsSection.TabletColumnFamily.PREV_ROW_COLUMN.fetch(scanner);
-      TabletsSection.ServerColumnFamily.TIME_COLUMN.fetch(scanner);
-      TabletsSection.ServerColumnFamily.DIRECTORY_COLUMN.fetch(scanner);
+      TabletColumnFamily.PREV_ROW_COLUMN.fetch(scanner);
+      ServerColumnFamily.TIME_COLUMN.fetch(scanner);
+      ServerColumnFamily.DIRECTORY_COLUMN.fetch(scanner);
       scanner.fetchColumnFamily(DataFileColumnFamily.NAME);
       Mutation m = new Mutation(stopRow);
       MetadataTime maxLogicalTime = null;
@@ -695,16 +695,16 @@ abstract class TabletGroupWatcher extends Daemon {
         if (key.getColumnFamily().equals(DataFileColumnFamily.NAME)) {
           m.put(key.getColumnFamily(), key.getColumnQualifier(), value);
           fileCount++;
-        } else if (TabletsSection.TabletColumnFamily.PREV_ROW_COLUMN.hasColumns(key)
+        } else if (TabletColumnFamily.PREV_ROW_COLUMN.hasColumns(key)
             && firstPrevRowValue == null) {
           Master.log.debug("prevRow entry for lowest tablet is {}", value);
           firstPrevRowValue = new Value(value);
-        } else if (TabletsSection.ServerColumnFamily.TIME_COLUMN.hasColumns(key)) {
+        } else if (ServerColumnFamily.TIME_COLUMN.hasColumns(key)) {
           maxLogicalTime =
               TabletTime.maxMetadataTime(maxLogicalTime, MetadataTime.parse(value.toString()));
-        } else if (TabletsSection.ServerColumnFamily.DIRECTORY_COLUMN.hasColumns(key)) {
+        } else if (ServerColumnFamily.DIRECTORY_COLUMN.hasColumns(key)) {
           String uri =
-              GcVolumeUtil.getDeleteTabletOnAllVolumesUri(range.getTableId(), value.toString());
+              GcVolumeUtil.getDeleteTabletOnAllVolumesUri(range.tableId(), value.toString());
           bw.addMutation(ServerAmpleImpl.createDeleteMutation(uri));
         }
       }
@@ -713,16 +713,16 @@ abstract class TabletGroupWatcher extends Daemon {
       // the loop above
       scanner = client.createScanner(targetSystemTable, Authorizations.EMPTY);
       scanner.setRange(new Range(stopRow));
-      TabletsSection.ServerColumnFamily.TIME_COLUMN.fetch(scanner);
+      ServerColumnFamily.TIME_COLUMN.fetch(scanner);
       for (Entry<Key,Value> entry : scanner) {
-        if (TabletsSection.ServerColumnFamily.TIME_COLUMN.hasColumns(entry.getKey())) {
+        if (ServerColumnFamily.TIME_COLUMN.hasColumns(entry.getKey())) {
           maxLogicalTime = TabletTime.maxMetadataTime(maxLogicalTime,
               MetadataTime.parse(entry.getValue().toString()));
         }
       }
 
       if (maxLogicalTime != null)
-        TabletsSection.ServerColumnFamily.TIME_COLUMN.put(m, new Value(maxLogicalTime.encode()));
+        ServerColumnFamily.TIME_COLUMN.put(m, new Value(maxLogicalTime.encode()));
 
       if (!m.getUpdates().isEmpty()) {
         bw.addMutation(m);
@@ -737,8 +737,9 @@ abstract class TabletGroupWatcher extends Daemon {
         return;
       }
 
-      stop.setPrevEndRow(KeyExtent.decodePrevEndRow(firstPrevRowValue));
-      Mutation updatePrevRow = stop.getPrevRowUpdateMutation();
+      stop = new KeyExtent(stop.tableId(), stop.endRow(),
+          TabletColumnFamily.decodePrevEndRow(firstPrevRowValue));
+      Mutation updatePrevRow = TabletColumnFamily.createPrevRowMutation(stop);
       Master.log.debug("Setting the prevRow for last tablet: {}", stop);
       bw.addMutation(updatePrevRow);
       bw.flush();
@@ -793,17 +794,16 @@ abstract class TabletGroupWatcher extends Daemon {
       AccumuloClient client = this.master.getContext();
       Scanner scanner = client.createScanner(range.isMeta() ? RootTable.NAME : MetadataTable.NAME,
           Authorizations.EMPTY);
-      TabletsSection.TabletColumnFamily.PREV_ROW_COLUMN.fetch(scanner);
-      KeyExtent start = new KeyExtent(range.getTableId(), range.getEndRow(), null);
-      scanner.setRange(new Range(start.getMetadataEntry(), null));
+      TabletColumnFamily.PREV_ROW_COLUMN.fetch(scanner);
+      KeyExtent start = new KeyExtent(range.tableId(), range.endRow(), null);
+      scanner.setRange(new Range(start.toMetaRow(), null));
       Iterator<Entry<Key,Value>> iterator = scanner.iterator();
       if (!iterator.hasNext()) {
         throw new AccumuloException("No last tablet for a merge " + range);
       }
       Entry<Key,Value> entry = iterator.next();
-      KeyExtent highTablet =
-          new KeyExtent(entry.getKey().getRow(), KeyExtent.decodePrevEndRow(entry.getValue()));
-      if (!highTablet.getTableId().equals(range.getTableId())) {
+      KeyExtent highTablet = KeyExtent.fromMetaPrevRow(entry);
+      if (!highTablet.tableId().equals(range.tableId())) {
         throw new AccumuloException("No last tablet for merge " + range + " " + highTablet);
       }
       return highTablet;

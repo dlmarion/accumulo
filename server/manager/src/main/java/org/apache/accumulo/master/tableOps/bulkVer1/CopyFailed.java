@@ -38,7 +38,6 @@ import org.apache.accumulo.core.dataImpl.KeyExtent;
 import org.apache.accumulo.core.master.thrift.BulkImportState;
 import org.apache.accumulo.core.metadata.MetadataTable;
 import org.apache.accumulo.core.metadata.TabletFileUtil;
-import org.apache.accumulo.core.metadata.schema.MetadataSchema.TabletsSection;
 import org.apache.accumulo.core.metadata.schema.MetadataSchema.TabletsSection.BulkFileColumnFamily;
 import org.apache.accumulo.core.security.Authorizations;
 import org.apache.accumulo.fate.FateTxId;
@@ -122,8 +121,8 @@ class CopyFailed extends MasterRepo {
     AccumuloClient client = master.getContext();
     try (Scanner mscanner =
         new IsolatedScanner(client.createScanner(MetadataTable.NAME, Authorizations.EMPTY))) {
-      mscanner.setRange(new KeyExtent(tableId, null, null).toMetadataRange());
-      mscanner.fetchColumnFamily(TabletsSection.BulkFileColumnFamily.NAME);
+      mscanner.setRange(new KeyExtent(tableId, null, null).toMetaRange());
+      mscanner.fetchColumnFamily(BulkFileColumnFamily.NAME);
 
       for (Entry<Key,Value> entry : mscanner) {
         if (BulkFileColumnFamily.getBulkLoadTid(entry.getValue()) == tid) {
