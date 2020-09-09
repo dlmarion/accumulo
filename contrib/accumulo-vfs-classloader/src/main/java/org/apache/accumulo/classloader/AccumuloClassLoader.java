@@ -48,13 +48,13 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
  * ClassLoader that implements the approach documented in
  * <a href="https://accumulo.apache.org/blog/2014/05/03/accumulo-classloader.html">The Accumulo
  * ClassLoader</a>
- * 
+ *
  * <p>
  * This classloader can be used as the <a href=
  * "https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/lang/ClassLoader.html#getSystemClassLoader()">JVM
  * System ClassLoader</a> by setting the system property <b>java.system.class.loader</b> to the name
  * of this class.
- * 
+ *
  * <p>
  * This class first creates a classloader that is configured to load resources from
  * <b>java.class.path</b> and <b>general.classpaths</b> (Deprecated) if specified. Next, this class
@@ -65,6 +65,8 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
  *
  */
 @Deprecated
+@SuppressFBWarnings(value = "DM_EXIT",
+    justification = "classloader should exit VM if not configured correctly")
 public class AccumuloClassLoader extends URLClassLoader implements ClassLoaderDescription {
 
   private static final Logger LOG = LoggerFactory.getLogger(AccumuloClassLoader.class);
@@ -100,10 +102,10 @@ public class AccumuloClassLoader extends URLClassLoader implements ClassLoaderDe
         if (f.exists() && !f.isDirectory()) {
           accumuloConfigUrl = f.toURI().toURL();
         } else {
-          LOG.warn("Failed to load Accumulo configuration from " + configFile);
+          LOG.warn("Failed to load Accumulo configuration from {}", configFile);
         }
       } catch (URISyntaxException | MalformedURLException e) {
-        LOG.warn("Failed to load Accumulo configuration from " + configFile, e);
+        LOG.warn("Failed to load Accumulo configuration from {}", configFile, e);
       }
     } else {
       accumuloConfigUrl = AccumuloClassLoader.class.getResource(configFile);
@@ -121,7 +123,8 @@ public class AccumuloClassLoader extends URLClassLoader implements ClassLoaderDe
         urls.addAll(genClassPathUrls);
       }
     } catch (IOException e) {
-      LOG.warn("IOException processing {} property: {}", GENERAL_CLASSPATHS, e.getMessage());
+      LOG.warn("IOException processing {} property: {}", sanitize(GENERAL_CLASSPATHS),
+          e.getMessage());
     }
     classpath = urls.toArray(new URL[urls.size()]);
   }
@@ -159,6 +162,14 @@ public class AccumuloClassLoader extends URLClassLoader implements ClassLoaderDe
   }
 
   /**
+   * Prevent potential CRLF injection into logs from read in user data See
+   * https://find-sec-bugs.github.io/bugs.htm#CRLF_INJECTION_LOGS
+   */
+  private static String sanitize(String msg) {
+    return msg.replaceAll("[\r\n]", "");
+  }
+
+  /**
    * Returns value of property in accumulo.properties file, otherwise default value
    *
    * @param propertyName
@@ -171,7 +182,7 @@ public class AccumuloClassLoader extends URLClassLoader implements ClassLoaderDe
     if (accumuloConfigUrl == null) {
       LOG.warn(
           "Using default value '{}' for '{}' as there is no Accumulo configuration on classpath",
-          defaultValue, propertyName);
+          sanitize(defaultValue), sanitize(propertyName));
       return defaultValue;
     }
     try (InputStream is =
@@ -243,10 +254,10 @@ public class AccumuloClassLoader extends URLClassLoader implements ClassLoaderDe
             for (File jar : extJars)
               urls.add(jar.toURI().toURL());
           } else {
-            LOG.debug("ignoring classpath entry {}", classpath);
+            LOG.debug("ignoring classpath entry {}", sanitize(classpath));
           }
         } else {
-          LOG.debug("ignoring classpath entry {}", classpath);
+          LOG.debug("ignoring classpath entry {}", sanitize(classpath));
         }
       }
     } else {
@@ -259,7 +270,7 @@ public class AccumuloClassLoader extends URLClassLoader implements ClassLoaderDe
     String cp = getAccumuloProperty(GENERAL_CLASSPATHS, null);
     if (cp == null)
       return new ArrayList<>();
-    LOG.warn("'{}' is deprecated but was set to '{}' ", GENERAL_CLASSPATHS, cp);
+    LOG.warn("'{}' is deprecated but was set to '{}' ", sanitize(GENERAL_CLASSPATHS), sanitize(cp));
     String[] cps = replaceEnvVars(cp, System.getenv()).split(",");
     ArrayList<URL> urls = new ArrayList<>();
     for (String classpath : cps) {

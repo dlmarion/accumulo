@@ -54,7 +54,7 @@ import org.slf4j.LoggerFactory;
  * Classloader that delegates operations to a VFSClassLoader object. This class also listens for
  * changes in any of the files/directories that are in the classpath and will recreate the delegate
  * object if there is any change in the classpath.
- * 
+ *
  * The filesystem monitor will look for changes in the classpath at 5 minute interval, unless the
  * system property <b>general.vfs.classpath.monitor.seconds</b> is defined.
  */
@@ -100,7 +100,7 @@ public class ReloadingVFSClassLoader extends ClassLoader
     String interval = System.getProperty(VFS_CLASSPATH_MONITOR_INTERVAL);
     if (null != interval && !interval.isBlank()) {
       try {
-        return TimeUnit.SECONDS.toMillis(Long.valueOf(interval));
+        return TimeUnit.SECONDS.toMillis(Long.parseLong(interval));
       } catch (NumberFormatException e) {
         return DEFAULT_TIMEOUT;
       }
@@ -381,11 +381,6 @@ public class ReloadingVFSClassLoader extends ClassLoader
   @Override
   public int hashCode() {
     return getClassLoader().hashCode();
-  }
-
-  @Override
-  public boolean equals(Object obj) {
-    return getClassLoader().equals(obj);
   }
 
   @Override

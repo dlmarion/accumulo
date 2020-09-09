@@ -32,9 +32,9 @@ public class URLClassLoaderFactory implements ClassLoaderFactory {
 
   /**
    * Will be defined in the Accumulo configuration prefixed with
-   * "general.classpath.context.<contextName>.", which will be stripped from the property name when
-   * passed to the create method. This property will contain a comma separated list of classpath
-   * entries.
+   * "general.classpath.context.&lt;contextName&gt;.", which will be stripped from the property name
+   * when passed to the create method. This property will contain a comma separated list of
+   * classpath entries.
    */
   private static final String CP = "classpath";
 
