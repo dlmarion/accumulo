@@ -44,12 +44,21 @@ public class ContextClassLoaderFactory {
   public static final String CONTEXT_PREFIX = "general.classpath.context.";
 
   private static final Map<String,ClassLoader> CONTEXTS = new ConcurrentHashMap<>();
+  private static AccumuloConfiguration CONF;
 
   public static ClassLoader getClassLoader(String contextName) {
     if (CONTEXTS.containsKey(contextName)) {
       return CONTEXTS.get(contextName);
     } else {
-      return null;
+      // It's possible that the user just defined the context and this has not been
+      // updated yet. Make one attempt at updating.
+      try {
+        updateContexts();
+      } catch (Exception e) {
+        LOG.error("Error updating contexts", e);
+        throw new RuntimeException("Error updating contexts", e);
+      }
+      return CONTEXTS.get(contextName);
     }
   }
 
@@ -79,17 +88,33 @@ public class ContextClassLoaderFactory {
     return contextProperties;
   }
 
+  public static void initialize(AccumuloConfiguration conf) {
+    if (null == CONF) {
+      CONF = conf;
+    }
+  }
+
+  public static void resetForTests() {
+    CONF = null;
+  }
+
+  public static synchronized void updateContexts() throws Exception {
+    LOG.info("Updating contexts");
+    createContexts();
+    removeUnusedContexts(CONF);
+  }
+
   @SuppressWarnings("deprecation")
-  public static void createContexts(AccumuloConfiguration conf) throws Exception {
+  private static void createContexts() throws Exception {
     var contextProperties = parseProperties(
-        conf.getAllPropertiesWithPrefixStripped(Property.GENERAL_CLASSPATH_CONTEXT));
+        CONF.getAllPropertiesWithPrefixStripped(Property.GENERAL_CLASSPATH_CONTEXT));
     for (var e : contextProperties.entrySet()) {
       if (CONTEXTS.containsKey(e.getKey())) {
         continue;
       }
       var properties = e.getValue();
       var factoryName = properties.get("FACTORY");
-      LOG.debug("context: {} uses ClassLoaderFactory: {}", e.getKey(), factoryName);
+      LOG.info("Creatng context: {} uses ClassLoaderFactory: {}", e.getKey(), factoryName);
       try {
         var factoryClass = Class.forName(factoryName);
         if (ClassLoaderFactory.class.isAssignableFrom(factoryClass)) {
@@ -109,20 +134,19 @@ public class ContextClassLoaderFactory {
 
     // Handle deprecated VFS context classloader property
     var vfsContexts =
-        conf.getAllPropertiesWithPrefixStripped(Property.VFS_CONTEXT_CLASSPATH_PROPERTY);
+        CONF.getAllPropertiesWithPrefixStripped(Property.VFS_CONTEXT_CLASSPATH_PROPERTY);
     if (null != vfsContexts && !vfsContexts.isEmpty()) {
       FileSystemManager vfs = AccumuloVFSManager.generateVfs();
       for (var e : vfsContexts.entrySet()) {
         if (CONTEXTS.containsKey(e.getKey())) {
           continue;
         }
-        LOG.debug("VFS context: {} uses classpath: {}", e.getKey(), e.getValue());
+        LOG.info("Creating VFS context: {} uses classpath: {}", e.getKey(), e.getValue());
         String delegation = System.getProperty(
             Property.VFS_CONTEXT_CLASSPATH_PROPERTY.toString() + e.getKey() + ".delegation", "");
         boolean preDelegation = (delegation.equals("post")) ? false : true;
         ClassLoader cl = new ReloadingVFSClassLoader(e.getKey() + " context",
-            e.getKey() + " Context Classloader", Thread.currentThread().getContextClassLoader(),
-            e.getValue(), preDelegation, vfs);
+            Thread.currentThread().getContextClassLoader(), e.getValue(), preDelegation, vfs);
         CONTEXTS.put(e.getKey(), cl);
       }
     }
@@ -155,11 +179,6 @@ public class ContextClassLoaderFactory {
         ((Closeable) e.getValue()).close();
       }
     }
-  }
-
-  public static void updateContexts(AccumuloConfiguration config) throws Exception {
-    createContexts(config);
-    removeUnusedContexts(config);
   }
 
 }

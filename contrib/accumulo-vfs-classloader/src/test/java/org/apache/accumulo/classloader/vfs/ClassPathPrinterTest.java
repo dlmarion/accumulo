@@ -62,24 +62,22 @@ public class ClassPathPrinterTest {
     out.append("general.vfs.classpaths=\n");
     out.close();
 
-    Whitebox.setInternalState(AccumuloClassLoader.class, "accumuloConfigUrl", conf.toURI().toURL());
-    try (AccumuloClassLoader acl = new AccumuloClassLoader(parent)) {
-      ClassLoader cl = Thread.currentThread().getContextClassLoader();
-      assertPattern(ClassPathPrinter.getClassPath(cl, true), "(?s).*\\s+.*\\n$", true);
-      assertTrue(ClassPathPrinter.getClassPath(cl, true)
-          .contains("Level 3: AccumuloClassLoader Classloader"));
-      assertTrue(
-          ClassPathPrinter.getClassPath(cl, true).contains("Level 4: default dynamic Classloader"));
-      assertTrue(ClassPathPrinter.getClassPath(cl, true).length()
-          > ClassPathPrinter.getClassPath(cl, false).length());
-      assertPattern(ClassPathPrinter.getClassPath(cl, false), "(?s).*\\s+.*\\n$", false);
-      assertFalse(ClassPathPrinter.getClassPath(cl, false)
-          .contains("Level 3: AccumuloClassLoader Classloader"));
-      assertFalse(ClassPathPrinter.getClassPath(cl, false)
-          .contains("Level 4: default dynamic Classloader"));
-    } finally {
-      Whitebox.setInternalState(AccumuloClassLoader.class, "accumuloConfigUrl", (Object) null);
-    }
+    Whitebox.setInternalState(AccumuloClassLoader.class, "ACCUMULO_CONFIG_URL",
+        conf.toURI().toURL());
+    AccumuloClassLoader.resetForTests();
+    AccumuloClassLoader cl = new AccumuloClassLoader(parent);
+    assertPattern(ClassPathPrinter.getClassPath(cl, true), "(?s).*\\s+.*\\n$", true);
+    assertTrue(ClassPathPrinter.getClassPath(cl, true)
+        .contains("Level 3: AccumuloClassLoader Classloader"));
+    assertTrue(
+        ClassPathPrinter.getClassPath(cl, true).contains("Level 4: Default Dynamic Classloader"));
+    assertTrue(ClassPathPrinter.getClassPath(cl, true).length()
+        > ClassPathPrinter.getClassPath(cl, false).length());
+    assertPattern(ClassPathPrinter.getClassPath(cl, false), "(?s).*\\s+.*\\n$", false);
+    assertFalse(ClassPathPrinter.getClassPath(cl, false)
+        .contains("Level 3: AccumuloClassLoader Classloader"));
+    assertFalse(
+        ClassPathPrinter.getClassPath(cl, false).contains("Level 4: Default Dynamic Classloader"));
   }
 
   @Test
@@ -96,24 +94,20 @@ public class ClassPathPrinterTest {
     out.append("general.dynamic.classpaths=" + System.getProperty("user.dir") + "\n");
     out.close();
 
-    Whitebox.setInternalState(AccumuloClassLoader.class, "accumuloConfigUrl", conf.toURI().toURL());
-
-    try (AccumuloClassLoader acl = new AccumuloClassLoader(parent)) {
-      ClassLoader cl = Thread.currentThread().getContextClassLoader();
-      assertPattern(ClassPathPrinter.getClassPath(cl, true), "(?s).*\\s+.*\\n$", true);
-      assertTrue(ClassPathPrinter.getClassPath(cl, true)
-          .contains("Level 3: AccumuloClassLoader Classloader"));
-      assertTrue(
-          ClassPathPrinter.getClassPath(cl, true).contains("Level 4: VFS system Classloader"));
-      assertTrue(ClassPathPrinter.getClassPath(cl, true).length()
-          > ClassPathPrinter.getClassPath(cl, false).length());
-      assertPattern(ClassPathPrinter.getClassPath(cl, false), "(?s).*\\s+.*\\n$", false);
-      assertFalse(ClassPathPrinter.getClassPath(cl, false)
-          .contains("Level 3: AccumuloClassLoader Classloader"));
-      assertFalse(
-          ClassPathPrinter.getClassPath(cl, false).contains("Level 4: VFS system Classloader"));
-    } finally {
-      Whitebox.setInternalState(AccumuloClassLoader.class, "accumuloConfigUrl", (Object) null);
-    }
+    Whitebox.setInternalState(AccumuloClassLoader.class, "ACCUMULO_CONFIG_URL",
+        conf.toURI().toURL());
+    AccumuloClassLoader.resetForTests();
+    AccumuloClassLoader cl = new AccumuloClassLoader(parent);
+    assertPattern(ClassPathPrinter.getClassPath(cl, true), "(?s).*\\s+.*\\n$", true);
+    assertTrue(ClassPathPrinter.getClassPath(cl, true)
+        .contains("Level 3: AccumuloClassLoader Classloader"));
+    assertTrue(ClassPathPrinter.getClassPath(cl, true).contains("Level 4: VFS System Classloader"));
+    assertTrue(ClassPathPrinter.getClassPath(cl, true).length()
+        > ClassPathPrinter.getClassPath(cl, false).length());
+    assertPattern(ClassPathPrinter.getClassPath(cl, false), "(?s).*\\s+.*\\n$", false);
+    assertFalse(ClassPathPrinter.getClassPath(cl, false)
+        .contains("Level 3: AccumuloClassLoader Classloader"));
+    assertFalse(
+        ClassPathPrinter.getClassPath(cl, false).contains("Level 4: VFS System Classloader"));
   }
 }

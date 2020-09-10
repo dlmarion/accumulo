@@ -37,7 +37,6 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
-import org.apache.accumulo.classloader.ClassLoaderDescription;
 import org.apache.commons.vfs2.FileChangeEvent;
 import org.apache.commons.vfs2.FileListener;
 import org.apache.commons.vfs2.FileObject;
@@ -59,8 +58,7 @@ import org.slf4j.LoggerFactory;
  * system property <b>general.vfs.classpath.monitor.seconds</b> is defined.
  */
 @Deprecated
-public class ReloadingVFSClassLoader extends ClassLoader
-    implements ClassLoaderDescription, Closeable, FileListener {
+public class ReloadingVFSClassLoader extends ClassLoader implements Closeable, FileListener {
 
   public static final String VFS_CLASSPATH_MONITOR_INTERVAL =
       "general.vfs.classpath.monitor.seconds";
@@ -84,7 +82,6 @@ public class ReloadingVFSClassLoader extends ClassLoader
   private VFSClassLoaderWrapper cl = null;
   private final ReentrantReadWriteLock updateLock = new ReentrantReadWriteLock(true);
   private final String name;
-  private final String description;
 
   {
     BlockingQueue<Runnable> queue = new ArrayBlockingQueue<>(2);
@@ -188,11 +185,10 @@ public class ReloadingVFSClassLoader extends ClassLoader
     }
   };
 
-  public ReloadingVFSClassLoader(String name, String description, ClassLoader parent,
-      String classpath, boolean preDelegation, FileSystemManager vfs) throws IOException {
+  public ReloadingVFSClassLoader(String name, ClassLoader parent, String classpath,
+      boolean preDelegation, FileSystemManager vfs) throws IOException {
     super(name, parent);
     this.name = name;
-    this.description = description;
     this.parent = parent;
     this.uris = classpath;
 
@@ -445,11 +441,6 @@ public class ReloadingVFSClassLoader extends ClassLoader
   @Override
   public void clearAssertionStatus() {
     getClassLoader().clearAssertionStatus();
-  }
-
-  @Override
-  public String getDescription() {
-    return this.description;
   }
 
 }

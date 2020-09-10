@@ -411,10 +411,11 @@ public class Tablet {
 
     String contextName = tableConfiguration.get(Property.TABLE_CLASSPATH);
     if (contextName != null && !contextName.equals("")) {
-      // initialize context classloader, instead of possibly waiting for it to initialize for a scan
+      // update context classloader instead of possibly waiting for it to initialize for a scan
+      // the ContextClassLoaderFactory should have been initialized TabletServer
       // TODO this could hang, causing other tablets to fail to load - ACCUMULO-1292
       try {
-        ContextClassLoaderFactory.createContexts(tabletServer.getConfiguration());
+        ContextClassLoaderFactory.updateContexts();
       } catch (Exception e1) {
         log.error("Error configuring ContextClassLoaderFactory", e1);
         throw new RuntimeException("Error configuring ContextClassLoaderFactory", e1);

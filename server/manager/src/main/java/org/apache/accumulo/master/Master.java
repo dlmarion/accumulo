@@ -384,7 +384,8 @@ public class Master extends AbstractServer
     this.tabletBalancer.init(context);
 
     try {
-      ContextClassLoaderFactory.createContexts(aconf);
+      ContextClassLoaderFactory.initialize(aconf);
+      ContextClassLoaderFactory.updateContexts();
     } catch (Exception e1) {
       log.error("Error configuring ContextClassLoaderFactory", e1);
       throw new RuntimeException("Error configuring ContextClassLoaderFactory", e1);

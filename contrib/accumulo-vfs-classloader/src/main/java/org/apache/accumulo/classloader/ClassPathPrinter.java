@@ -87,13 +87,6 @@ public class ClassPathPrinter {
         buffer.append(": ");
         buffer.append(classLoader.getName());
         buffer.append(" Classloader ");
-        if (classLoader.getClass().getName().startsWith("jdk.internal")) {
-          // do nothing, not able to get classpath information
-        } else if (classLoader instanceof ClassLoaderDescription) {
-          buffer.append(((ClassLoaderDescription) classLoader).getDescription());
-        } else {
-          buffer.append(" (DESCRIPTION MISSING) ");
-        }
 
         String classLoaderDescription = buffer.toString();
         boolean sawFirst = false;
@@ -120,7 +113,6 @@ public class ClassPathPrinter {
             printJar(out, f.getURL().getFile(), debug, sawFirst);
             sawFirst = true;
           }
-          vcl.close();
         } else if (classLoader instanceof VFSClassLoader) {
           if (debug) {
             out.print("Level " + classLoaderDescription + " VFS classpaths, items are:\n");

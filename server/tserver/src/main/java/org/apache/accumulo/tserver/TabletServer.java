@@ -1001,7 +1001,7 @@ public class TabletServer extends AbstractServer {
 
     final AccumuloConfiguration aconf = getConfiguration();
     try {
-      ContextClassLoaderFactory.createContexts(aconf);
+      ContextClassLoaderFactory.initialize(aconf);
     } catch (Exception e1) {
       log.error("Error configuring ContextClassLoaderFactory", e1);
       throw new RuntimeException("Error configuring ContextClassLoaderFactory", e1);
@@ -1010,13 +1010,13 @@ public class TabletServer extends AbstractServer {
     // A task that cleans up unused classloader contexts
     Runnable contextCleaner = () -> {
       try {
-        ContextClassLoaderFactory.updateContexts(getConfiguration());
+        ContextClassLoaderFactory.updateContexts();
       } catch (Exception e) {
         log.warn("{}", e.getMessage(), e);
       }
     };
 
-    SimpleTimer.getInstance(aconf).schedule(contextCleaner, 60000, 60000);
+    SimpleTimer.getInstance(aconf).schedule(contextCleaner, 30000, 30000);
 
     FileSystemMonitor.start(aconf, Property.TSERV_MONITOR_FS);
 

@@ -60,7 +60,9 @@ public class ContextClassLoaderFactoryTest {
     uri2 = folder2.toURI() + ".*";
 
     // Remove all contexts
-    ContextClassLoaderFactory.updateContexts(new ConfigurationCopy());
+    ContextClassLoaderFactory.resetForTests();
+    ContextClassLoaderFactory.initialize(new ConfigurationCopy());
+    ContextClassLoaderFactory.updateContexts();
 
   }
 
@@ -71,7 +73,9 @@ public class ContextClassLoaderFactoryTest {
     cc.set("general.classpath.context.CX1.classpath", uri1);
     cc.set("general.classpath.context.CX2", URLClassLoaderFactory.class.getName());
     cc.set("general.classpath.context.CX2.classpath", uri2);
-    ContextClassLoaderFactory.createContexts(cc);
+    ContextClassLoaderFactory.resetForTests();
+    ContextClassLoaderFactory.initialize(cc);
+    ContextClassLoaderFactory.updateContexts();
 
     ClassLoader cl1 = ContextClassLoaderFactory.getClassLoader("CX1");
     assertNotNull(cl1);
@@ -81,7 +85,9 @@ public class ContextClassLoaderFactoryTest {
     ConfigurationCopy cc2 = new ConfigurationCopy();
     cc2.set("general.classpath.context.CX1", URLClassLoaderFactory.class.getName());
     cc2.set("general.classpath.context.CX1.classpath", uri1);
-    ContextClassLoaderFactory.updateContexts(cc2);
+    ContextClassLoaderFactory.resetForTests();
+    ContextClassLoaderFactory.initialize(cc2);
+    ContextClassLoaderFactory.updateContexts();
 
     cl1 = ContextClassLoaderFactory.getClassLoader("CX1");
     assertNotNull(cl1);
@@ -98,7 +104,9 @@ public class ContextClassLoaderFactoryTest {
     cc.set("general.classpath.context.CX1.classpath", uri1);
     cc.set("general.classpath.context.CX2", URLClassLoaderFactory.class.getName());
     cc.set("general.classpath.context.CX2.classpath", uri2);
-    ContextClassLoaderFactory.createContexts(cc);
+    ContextClassLoaderFactory.resetForTests();
+    ContextClassLoaderFactory.initialize(cc);
+    ContextClassLoaderFactory.updateContexts();
 
     URLClassLoader cl1 = (URLClassLoader) ContextClassLoaderFactory.getClassLoader("CX1");
     var urls1 = cl1.getURLs();

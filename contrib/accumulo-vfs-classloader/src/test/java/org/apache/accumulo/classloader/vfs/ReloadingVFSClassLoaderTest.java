@@ -76,7 +76,7 @@ public class ReloadingVFSClassLoaderTest {
     FileObject[] dirContents = testDir.getChildren();
 
     ReloadingVFSClassLoader arvcl = new ReloadingVFSClassLoader("testConstructor",
-        "testConstructor", ClassLoader.getSystemClassLoader(), folderPath, true, vfs);
+        ClassLoader.getSystemClassLoader(), folderPath, true, vfs);
 
     FileObject[] files = arvcl.getWrapper().getFileObjects();
     assertArrayEquals(createFileSystems(dirContents), files);
@@ -89,7 +89,7 @@ public class ReloadingVFSClassLoaderTest {
     FileObject testDir = vfs.resolveFile(folder1.getRoot().toURI().toString());
     FileObject[] dirContents = testDir.getChildren();
 
-    ReloadingVFSClassLoader arvcl = new ReloadingVFSClassLoader("testReloading", "testReloading",
+    ReloadingVFSClassLoader arvcl = new ReloadingVFSClassLoader("testReloading",
         ClassLoader.getSystemClassLoader(), folderPath, true, vfs);
 
     FileObject[] files = arvcl.getWrapper().getFileObjects();
@@ -134,7 +134,7 @@ public class ReloadingVFSClassLoaderTest {
     FileObject[] dirContents = testDir.getChildren();
 
     ReloadingVFSClassLoader arvcl = new ReloadingVFSClassLoader("testReloadingTimeout",
-        "testReloadingTimeout", ClassLoader.getSystemClassLoader(), folderPath, true, vfs);
+        ClassLoader.getSystemClassLoader(), folderPath, true, vfs);
 
     FileObject[] files = arvcl.getWrapper().getFileObjects();
     assertArrayEquals(createFileSystems(dirContents), files);
