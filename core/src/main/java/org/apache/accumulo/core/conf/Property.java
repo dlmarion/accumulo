@@ -904,7 +904,7 @@ public enum Property {
   // VFS ClassLoader properties
 
   // this property shouldn't be used directly; it exists solely to document the default value
-  // defined by its use in AccumuloVFSClassLoader when generating the property documentation
+  // defined by its use in AccumuloClassLoader when generating the property documentation
   @Deprecated
   VFS_CLASSLOADER_SYSTEM_CLASSPATH_PROPERTY(
       AccumuloClassLoader.VFS_CLASSLOADER_SYSTEM_CLASSPATH_PROPERTY, "", PropertyType.STRING,
@@ -924,7 +924,7 @@ public enum Property {
           + " from parent classloader first."),
 
   // this property shouldn't be used directly; it exists solely to document the default value
-  // defined by its use in AccumuloVFSClassLoader when generating the property documentation
+  // defined by its use in AccumuloClassLoader when generating the property documentation
   @Deprecated
   VFS_CLASSLOADER_CACHE_DIR(AccumuloVFSManager.VFS_CACHE_DIR, "${java.io.tmpdir}",
       PropertyType.ABSOLUTEPATH,
@@ -1349,7 +1349,7 @@ public enum Property {
    * @param defaultInstance
    *          instance to use if creation fails
    * @return new class instance, or default instance if creation failed
-   * @see AccumuloVFSClassLoader
+   * @see AccumuloClassLoader
    */
   public static <T> T createTableInstanceFromPropertyName(AccumuloConfiguration conf,
       Property property, Class<T> base, T defaultInstance) {
@@ -1370,7 +1370,7 @@ public enum Property {
    * @param defaultInstance
    *          instance to use if creation fails
    * @return new class instance, or default instance if creation failed
-   * @see AccumuloVFSClassLoader
+   * @see AccumuloClassLoader
    */
   public static <T> T createInstanceFromPropertyName(AccumuloConfiguration conf, Property property,
       Class<T> base, T defaultInstance) {
