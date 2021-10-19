@@ -400,6 +400,63 @@
   </build>
   <profiles>
     <profile>
+      <id>semver</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>com.github.siom79.japicmp</groupId>
+            <artifactId>japicmp-maven-plugin</artifactId>
+            <version>0.15.4</version>
+            <executions>
+              <execution>
+                <id>client compliance</id>
+                <goals>
+                  <goal>cmp</goal>
+                </goals>
+                <phase>package</phase>
+                <configuration>
+                  <oldVersion>
+                    <dependency>
+                      <groupId>org.apache.accumulo</groupId>
+                      <artifactId>accumulo-core</artifactId>
+                      <version>2.0.0</version>
+                      <type>jar</type>
+                    </dependency>
+                  </oldVersion>
+                  <newVersion>
+                    <dependency>
+                      <groupId>org.apache.accumulo</groupId>
+                      <artifactId>accumulo-core</artifactId>
+                      <version>${project.version}</version>
+                      <type>jar</type>
+                    </dependency>
+                  </newVersion>
+                  <parameter>
+                    <includes>
+                      <include>org.apache.accumulo.core.client</include>
+                      <include>org.apache.accumulo.core.data</include>
+                      <include>org.apache.accumulo.core.security</include>
+                      <include>org.apache.accumulo.minicluster</include>
+                      <include>org.apache.accumulo.hadoop</include>
+                    </includes>
+                    <excludes>
+                      <exclude>*crypto*</exclude>
+                      <exclude>*impl*</exclude>
+                      <exclude>*thrift*</exclude>
+                    </excludes>
+                    <accessModifier>protected</accessModifier>
+                    <breakBuildOnBinaryIncompatibleModifications>true</breakBuildOnBinaryIncompatibleModifications>
+                    <breakBuildBasedOnSemanticVersioning>true</breakBuildBasedOnSemanticVersioning>
+                    <onlyModified>false</onlyModified>
+                  </parameter>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <profile>
       <id>thrift</id>
       <build>
         <plugins>
