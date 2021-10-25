@@ -29,8 +29,10 @@ import org.apache.accumulo.core.gc.thrift.GcCycleStats;
  */
 public class GcCycleMetrics {
 
-  private final AtomicReference<GcCycleStats> lastCollect = new AtomicReference<>(new GcCycleStats());
-  private final AtomicReference<GcCycleStats> lastWalCollect = new AtomicReference<>(new GcCycleStats());
+  private final AtomicReference<GcCycleStats> lastCollect =
+      new AtomicReference<>(new GcCycleStats());
+  private final AtomicReference<GcCycleStats> lastWalCollect =
+      new AtomicReference<>(new GcCycleStats());
 
   private final AtomicLong postOpDurationNanos = new AtomicLong(0);
   private final AtomicLong runCycleCount = new AtomicLong(0);
