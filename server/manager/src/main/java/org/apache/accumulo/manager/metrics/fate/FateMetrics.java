@@ -112,10 +112,10 @@ public class FateMetrics implements MetricsProducer {
           successfulTxGauge.set(vals.getValue());
           break;
         case UNKNOWN:
+        default:
+          log.debug("Unhandled status type: {}", vals.getKey());
           unknownTxGauge.set(vals.getValue());
           break;
-        default:
-          log.warn("Unhandled status type: {}", vals.getKey());
       }
     }
   }

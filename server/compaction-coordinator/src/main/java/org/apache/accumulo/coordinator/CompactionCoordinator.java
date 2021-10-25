@@ -427,8 +427,8 @@ public class CompactionCoordinator extends AbstractServer
             client.reserveCompactionJob(TraceUtil.traceInfo(), getContext().rpcCreds(), queue,
                 prioTserver.prio, compactorAddress, externalCompactionId);
         if (null == job.getExternalCompactionId()) {
-          LOG.trace("No compactions found for queue {} on tserver {}, trying next tserver", queue,
-              tserver.getHostAndPort(), compactorAddress);
+          LOG.trace("No compactions found for queue {} on tserver {}, trying next tserver to {}",
+              queue, tserver.getHostAndPort(), compactorAddress);
 
           QUEUE_SUMMARIES.removeSummary(tserver, queueName, prioTserver.prio);
           prioTserver = QUEUE_SUMMARIES.getNextTserver(queueName);

@@ -115,8 +115,7 @@ public class ThreadPools {
         int threads = conf.getCount(p);
         if (threads == 0) {
           return createThreadPool(0, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS,
-              "GatherTableInformation", new SynchronousQueue<Runnable>(), OptionalInt.empty(),
-              false);
+              "GatherTableInformation", new SynchronousQueue<>(), OptionalInt.empty(), false);
         } else {
           return createFixedThreadPool(threads, "GatherTableInformation", false);
         }
@@ -164,19 +163,19 @@ public class ThreadPools {
   public static ThreadPoolExecutor createFixedThreadPool(int numThreads, long timeOut,
       TimeUnit units, final String name, boolean enableTracing) {
     return createThreadPool(numThreads, numThreads, timeOut, units, name,
-        new LinkedBlockingQueue<Runnable>(), OptionalInt.empty(), enableTracing);
+        new LinkedBlockingQueue<>(), OptionalInt.empty(), enableTracing);
   }
 
   public static ThreadPoolExecutor createThreadPool(int coreThreads, int maxThreads, long timeOut,
       TimeUnit units, final String name, boolean enableTracing) {
     return createThreadPool(coreThreads, maxThreads, timeOut, units, name,
-        new LinkedBlockingQueue<Runnable>(), OptionalInt.empty(), enableTracing);
+        new LinkedBlockingQueue<>(), OptionalInt.empty(), enableTracing);
   }
 
   public static ThreadPoolExecutor createThreadPool(int coreThreads, int maxThreads, long timeOut,
       TimeUnit units, final String name, BlockingQueue<Runnable> queue, OptionalInt priority,
       boolean enableTracing) {
-    ThreadPoolExecutor result = null;
+    ThreadPoolExecutor result;
     if (enableTracing) {
       result = new TracingThreadPoolExecutor(coreThreads, maxThreads, timeOut, units, queue,
           new NamedThreadFactory(name, priority));
@@ -208,7 +207,7 @@ public class ThreadPools {
 
   public static ScheduledThreadPoolExecutor createScheduledExecutorService(int numThreads,
       final String name, OptionalInt priority, boolean enableTracing) {
-    ScheduledThreadPoolExecutor result = null;
+    ScheduledThreadPoolExecutor result;
     if (enableTracing) {
       result = new TracingScheduledThreadPoolExecutor(numThreads,
           new NamedThreadFactory(name, priority));
