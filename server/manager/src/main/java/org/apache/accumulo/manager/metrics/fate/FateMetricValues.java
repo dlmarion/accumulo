@@ -134,7 +134,7 @@ class FateMetricValues {
         // incr count for state
         states.merge(stateName, 1L, Long::sum);
 
-        // incr count for op type for for in_progress transactions.
+        // incr count for op type for in_progress transactions.
         if (ReadOnlyTStore.TStatus.IN_PROGRESS.equals(tx.getStatus())) {
           String opType = tx.getDebug();
           if (opType == null || opType.isEmpty()) {

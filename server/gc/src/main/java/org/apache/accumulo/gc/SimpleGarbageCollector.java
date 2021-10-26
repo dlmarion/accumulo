@@ -586,6 +586,7 @@ public class SimpleGarbageCollector extends AbstractServer implements Iface {
         Thread.sleep(gcDelay);
       } catch (InterruptedException e) {
         log.warn("{}", e.getMessage(), e);
+        Thread.currentThread().interrupt();
         return;
       }
     }
