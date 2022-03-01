@@ -32,7 +32,12 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
-import org.apache.accumulo.core.file.rfile.bcfile.Compression.Algorithm;
+import org.apache.accumulo.core.spi.file.rfile.compression.Bzip2;
+import org.apache.accumulo.core.spi.file.rfile.compression.Gz;
+import org.apache.accumulo.core.spi.file.rfile.compression.Lz4;
+import org.apache.accumulo.core.spi.file.rfile.compression.Lzo;
+import org.apache.accumulo.core.spi.file.rfile.compression.Snappy;
+import org.apache.accumulo.core.spi.file.rfile.compression.ZStandard;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.compress.CompressionCodec;
 import org.apache.hadoop.util.ReflectionUtils;
@@ -41,37 +46,85 @@ import org.junit.Test;
 
 public class CompressionTest {
 
-  HashMap<Compression.Algorithm,Boolean> isSupported = new HashMap<>();
+  HashMap<CompressionAlgorithm,Boolean> isSupported = new HashMap<>();
 
   @Before
-  public void testSupport() {
-    // we can safely assert that GZ exists by virtue of it being the DefaultCodec
-    isSupported.put(Compression.Algorithm.GZ, true);
-
+  public void testSupport() throws ClassNotFoundException {
     Configuration myConf = new Configuration();
 
-    String extClazz = System.getProperty(Compression.Algorithm.CONF_LZO_CLASS);
-    String clazz = (extClazz != null) ? extClazz : "org.apache.hadoop.io.compress.LzoCodec";
+    Gz gz = new Gz();
+    String extClazz = gz.getCodecClassNameProperty();
+    String clazz = (extClazz != null) ? extClazz : gz.getCodecClassName();
+    CompressionCodec codec =
+        (CompressionCodec) ReflectionUtils.newInstance(Class.forName(clazz), myConf);
+
+    assertNotNull(codec);
+    isSupported.put(new CompressionAlgorithm(gz, myConf), true);
+
+    Lzo lzo = new Lzo();
+    extClazz = lzo.getCodecClassNameProperty();
+    clazz = (extClazz != null) ? extClazz : lzo.getCodecClassName();
     try {
-      CompressionCodec codec =
-          (CompressionCodec) ReflectionUtils.newInstance(Class.forName(clazz), myConf);
+      codec = (CompressionCodec) ReflectionUtils.newInstance(Class.forName(clazz), myConf);
 
       assertNotNull(codec);
-      isSupported.put(Compression.Algorithm.LZO, true);
+      isSupported.put(new CompressionAlgorithm(lzo, myConf), true);
 
     } catch (ClassNotFoundException e) {
       // that is okay
     }
 
-    extClazz = System.getProperty(Compression.Algorithm.CONF_SNAPPY_CLASS);
-    clazz = (extClazz != null) ? extClazz : "org.apache.hadoop.io.compress.SnappyCodec";
+    Lz4 lz4 = new Lz4();
+    extClazz = lz4.getCodecClassNameProperty();
+    clazz = (extClazz != null) ? extClazz : lz4.getCodecClassName();
     try {
-      CompressionCodec codec =
-          (CompressionCodec) ReflectionUtils.newInstance(Class.forName(clazz), myConf);
+      codec = (CompressionCodec) ReflectionUtils.newInstance(Class.forName(clazz), myConf);
 
       assertNotNull(codec);
 
-      isSupported.put(Compression.Algorithm.SNAPPY, true);
+      isSupported.put(new CompressionAlgorithm(lz4, myConf), true);
+
+    } catch (ClassNotFoundException e) {
+      // that is okay
+    }
+
+    Bzip2 bzip = new Bzip2();
+    extClazz = bzip.getCodecClassNameProperty();
+    clazz = (extClazz != null) ? extClazz : bzip.getCodecClassName();
+    try {
+      codec = (CompressionCodec) ReflectionUtils.newInstance(Class.forName(clazz), myConf);
+
+      assertNotNull(codec);
+
+      isSupported.put(new CompressionAlgorithm(bzip, myConf), true);
+
+    } catch (ClassNotFoundException e) {
+      // that is okay
+    }
+
+    Snappy snappy = new Snappy();
+    extClazz = snappy.getCodecClassNameProperty();
+    clazz = (extClazz != null) ? extClazz : snappy.getCodecClassName();
+    try {
+      codec = (CompressionCodec) ReflectionUtils.newInstance(Class.forName(clazz), myConf);
+
+      assertNotNull(codec);
+
+      isSupported.put(new CompressionAlgorithm(snappy, myConf), true);
+
+    } catch (ClassNotFoundException e) {
+      // that is okay
+    }
+
+    ZStandard zstd = new ZStandard();
+    extClazz = zstd.getCodecClassNameProperty();
+    clazz = (extClazz != null) ? extClazz : zstd.getCodecClassName();
+    try {
+      codec = (CompressionCodec) ReflectionUtils.newInstance(Class.forName(clazz), myConf);
+
+      assertNotNull(codec);
+
+      isSupported.put(new CompressionAlgorithm(zstd, myConf), true);
 
     } catch (ClassNotFoundException e) {
       // that is okay
@@ -82,8 +135,9 @@ public class CompressionTest {
   @Test
   public void testSingle() throws IOException {
 
-    for (final Algorithm al : Algorithm.values()) {
-      if (isSupported.get(al) != null && isSupported.get(al) == true) {
+    for (final String name : Compression.getSupportedAlgorithms()) {
+      CompressionAlgorithm al = Compression.getCompressionAlgorithmByName(name);
+      if (isSupported.get(al) != null && isSupported.get(al)) {
 
         // first call to issupported should be true
         assertTrue(al + " is not supported, but should be", al.isSupported());
@@ -98,8 +152,9 @@ public class CompressionTest {
   @Test
   public void testSingleNoSideEffect() throws IOException {
 
-    for (final Algorithm al : Algorithm.values()) {
-      if (isSupported.get(al) != null && isSupported.get(al) == true) {
+    for (final String name : Compression.getSupportedAlgorithms()) {
+      CompressionAlgorithm al = Compression.getCompressionAlgorithmByName(name);
+      if (isSupported.get(al) != null && isSupported.get(al)) {
 
         assertTrue(al + " is not supported, but should be", al.isSupported());
 
@@ -117,8 +172,9 @@ public class CompressionTest {
   @Test(timeout = 60 * 1000)
   public void testManyStartNotNull() throws IOException, InterruptedException, ExecutionException {
 
-    for (final Algorithm al : Algorithm.values()) {
-      if (isSupported.get(al) != null && isSupported.get(al) == true) {
+    for (final String name : Compression.getSupportedAlgorithms()) {
+      CompressionAlgorithm al = Compression.getCompressionAlgorithmByName(name);
+      if (isSupported.get(al) != null && isSupported.get(al)) {
 
         // first call to issupported should be true
         assertTrue(al + " is not supported, but should be", al.isSupported());
@@ -165,8 +221,9 @@ public class CompressionTest {
   public void testManyDontStartUntilThread()
       throws IOException, InterruptedException, ExecutionException {
 
-    for (final Algorithm al : Algorithm.values()) {
-      if (isSupported.get(al) != null && isSupported.get(al) == true) {
+    for (final String name : Compression.getSupportedAlgorithms()) {
+      CompressionAlgorithm al = Compression.getCompressionAlgorithmByName(name);
+      if (isSupported.get(al) != null && isSupported.get(al)) {
 
         // first call to issupported should be true
         assertTrue(al + " is not supported, but should be", al.isSupported());
@@ -206,8 +263,9 @@ public class CompressionTest {
   @Test(timeout = 60 * 1000)
   public void testThereCanBeOnlyOne() throws IOException, InterruptedException, ExecutionException {
 
-    for (final Algorithm al : Algorithm.values()) {
-      if (isSupported.get(al) != null && isSupported.get(al) == true) {
+    for (final String name : Compression.getSupportedAlgorithms()) {
+      CompressionAlgorithm al = Compression.getCompressionAlgorithmByName(name);
+      if (isSupported.get(al) != null && isSupported.get(al)) {
 
         // first call to issupported should be true
         assertTrue(al + " is not supported, but should be", al.isSupported());
