@@ -65,6 +65,7 @@ import org.apache.accumulo.core.file.blockfile.cache.impl.BlockCacheConfiguratio
 import org.apache.accumulo.core.master.thrift.TabletServerStatus;
 import org.apache.accumulo.core.metadata.ScanServerStoredTabletFile;
 import org.apache.accumulo.core.metadata.StoredTabletFile;
+import org.apache.accumulo.core.metadata.schema.Ample;
 import org.apache.accumulo.core.metadata.schema.Ample.DataLevel;
 import org.apache.accumulo.core.metadata.schema.Ample.TabletMutator;
 import org.apache.accumulo.core.metadata.schema.ExternalCompactionId;
@@ -462,9 +463,9 @@ public class ScanServer extends TabletServer implements TabletClientService.Ifac
     TabletMutator mutator = getContext().getAmple().mutateTablet(tablet.getExtent());
     tablet.getDatafiles().keySet().forEach(stf -> {
       Preconditions.checkArgument(tabletsFiles.contains(stf),
-          "File is no longer part of tablet: " + stf);
+          "Tablet file is no longer part of tablet: " + stf);
       mutator.putScan(new ScanServerStoredTabletFile(stf.toString(), clientAddress.toString(),
-          Long.toBinaryString(scanID)));
+          Long.toString(scanID)));
       reservedFiles.add(stf);
     });
     mutator.mutate();
@@ -474,7 +475,8 @@ public class ScanServer extends TabletServer implements TabletClientService.Ifac
     tm.forEach(m -> {
       Collection<StoredTabletFile> files = m.getFiles();
       reservedFiles.forEach(rf -> {
-        Preconditions.checkArgument(files.contains(rf), "File is no longer part of tablet: " + rf);
+        Preconditions.checkArgument(files.contains(rf),
+            "Reserved file is no longer part of tablet: " + rf);
       });
     });
 
@@ -487,7 +489,7 @@ public class ScanServer extends TabletServer implements TabletClientService.Ifac
     TabletMutator mutator = getContext().getAmple().mutateTablet(tablet.getExtent());
     tablet.getDatafiles().keySet().forEach(stf -> {
       mutator.deleteScan(new ScanServerStoredTabletFile(stf.getPath().toString(),
-          clientAddress.toString(), Long.toBinaryString(scanID)));
+          clientAddress.toString(), Long.toString(scanID)));
     });
     mutator.mutate();
   }
@@ -495,12 +497,13 @@ public class ScanServer extends TabletServer implements TabletClientService.Ifac
   protected void removePriorReservations() {
     TabletsMetadata tm = TabletsMetadata.builder(getContext()).forLevel(DataLevel.METADATA)
         .fetch(ColumnType.SCANS).build();
+    final Ample ample = getContext().getAmple();
     tm.forEach(m -> {
       m.getScans().forEach(stf -> {
         if (stf instanceof ScanServerStoredTabletFile) {
           ScanServerStoredTabletFile ssstf = (ScanServerStoredTabletFile) stf;
           if (ssstf.getScanServerAddress().equals(clientAddress.toString())) {
-            TabletMutator mutator = getContext().getAmple().mutateTablet(m.getExtent());
+            TabletMutator mutator = ample.mutateTablet(m.getExtent());
             mutator.deleteScan(ssstf);
             mutator.mutate();
           }
@@ -560,8 +563,14 @@ public class ScanServer extends TabletServer implements TabletClientService.Ifac
       InitialScan is = handler.startScan(tinfo, credentials, extent, range, columns, batchSize,
           ssiList, ssio, authorizations, waitForWrites, isolated, readaheadThreshold, samplerConfig,
           batchTimeOut, classLoaderContext, executionHints, getScanTabletResolver(si), busyTimeout);
+      try {
+        reserve(si.getTablet(), is.getScanID());
+      } catch (Exception e) {
+        LOG.error("Error reserving files for scan", e);
+        unreserve(is.getScanID());
+        throw e;
+      }
       si.setScanId(is.getScanID());
-      reserve(si.getTablet(), is.getScanID());
       LOG.debug("started scan {} for extent {}", si.getScanId(), si.getExtent());
       return is;
     } catch (TException e) {
@@ -635,7 +644,13 @@ public class ScanServer extends TabletServer implements TabletClientService.Ifac
       InitialMultiScan ims = handler.startMultiScan(tinfo, credentials, tcolumns, ssiList, batch,
           ssio, authorizations, waitForWrites, tSamplerConfig, batchTimeOut, contextArg,
           executionHints, tabletResolver, busyTimeout);
-      reserve(si.getTablet(), ims.getScanID());
+      try {
+        reserve(si.getTablet(), ims.getScanID());
+      } catch (Exception e) {
+        LOG.error("Error reserving files for scan", e);
+        unreserve(ims.getScanID());
+        throw e;
+      }
       si.setScanId(ims.getScanID());
       LOG.debug("started scan: {}", si.getScanId());
       return ims;
