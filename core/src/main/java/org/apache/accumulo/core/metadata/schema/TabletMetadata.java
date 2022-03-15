@@ -47,6 +47,7 @@ import org.apache.accumulo.core.data.Key;
 import org.apache.accumulo.core.data.TableId;
 import org.apache.accumulo.core.data.Value;
 import org.apache.accumulo.core.dataImpl.KeyExtent;
+import org.apache.accumulo.core.metadata.ScanServerStoredTabletFile;
 import org.apache.accumulo.core.metadata.StoredTabletFile;
 import org.apache.accumulo.core.metadata.SuspendingTServer;
 import org.apache.accumulo.core.metadata.TServerInstance;
@@ -295,6 +296,14 @@ public class TabletMetadata {
     return extCompactions;
   }
 
+  private static StoredTabletFile parseScanColumnFamily(String colq) {
+    if (!colq.startsWith(ScanServerStoredTabletFile.IDENTIFIER_STR)) {
+      return new StoredTabletFile(colq);
+    } else {
+      return ScanServerStoredTabletFile.parse(colq);
+    }
+  }
+
   @VisibleForTesting
   public static TabletMetadata convertRow(Iterator<Entry<Key,Value>> rowIter,
       EnumSet<ColumnType> fetchedColumns, boolean buildKeyValueMap) {
@@ -387,7 +396,7 @@ public class TabletMetadata {
           te.suspend = SuspendingTServer.fromValue(kv.getValue());
           break;
         case ScanFileColumnFamily.STR_NAME:
-          scansBuilder.add(new StoredTabletFile(qual));
+          scansBuilder.add(parseScanColumnFamily(qual));
           break;
         case ClonedColumnFamily.STR_NAME:
           te.cloned = val;

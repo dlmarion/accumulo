@@ -37,6 +37,7 @@ import java.util.concurrent.TimeUnit;
 import org.apache.accumulo.core.conf.Property;
 import org.apache.accumulo.core.dataImpl.KeyExtent;
 import org.apache.accumulo.core.logging.TabletLogger;
+import org.apache.accumulo.core.metadata.ScanServerStoredTabletFile;
 import org.apache.accumulo.core.metadata.StoredTabletFile;
 import org.apache.accumulo.core.metadata.TServerInstance;
 import org.apache.accumulo.core.metadata.TabletFile;
@@ -121,6 +122,10 @@ class DatafileManager {
 
       boolean notify = false;
       for (StoredTabletFile path : absFilePaths) {
+        // Don't remove SCAN entries that are placed by the ScanServer
+        if (path instanceof ScanServerStoredTabletFile) {
+          continue;
+        }
         long refCount = fileScanReferenceCounts.decrement(path, 1);
         if (refCount == 0) {
           if (filesToDeleteAfterScan.remove(path))
@@ -149,6 +154,10 @@ class DatafileManager {
 
     synchronized (tablet) {
       for (StoredTabletFile path : scanFiles) {
+        // Don't remove SCAN entries that are placed by the ScanServer
+        if (path instanceof ScanServerStoredTabletFile) {
+          continue;
+        }
         if (fileScanReferenceCounts.get(path) == 0)
           filesToDelete.add(path);
         else

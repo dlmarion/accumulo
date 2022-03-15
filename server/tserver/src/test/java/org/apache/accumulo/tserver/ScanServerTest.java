@@ -100,6 +100,12 @@ public class ScanServerTest {
       return resolver;
     }
 
+    @Override
+    protected void reserve(Tablet tablet, long scanID) {}
+
+    @Override
+    protected void unreserve(long scanID) {}
+
   }
 
   private ThriftClientHandler handler;
