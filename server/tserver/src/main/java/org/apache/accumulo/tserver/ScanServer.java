@@ -25,8 +25,10 @@ import java.io.IOException;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -36,6 +38,7 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.accumulo.core.Constants;
 import org.apache.accumulo.core.client.AccumuloException;
+import org.apache.accumulo.core.clientImpl.lexicoder.ByteUtils;
 import org.apache.accumulo.core.clientImpl.thrift.ConfigurationType;
 import org.apache.accumulo.core.clientImpl.thrift.TDiskUsage;
 import org.apache.accumulo.core.clientImpl.thrift.ThriftSecurityException;
@@ -62,8 +65,12 @@ import org.apache.accumulo.core.dataImpl.thrift.TSummaryRequest;
 import org.apache.accumulo.core.dataImpl.thrift.UpdateErrors;
 import org.apache.accumulo.core.file.blockfile.cache.impl.BlockCacheConfiguration;
 import org.apache.accumulo.core.master.thrift.TabletServerStatus;
+import org.apache.accumulo.core.metadata.StoredTabletFile;
+import org.apache.accumulo.core.metadata.schema.Ample.TabletMutator;
 import org.apache.accumulo.core.metadata.schema.ExternalCompactionId;
 import org.apache.accumulo.core.metadata.schema.TabletMetadata;
+import org.apache.accumulo.core.metadata.schema.TabletMetadata.ColumnType;
+import org.apache.accumulo.core.metadata.schema.TabletsMetadata;
 import org.apache.accumulo.core.metrics.MetricsUtil;
 import org.apache.accumulo.core.securityImpl.thrift.TCredentials;
 import org.apache.accumulo.core.spi.compaction.CompactionExecutorId;
@@ -111,9 +118,11 @@ import org.apache.accumulo.tserver.metrics.CompactionExecutorsMetrics;
 import org.apache.accumulo.tserver.metrics.TabletServerScanMetrics;
 import org.apache.accumulo.tserver.session.ScanSession;
 import org.apache.accumulo.tserver.session.ScanSession.TabletResolver;
+import org.apache.accumulo.tserver.session.SingleScanSession;
 import org.apache.accumulo.tserver.tablet.Tablet;
 import org.apache.accumulo.tserver.tablet.TabletData;
 import org.apache.commons.lang3.tuple.MutableTriple;
+import org.apache.hadoop.io.Text;
 import org.apache.thrift.TException;
 import org.apache.zookeeper.KeeperException;
 import org.slf4j.Logger;
@@ -122,8 +131,61 @@ import org.slf4j.LoggerFactory;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.github.benmanes.caffeine.cache.Scheduler;
+import com.google.common.base.Preconditions;
 
 public class ScanServer extends TabletServer implements TabletClientService.Iface {
+
+  public static class ScanServerTabletFile extends StoredTabletFile {
+
+    private static final byte[] IDENTIFIER = "SSERV".getBytes(UTF_8);
+    private final String scanServerAddress;
+    private final Text metadataEntry;
+
+    public static ScanServerTabletFile parse(String columnQualifier)
+        throws IllegalArgumentException {
+      byte[][] parts = ByteUtils.split(columnQualifier.getBytes(UTF_8));
+      if (parts.length == 4) {
+        if (!Arrays.equals(IDENTIFIER, parts[0])) {
+          throw new IllegalArgumentException("Not a ScanServerTabletFile entry");
+        }
+        return new ScanServerTabletFile(new String(parts[1], UTF_8), new String(parts[2], UTF_8),
+            new String(parts[3], UTF_8));
+      }
+      throw new IllegalArgumentException("Not a ScanServerTabletFile entry");
+    }
+
+    public ScanServerTabletFile(String datafilePath, String scanServerAddress, String scanID) {
+      super(datafilePath);
+      this.scanServerAddress = scanServerAddress;
+      this.metadataEntry = new Text(ByteUtils.concat(datafilePath.getBytes(UTF_8),
+          scanServerAddress.getBytes(UTF_8), scanID.getBytes(UTF_8)));
+    }
+
+    @Override
+    public String getMetaInsert() {
+      return this.metadataEntry.toString();
+    }
+
+    @Override
+    public Text getMetaInsertText() {
+      return this.metadataEntry;
+    }
+
+    @Override
+    public String getMetaUpdateDelete() {
+      return this.metadataEntry.toString();
+    }
+
+    @Override
+    public Text getMetaUpdateDeleteText() {
+      return this.metadataEntry;
+    }
+
+    public String getScanServerAddress() {
+      return this.scanServerAddress;
+    }
+
+  }
 
   static class ScanInformation extends MutableTriple<Long,KeyExtent,Tablet> {
     private static final long serialVersionUID = 1L;
@@ -439,6 +501,47 @@ public class ScanServer extends TabletServer implements TabletClientService.Ifac
     }
   }
 
+  protected void reserve(Tablet tablet, long scanID) {
+    final Set<StoredTabletFile> tabletsFiles = new HashSet<>();
+    TabletsMetadata.builder(getContext()).forTablet(tablet.getExtent()).fetch(ColumnType.FILES)
+        .build().forEach(m -> {
+          tabletsFiles.addAll(m.getFiles());
+        });
+    // Put a scan entry in the metadata table so these files don't get GC'd
+    final Set<StoredTabletFile> reservedFiles = new HashSet<>();
+    TabletMutator mutator = getContext().getAmple().mutateTablet(tablet.getExtent());
+    tablet.getDatafiles().keySet().forEach(stf -> {
+      Preconditions.checkArgument(tabletsFiles.contains(stf),
+          "File is no longer part of tablet: " + stf);
+      mutator.putScan(new ScanServerTabletFile(stf.toString(), clientAddress.toString(),
+          Long.toBinaryString(scanID)));
+      reservedFiles.add(stf);
+    });
+    mutator.mutate();
+    // Confirm that the reserved files are still part of the tablets' files.
+    TabletsMetadata tm = TabletsMetadata.builder(getContext()).forTablet(tablet.getExtent())
+        .fetch(ColumnType.FILES).build();
+    tm.forEach(m -> {
+      Collection<StoredTabletFile> files = m.getFiles();
+      reservedFiles.forEach(rf -> {
+        Preconditions.checkArgument(files.contains(rf), "File is no longer part of tablet: " + rf);
+      });
+    });
+
+  }
+
+  protected void unreserve(long scanID) {
+    SingleScanSession session = (SingleScanSession) sessionManager.getSession(scanID);
+    Tablet tablet = session.getTabletResolver().getTablet(session.extent);
+    // Remove the scan entry in the metadata table so these files can be GC'd
+    TabletMutator mutator = getContext().getAmple().mutateTablet(tablet.getExtent());
+    tablet.getDatafiles().keySet().forEach(stf -> {
+      mutator.deleteScan(new ScanServerTabletFile(stf.getPath().toString(),
+          clientAddress.toString(), Long.toBinaryString(scanID)));
+    });
+    mutator.mutate();
+  }
+
   /*
    * This simple method exists to be overridden in tests
    */
@@ -491,6 +594,7 @@ public class ScanServer extends TabletServer implements TabletClientService.Ifac
           ssiList, ssio, authorizations, waitForWrites, isolated, readaheadThreshold, samplerConfig,
           batchTimeOut, classLoaderContext, executionHints, getScanTabletResolver(si), busyTimeout);
       si.setScanId(is.getScanID());
+      reserve(si.getTablet(), is.getScanID());
       LOG.debug("started scan {} for extent {}", si.getScanId(), si.getExtent());
       return is;
     } catch (TException e) {
@@ -507,6 +611,7 @@ public class ScanServer extends TabletServer implements TabletClientService.Ifac
     try {
       return handler.continueScan(tinfo, scanID, busyTimeout);
     } catch (Exception e) {
+      unreserve(scanID);
       throw e;
     }
   }
@@ -514,7 +619,11 @@ public class ScanServer extends TabletServer implements TabletClientService.Ifac
   @Override
   public void closeScan(TInfo tinfo, long scanID) throws TException {
     LOG.debug("close scan: {}", scanID);
-    handler.closeScan(tinfo, scanID);
+    try {
+      handler.closeScan(tinfo, scanID);
+    } finally {
+      unreserve(scanID);
+    }
   }
 
   @Override
@@ -559,6 +668,7 @@ public class ScanServer extends TabletServer implements TabletClientService.Ifac
       InitialMultiScan ims = handler.startMultiScan(tinfo, credentials, tcolumns, ssiList, batch,
           ssio, authorizations, waitForWrites, tSamplerConfig, batchTimeOut, contextArg,
           executionHints, tabletResolver, busyTimeout);
+      reserve(si.getTablet(), ims.getScanID());
       si.setScanId(ims.getScanID());
       LOG.debug("started scan: {}", si.getScanId());
       return ims;
@@ -571,14 +681,22 @@ public class ScanServer extends TabletServer implements TabletClientService.Ifac
   public MultiScanResult continueMultiScan(TInfo tinfo, long scanID, long busyTimeout)
       throws NoSuchScanIDException, TSampleNotPresentException, TException {
     LOG.debug("continue multi scan: {}", scanID);
-
-    return handler.continueMultiScan(tinfo, scanID, busyTimeout);
+    try {
+      return handler.continueMultiScan(tinfo, scanID, busyTimeout);
+    } catch (Exception e) {
+      unreserve(scanID);
+      throw e;
+    }
   }
 
   @Override
   public void closeMultiScan(TInfo tinfo, long scanID) throws NoSuchScanIDException, TException {
     LOG.debug("close multi scan: {}", scanID);
-    handler.closeMultiScan(tinfo, scanID);
+    try {
+      handler.closeMultiScan(tinfo, scanID);
+    } finally {
+      unreserve(scanID);
+    }
   }
 
   @Override
