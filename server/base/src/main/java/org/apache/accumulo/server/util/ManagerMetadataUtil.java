@@ -42,6 +42,7 @@ import org.apache.accumulo.core.data.TableId;
 import org.apache.accumulo.core.data.Value;
 import org.apache.accumulo.core.dataImpl.KeyExtent;
 import org.apache.accumulo.core.metadata.MetadataTable;
+import org.apache.accumulo.core.metadata.ScanReferenceTabletFile;
 import org.apache.accumulo.core.metadata.StoredTabletFile;
 import org.apache.accumulo.core.metadata.TServerInstance;
 import org.apache.accumulo.core.metadata.TabletFile;
@@ -191,7 +192,9 @@ public class ManagerMetadataUtil {
     TabletMutator tablet = context.getAmple().mutateTablet(extent);
 
     datafilesToDelete.forEach(tablet::deleteFile);
-    scanFiles.forEach(tablet::putScan);
+    scanFiles.forEach(sf -> {
+      tablet.putScan(new ScanReferenceTabletFile(sf.getPathStr(), address));
+    });
 
     if (size.getNumEntries() > 0)
       tablet.putFile(path, size);

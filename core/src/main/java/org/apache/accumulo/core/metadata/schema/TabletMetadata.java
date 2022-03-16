@@ -47,7 +47,7 @@ import org.apache.accumulo.core.data.Key;
 import org.apache.accumulo.core.data.TableId;
 import org.apache.accumulo.core.data.Value;
 import org.apache.accumulo.core.dataImpl.KeyExtent;
-import org.apache.accumulo.core.metadata.ScanServerStoredTabletFile;
+import org.apache.accumulo.core.metadata.ScanReferenceTabletFile;
 import org.apache.accumulo.core.metadata.StoredTabletFile;
 import org.apache.accumulo.core.metadata.SuspendingTServer;
 import org.apache.accumulo.core.metadata.TServerInstance;
@@ -92,7 +92,7 @@ public class TabletMetadata {
   private Text endRow;
   private Location location;
   private Map<StoredTabletFile,DataFileValue> files;
-  private List<StoredTabletFile> scans;
+  private List<ScanReferenceTabletFile> scans;
   private Map<TabletFile,Long> loadedFiles;
   private EnumSet<ColumnType> fetchedCols;
   private KeyExtent extent;
@@ -231,7 +231,7 @@ public class TabletMetadata {
     return logs;
   }
 
-  public List<StoredTabletFile> getScans() {
+  public List<ScanReferenceTabletFile> getScans() {
     ensureFetched(ColumnType.SCANS);
     return scans;
   }
@@ -296,14 +296,6 @@ public class TabletMetadata {
     return extCompactions;
   }
 
-  private static StoredTabletFile parseScanColumnFamily(String colq) {
-    if (!colq.startsWith(ScanServerStoredTabletFile.IDENTIFIER_STR)) {
-      return new StoredTabletFile(colq);
-    } else {
-      return ScanServerStoredTabletFile.parse(colq);
-    }
-  }
-
   @VisibleForTesting
   public static TabletMetadata convertRow(Iterator<Entry<Key,Value>> rowIter,
       EnumSet<ColumnType> fetchedColumns, boolean buildKeyValueMap) {
@@ -314,7 +306,7 @@ public class TabletMetadata {
         buildKeyValueMap ? ImmutableSortedMap.naturalOrder() : null;
 
     final var filesBuilder = ImmutableMap.<StoredTabletFile,DataFileValue>builder();
-    final var scansBuilder = ImmutableList.<StoredTabletFile>builder();
+    final var scansBuilder = ImmutableList.<ScanReferenceTabletFile>builder();
     final var logsBuilder = ImmutableList.<LogEntry>builder();
     final var extCompBuilder =
         ImmutableMap.<ExternalCompactionId,ExternalCompactionMetadata>builder();
@@ -396,7 +388,7 @@ public class TabletMetadata {
           te.suspend = SuspendingTServer.fromValue(kv.getValue());
           break;
         case ScanFileColumnFamily.STR_NAME:
-          scansBuilder.add(parseScanColumnFamily(qual));
+          scansBuilder.add(ScanReferenceTabletFile.parse(qual));
           break;
         case ClonedColumnFamily.STR_NAME:
           te.cloned = val;

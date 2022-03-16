@@ -64,6 +64,7 @@ import org.apache.accumulo.core.data.Value;
 import org.apache.accumulo.core.dataImpl.KeyExtent;
 import org.apache.accumulo.core.metadata.MetadataTable;
 import org.apache.accumulo.core.metadata.RootTable;
+import org.apache.accumulo.core.metadata.ScanReferenceTabletFile;
 import org.apache.accumulo.core.metadata.StoredTabletFile;
 import org.apache.accumulo.core.metadata.TabletFile;
 import org.apache.accumulo.core.metadata.TabletFileUtil;
@@ -292,9 +293,11 @@ public class MetadataTableUtil {
   }
 
   public static void removeScanFiles(KeyExtent extent, Set<StoredTabletFile> scanFiles,
-      ServerContext context, ServiceLock zooLock) {
+      ServerContext context, ServiceLock zooLock, String serverAddress) {
     TabletMutator tablet = context.getAmple().mutateTablet(extent);
-    scanFiles.forEach(tablet::deleteScan);
+    scanFiles.forEach(sf -> {
+      tablet.deleteScan(new ScanReferenceTabletFile(sf.getPathStr(), serverAddress));
+    });
     tablet.putZooLock(zooLock);
     tablet.mutate();
   }

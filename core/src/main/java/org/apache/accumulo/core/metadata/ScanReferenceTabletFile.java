@@ -20,36 +20,39 @@ package org.apache.accumulo.core.metadata;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-import java.util.Arrays;
+import java.util.Objects;
 
 import org.apache.accumulo.core.clientImpl.lexicoder.ByteUtils;
 import org.apache.hadoop.io.Text;
 
-public class ScanServerStoredTabletFile extends StoredTabletFile {
+public class ScanReferenceTabletFile extends StoredTabletFile {
 
-  public static final String IDENTIFIER_STR = "SSERV";
-  private static final byte[] IDENTIFIER = IDENTIFIER_STR.getBytes(UTF_8);
-  private final String scanServerAddress;
+  private final String serverAddress;
   private final Text metadataEntry;
 
-  public static ScanServerStoredTabletFile parse(String columnQualifier)
+  public static ScanReferenceTabletFile parse(String columnQualifier)
       throws IllegalArgumentException {
     byte[][] parts = ByteUtils.split(columnQualifier.getBytes(UTF_8));
-    if (parts.length == 4) {
-      if (!Arrays.equals(IDENTIFIER, parts[0])) {
-        throw new IllegalArgumentException("Not a ScanServerTabletFile entry");
-      }
-      return new ScanServerStoredTabletFile(new String(parts[1], UTF_8),
-          new String(parts[2], UTF_8), new String(parts[3], UTF_8));
+    if (parts.length == 2) {
+      return new ScanReferenceTabletFile(new String(parts[0], UTF_8), new String(parts[1], UTF_8));
+    } else if (parts.length == 3) {
+      return new ScanReferenceTabletFile(new String(parts[0], UTF_8), new String(parts[1], UTF_8),
+          new String(parts[2], UTF_8));
     }
     throw new IllegalArgumentException("Not a ScanServerTabletFile entry");
   }
 
-  public ScanServerStoredTabletFile(String datafilePath, String scanServerAddress, String scanID) {
+  public ScanReferenceTabletFile(String datafilePath, String serverAddress) {
+    this(datafilePath, serverAddress, "unknown");
+  }
+
+  public ScanReferenceTabletFile(String datafilePath, String serverAddress, String scanID) {
     super(datafilePath);
-    this.scanServerAddress = scanServerAddress;
+    Objects.requireNonNull(serverAddress);
+    Objects.requireNonNull(scanID);
+    this.serverAddress = serverAddress;
     this.metadataEntry = new Text(ByteUtils.concat(datafilePath.getBytes(UTF_8),
-        scanServerAddress.getBytes(UTF_8), scanID.getBytes(UTF_8)));
+        serverAddress.getBytes(UTF_8), scanID.getBytes(UTF_8)));
   }
 
   @Override
@@ -72,8 +75,8 @@ public class ScanServerStoredTabletFile extends StoredTabletFile {
     return this.metadataEntry;
   }
 
-  public String getScanServerAddress() {
-    return this.scanServerAddress;
+  public String getServerAddress() {
+    return this.serverAddress;
   }
 
 }

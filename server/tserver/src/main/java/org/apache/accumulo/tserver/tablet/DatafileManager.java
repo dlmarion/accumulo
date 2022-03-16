@@ -37,7 +37,7 @@ import java.util.concurrent.TimeUnit;
 import org.apache.accumulo.core.conf.Property;
 import org.apache.accumulo.core.dataImpl.KeyExtent;
 import org.apache.accumulo.core.logging.TabletLogger;
-import org.apache.accumulo.core.metadata.ScanServerStoredTabletFile;
+import org.apache.accumulo.core.metadata.ScanReferenceTabletFile;
 import org.apache.accumulo.core.metadata.StoredTabletFile;
 import org.apache.accumulo.core.metadata.TServerInstance;
 import org.apache.accumulo.core.metadata.TabletFile;
@@ -123,7 +123,7 @@ class DatafileManager {
       boolean notify = false;
       for (StoredTabletFile path : absFilePaths) {
         // Don't remove SCAN entries that are placed by the ScanServer
-        if (path instanceof ScanServerStoredTabletFile) {
+        if (path instanceof ScanReferenceTabletFile) {
           continue;
         }
         long refCount = fileScanReferenceCounts.decrement(path, 1);
@@ -142,7 +142,7 @@ class DatafileManager {
     if (!filesToDelete.isEmpty()) {
       log.debug("Removing scan refs from metadata {} {}", tablet.getExtent(), filesToDelete);
       MetadataTableUtil.removeScanFiles(tablet.getExtent(), filesToDelete, tablet.getContext(),
-          tablet.getTabletServer().getLock());
+          tablet.getTabletServer().getLock(), tablet.getTabletServer().getClientAddressString());
     }
   }
 
@@ -155,7 +155,7 @@ class DatafileManager {
     synchronized (tablet) {
       for (StoredTabletFile path : scanFiles) {
         // Don't remove SCAN entries that are placed by the ScanServer
-        if (path instanceof ScanServerStoredTabletFile) {
+        if (path instanceof ScanReferenceTabletFile) {
           continue;
         }
         if (fileScanReferenceCounts.get(path) == 0)
@@ -168,7 +168,7 @@ class DatafileManager {
     if (!filesToDelete.isEmpty()) {
       log.debug("Removing scan refs from metadata {} {}", tablet.getExtent(), filesToDelete);
       MetadataTableUtil.removeScanFiles(tablet.getExtent(), filesToDelete, tablet.getContext(),
-          tablet.getTabletServer().getLock());
+          tablet.getTabletServer().getLock(), tablet.getTabletServer().getClientAddressString());
     }
   }
 

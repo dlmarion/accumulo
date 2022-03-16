@@ -21,6 +21,7 @@ package org.apache.accumulo.server.metadata;
 import org.apache.accumulo.core.data.Mutation;
 import org.apache.accumulo.core.data.Value;
 import org.apache.accumulo.core.dataImpl.KeyExtent;
+import org.apache.accumulo.core.metadata.ScanReferenceTabletFile;
 import org.apache.accumulo.core.metadata.StoredTabletFile;
 import org.apache.accumulo.core.metadata.SuspendingTServer;
 import org.apache.accumulo.core.metadata.TServerInstance;
@@ -97,14 +98,14 @@ public abstract class TabletMutatorBase implements Ample.TabletMutator {
   }
 
   @Override
-  public Ample.TabletMutator putScan(TabletFile path) {
+  public Ample.TabletMutator putScan(ScanReferenceTabletFile path) {
     Preconditions.checkState(updatesEnabled, "Cannot make updates after calling mutate.");
     mutation.put(ScanFileColumnFamily.NAME, path.getMetaInsertText(), new Value());
     return this;
   }
 
   @Override
-  public Ample.TabletMutator deleteScan(StoredTabletFile path) {
+  public Ample.TabletMutator deleteScan(ScanReferenceTabletFile path) {
     Preconditions.checkState(updatesEnabled, "Cannot make updates after calling mutate.");
     mutation.putDelete(ScanFileColumnFamily.NAME, path.getMetaUpdateDeleteText());
     return this;

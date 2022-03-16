@@ -19,7 +19,6 @@
 package org.apache.accumulo.core.metadata.schema;
 
 import static java.util.stream.Collectors.toSet;
-import static org.apache.accumulo.core.metadata.schema.MetadataSchema.TabletsSection.SuspendLocationColumn;
 import static org.apache.accumulo.core.metadata.schema.MetadataSchema.TabletsSection.ServerColumnFamily.COMPACT_COLUMN;
 import static org.apache.accumulo.core.metadata.schema.MetadataSchema.TabletsSection.ServerColumnFamily.DIRECTORY_COLUMN;
 import static org.apache.accumulo.core.metadata.schema.MetadataSchema.TabletsSection.ServerColumnFamily.FLUSH_COLUMN;
@@ -45,6 +44,7 @@ import org.apache.accumulo.core.data.Mutation;
 import org.apache.accumulo.core.data.TableId;
 import org.apache.accumulo.core.data.Value;
 import org.apache.accumulo.core.dataImpl.KeyExtent;
+import org.apache.accumulo.core.metadata.ScanReferenceTabletFile;
 import org.apache.accumulo.core.metadata.StoredTabletFile;
 import org.apache.accumulo.core.metadata.SuspendingTServer;
 import org.apache.accumulo.core.metadata.TServerInstance;
@@ -56,6 +56,7 @@ import org.apache.accumulo.core.metadata.schema.MetadataSchema.TabletsSection.Da
 import org.apache.accumulo.core.metadata.schema.MetadataSchema.TabletsSection.FutureLocationColumnFamily;
 import org.apache.accumulo.core.metadata.schema.MetadataSchema.TabletsSection.LastLocationColumnFamily;
 import org.apache.accumulo.core.metadata.schema.MetadataSchema.TabletsSection.ScanFileColumnFamily;
+import org.apache.accumulo.core.metadata.schema.MetadataSchema.TabletsSection.SuspendLocationColumn;
 import org.apache.accumulo.core.metadata.schema.MetadataSchema.TabletsSection.TabletColumnFamily;
 import org.apache.accumulo.core.metadata.schema.TabletMetadata.ColumnType;
 import org.apache.accumulo.core.metadata.schema.TabletMetadata.LocationType;
@@ -105,8 +106,10 @@ public class TabletMetadataTest {
     mutation.at().family(le2.getColumnFamily()).qualifier(le2.getColumnQualifier())
         .timestamp(le2.timestamp).put(le2.getValue());
 
-    StoredTabletFile sf1 = new StoredTabletFile("hdfs://nn1/acc/tables/1/t-0001/sf1.rf");
-    StoredTabletFile sf2 = new StoredTabletFile("hdfs://nn1/acc/tables/1/t-0001/sf2.rf");
+    ScanReferenceTabletFile sf1 =
+        new ScanReferenceTabletFile("hdfs://nn1/acc/tables/1/t-0001/sf1.rf", "server1:8555");
+    ScanReferenceTabletFile sf2 =
+        new ScanReferenceTabletFile("hdfs://nn1/acc/tables/1/t-0001/sf2.rf", "server2:8555");
     mutation.at().family(ScanFileColumnFamily.NAME).qualifier(sf1.getMetaUpdateDelete()).put("");
     mutation.at().family(ScanFileColumnFamily.NAME).qualifier(sf2.getMetaUpdateDelete()).put("");
 

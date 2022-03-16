@@ -20,7 +20,6 @@ package org.apache.accumulo.server.util;
 
 import java.util.List;
 
-import org.apache.accumulo.core.metadata.ScanServerStoredTabletFile;
 import org.apache.accumulo.core.metadata.schema.Ample;
 import org.apache.accumulo.core.metadata.schema.Ample.DataLevel;
 import org.apache.accumulo.core.metadata.schema.Ample.TabletMutator;
@@ -49,15 +48,12 @@ public class CleanScanServerScanEntries {
     final Ample ample = context.getAmple();
     tm.forEach(m -> {
       m.getScans().forEach(stf -> {
-        if (stf instanceof ScanServerStoredTabletFile) {
-          ScanServerStoredTabletFile ssstf = (ScanServerStoredTabletFile) stf;
-          if (!scanServers.contains(ssstf.getScanServerAddress())) {
-            LOG.info("ScanServer {} not found, removing scan entry for file: {}",
-                ssstf.getScanServerAddress(), ssstf.toString());
-            TabletMutator mutator = ample.mutateTablet(m.getExtent());
-            mutator.deleteScan(ssstf);
-            mutator.mutate();
-          }
+        if (!scanServers.contains(stf.getServerAddress())) {
+          LOG.info("ScanServer {} not found, removing scan entry for file: {}",
+              stf.getServerAddress(), stf.toString());
+          TabletMutator mutator = ample.mutateTablet(m.getExtent());
+          mutator.deleteScan(stf);
+          mutator.mutate();
         }
       });
     });

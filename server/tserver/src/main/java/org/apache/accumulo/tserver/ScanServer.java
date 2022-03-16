@@ -63,7 +63,7 @@ import org.apache.accumulo.core.dataImpl.thrift.TSummaryRequest;
 import org.apache.accumulo.core.dataImpl.thrift.UpdateErrors;
 import org.apache.accumulo.core.file.blockfile.cache.impl.BlockCacheConfiguration;
 import org.apache.accumulo.core.master.thrift.TabletServerStatus;
-import org.apache.accumulo.core.metadata.ScanServerStoredTabletFile;
+import org.apache.accumulo.core.metadata.ScanReferenceTabletFile;
 import org.apache.accumulo.core.metadata.StoredTabletFile;
 import org.apache.accumulo.core.metadata.schema.Ample;
 import org.apache.accumulo.core.metadata.schema.Ample.DataLevel;
@@ -464,7 +464,7 @@ public class ScanServer extends TabletServer implements TabletClientService.Ifac
     tablet.getDatafiles().keySet().forEach(stf -> {
       Preconditions.checkArgument(tabletsFiles.contains(stf),
           "Tablet file is no longer part of tablet: " + stf);
-      mutator.putScan(new ScanServerStoredTabletFile(stf.toString(), clientAddress.toString(),
+      mutator.putScan(new ScanReferenceTabletFile(stf.toString(), clientAddress.toString(),
           Long.toString(scanID)));
       reservedFiles.add(stf);
     });
@@ -488,7 +488,7 @@ public class ScanServer extends TabletServer implements TabletClientService.Ifac
     // Remove the scan entry in the metadata table so these files can be GC'd
     TabletMutator mutator = getContext().getAmple().mutateTablet(tablet.getExtent());
     tablet.getDatafiles().keySet().forEach(stf -> {
-      mutator.deleteScan(new ScanServerStoredTabletFile(stf.getPath().toString(),
+      mutator.deleteScan(new ScanReferenceTabletFile(stf.getPath().toString(),
           clientAddress.toString(), Long.toString(scanID)));
     });
     mutator.mutate();
@@ -500,13 +500,10 @@ public class ScanServer extends TabletServer implements TabletClientService.Ifac
     final Ample ample = getContext().getAmple();
     tm.forEach(m -> {
       m.getScans().forEach(stf -> {
-        if (stf instanceof ScanServerStoredTabletFile) {
-          ScanServerStoredTabletFile ssstf = (ScanServerStoredTabletFile) stf;
-          if (ssstf.getScanServerAddress().equals(clientAddress.toString())) {
-            TabletMutator mutator = ample.mutateTablet(m.getExtent());
-            mutator.deleteScan(ssstf);
-            mutator.mutate();
-          }
+        if (stf.getServerAddress().equals(clientAddress.toString())) {
+          TabletMutator mutator = ample.mutateTablet(m.getExtent());
+          mutator.deleteScan(stf);
+          mutator.mutate();
         }
       });
     });

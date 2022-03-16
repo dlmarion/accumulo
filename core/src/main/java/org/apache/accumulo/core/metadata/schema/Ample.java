@@ -27,6 +27,7 @@ import org.apache.accumulo.core.data.TableId;
 import org.apache.accumulo.core.dataImpl.KeyExtent;
 import org.apache.accumulo.core.metadata.MetadataTable;
 import org.apache.accumulo.core.metadata.RootTable;
+import org.apache.accumulo.core.metadata.ScanReferenceTabletFile;
 import org.apache.accumulo.core.metadata.StoredTabletFile;
 import org.apache.accumulo.core.metadata.TServerInstance;
 import org.apache.accumulo.core.metadata.TabletFile;
@@ -251,9 +252,9 @@ public interface Ample {
 
     TabletMutator deleteFile(StoredTabletFile path);
 
-    TabletMutator putScan(TabletFile path);
+    TabletMutator putScan(ScanReferenceTabletFile path);
 
-    TabletMutator deleteScan(StoredTabletFile path);
+    TabletMutator deleteScan(ScanReferenceTabletFile path);
 
     TabletMutator putCompactionId(long compactionId);
 
