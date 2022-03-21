@@ -18,7 +18,7 @@
  */
 package org.apache.accumulo.core.spi.scan;
 
-import static org.junit.Assert.assertEquals;
+
 
 import java.util.Collection;
 import java.util.HashSet;
@@ -32,7 +32,10 @@ import org.apache.accumulo.core.dataImpl.KeyExtent;
 import org.apache.accumulo.core.dataImpl.TabletIdImpl;
 import org.apache.accumulo.core.spi.common.ServiceEnvironment;
 import org.apache.hadoop.io.Text;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 
 public class DefaultScanServerDispatcherTest {
 
