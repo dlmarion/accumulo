@@ -25,8 +25,17 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.TimeUnit;
@@ -128,6 +137,7 @@ import com.github.benmanes.caffeine.cache.CacheLoader;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.github.benmanes.caffeine.cache.Scheduler;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Sets;
 
 public class ScanServer extends TabletServer implements TabletClientService.Iface {
@@ -237,6 +247,9 @@ public class ScanServer extends TabletServer implements TabletClientService.Ifac
   private UUID serverLockUUID;
   private final TabletMetadataLoader tabletMetadataLoader;
   private final LoadingCache<KeyExtent,TabletMetadata> tabletMetadataCache;
+  protected Set<StoredTabletFile> lockedFiles = new HashSet<>();
+  protected Map<StoredTabletFile,ReservedFile> reservedFiles = new ConcurrentHashMap<>();
+  protected AtomicLong nextScanReservationId = new AtomicLong();
 
   private static class TabletMetadataLoader implements CacheLoader<KeyExtent,TabletMetadata> {
 
@@ -260,8 +273,8 @@ public class ScanServer extends TabletServer implements TabletClientService.Ifac
     public Map<? extends KeyExtent,? extends TabletMetadata>
         loadAll(Set<? extends KeyExtent> keys) {
       long t1 = System.currentTimeMillis();
-      var tms = ample.readTablets().forTablets((Collection<KeyExtent>) keys)
-          .build().stream().collect(Collectors.toMap(tm -> tm.getExtent(), tm -> tm));
+      var tms = ample.readTablets().forTablets((Collection<KeyExtent>) keys).build().stream()
+          .collect(Collectors.toMap(tm -> tm.getExtent(), tm -> tm));
       long t2 = System.currentTimeMillis();
       LOG.trace("Read metadata for {} tablets in {} ms", keys.size(), t2 - t1);
       return tms;
@@ -275,8 +288,12 @@ public class ScanServer extends TabletServer implements TabletClientService.Ifac
     // perform is by using Property.TSERV_SCAN_EXECUTORS_DEFAULT_THREADS or the number
     // of threads in Property.TSERV_SCAN_EXECUTORS_PREFIX.
 
+    // TODO: Make Property.SSERV_SCAN_EXECUTORS_PREFIX
+
     long cacheExpiration =
         getConfiguration().getTimeInMillis(Property.SSERV_CACHED_TABLET_METADATA_EXPIRATION);
+
+    long scanServerReservationExpiration = (cacheExpiration == 0) ? 1000L : 2 * cacheExpiration;
 
     tabletMetadataLoader = new TabletMetadataLoader(getContext().getAmple());
 
@@ -294,12 +311,15 @@ public class ScanServer extends TabletServer implements TabletClientService.Ifac
     }
     handler = getHandler();
 
-    // TODO maybe have separate prop from cahce for expiring refs
+    // TODO maybe have separate prop from cache for expiring refs
     ThreadPools.watchCriticalScheduledTask(getContext().getScheduledExecutor()
-        .scheduleWithFixedDelay(() -> cleanUpReservedFiles(2 * cacheExpiration), cacheExpiration,
-            cacheExpiration, TimeUnit.MILLISECONDS));
+        .scheduleWithFixedDelay(() -> cleanUpReservedFiles(scanServerReservationExpiration),
+            scanServerReservationExpiration, scanServerReservationExpiration,
+            TimeUnit.MILLISECONDS));
+
   }
 
+  @VisibleForTesting
   protected ThriftClientHandler getHandler() {
     return new ThriftClientHandler(this);
   }
@@ -476,10 +496,6 @@ public class ScanServer extends TabletServer implements TabletClientService.Ifac
           && System.currentTimeMillis() - lastUseTime > expireTimeMs;
     }
   }
-
-  private Set<StoredTabletFile> lockedFiles = new HashSet<>();
-  private Map<StoredTabletFile,ReservedFile> reservedFiles = new ConcurrentHashMap<>();
-  private AtomicLong nextScanReservationId = new AtomicLong();
 
   private class FilesLock implements AutoCloseable {
 
@@ -682,7 +698,7 @@ public class ScanServer extends TabletServer implements TabletClientService.Ifac
     return tabletsMetadata;
   }
 
-  private ScanReservation reserveFiles(Collection<KeyExtent> extents)
+  protected ScanReservation reserveFiles(Collection<KeyExtent> extents)
       throws NotServingTabletException, AccumuloException {
 
     long myReservationId = nextScanReservationId.incrementAndGet();
@@ -695,7 +711,7 @@ public class ScanServer extends TabletServer implements TabletClientService.Ifac
     return new ScanReservation(tabletsMetadata, myReservationId);
   }
 
-  ScanReservation reserveFiles(long scanId) throws NoSuchScanIDException {
+  protected ScanReservation reserveFiles(long scanId) throws NoSuchScanIDException {
     var session = (ScanSession) sessionManager.getSession(scanId);
     if (session == null) {
       throw new NoSuchScanIDException();
@@ -881,11 +897,9 @@ public class ScanServer extends TabletServer implements TabletClientService.Ifac
         }
       });
 
-      ScanSession.TabletResolver tabletResolver = getBatchScanTabletResolver(tablets);
-
       InitialMultiScan ims = handler.startMultiScan(tinfo, credentials, tcolumns, ssiList, batch,
           ssio, authorizations, waitForWrites, tSamplerConfig, batchTimeOut, contextArg,
-          executionHints, tabletResolver, busyTimeout);
+          executionHints, getBatchScanTabletResolver(tablets), busyTimeout);
 
       LOG.debug("started scan: {}", ims.getScanID());
       return ims;
