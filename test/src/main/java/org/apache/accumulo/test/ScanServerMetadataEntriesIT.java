@@ -110,7 +110,6 @@ public class ScanServerMetadataEntriesIT extends SharedMiniClusterBase {
     try (AccumuloClient ac = Accumulo.newClient().from(getClientProps()).build()) {
       HostAndPort server = HostAndPort.fromParts("127.0.0.1", 1234);
       UUID serverLockUUID = UUID.randomUUID();
-      HostAndPort client = HostAndPort.fromParts("127.0.0.1", 4321);
 
       String[] files =
           new String[] {"hdfs://localhost:8020/accumulo/tables/2a/default_tablet/F0000070.rf",
@@ -118,8 +117,7 @@ public class ScanServerMetadataEntriesIT extends SharedMiniClusterBase {
 
       Set<ScanServerRefTabletFile> scanRefs = new HashSet<>();
       for (String file : files) {
-        scanRefs.add(new ScanServerRefTabletFile(file, server.toString(), serverLockUUID,
-            client.toString()));
+        scanRefs.add(new ScanServerRefTabletFile(file, server.toString(), serverLockUUID));
       }
 
       ServerContext ctx = getCluster().getServerContext();
@@ -169,6 +167,8 @@ public class ScanServerMetadataEntriesIT extends SharedMiniClusterBase {
         Iterator<Entry<Key,Value>> iter = scanner.iterator();
         assertTrue(iter.hasNext());
         assertNotNull(iter.next());
+
+        Thread.sleep(6000); // wait twice the insert interval
 
         assertEquals(3, ctx.getAmple().getScanServerFileReferences().count());
 

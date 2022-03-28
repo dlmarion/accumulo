@@ -24,7 +24,6 @@ import java.util.Set;
 import java.util.UUID;
 
 import org.apache.accumulo.core.metadata.ScanServerRefTabletFile;
-import org.apache.accumulo.core.util.Pair;
 import org.apache.accumulo.server.ServerContext;
 import org.apache.accumulo.server.cli.ServerUtilOpts;
 import org.slf4j.Logger;
@@ -39,18 +38,20 @@ public class ScanServerMetadataEntries {
     final Set<ScanServerRefTabletFile> refsToDelete = new HashSet<>();
 
     context.getAmple().getScanServerFileReferences().forEach(ssrtf -> {
-      Pair<String,UUID> fileInfo = ScanServerRefTabletFile.parseColf(ssrtf.getServerAddress());
       // we are looking for file references for dead scan servers
-      UUID serverUUID = scanServers.get(fileInfo.getFirst());
-      if (serverUUID == null || !serverUUID.equals(fileInfo.getSecond())) {
+      UUID serverUUID = scanServers.get(ssrtf.getServerAddress().toString());
+      if (serverUUID == null
+          || !serverUUID.equals(UUID.fromString(ssrtf.getServerLockUUID().toString()))) {
         LOG.info("{} is in the metadata table but does not match any live scan server, deleting it",
             ssrtf);
         refsToDelete.add(ssrtf);
+        if (refsToDelete.size() > 5000) {
+          context.getAmple().deleteScanServerFileReferences(refsToDelete);
+          refsToDelete.clear();
+        }
       }
     });
-
     context.getAmple().deleteScanServerFileReferences(refsToDelete);
-
   }
 
   public static void main(String[] args) {

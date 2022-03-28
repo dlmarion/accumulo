@@ -281,7 +281,7 @@ public class ServerAmpleImpl extends AmpleImpl implements Ample {
       String prefix = ScanServerFileReferenceSection.getRowPrefix();
       for (ScanServerRefTabletFile ref : scanRefs) {
         Mutation m = new Mutation(prefix + ref.getRowSuffix());
-        m.put(ref.getServerAddress(), ref.getClientAddress(), ref.getValue());
+        m.put(ref.getServerAddress(), ref.getServerLockUUID(), ref.getValue());
         writer.addMutation(m);
       }
     } catch (MutationsRejectedException | TableNotFoundException e) {
@@ -310,8 +310,7 @@ public class ServerAmpleImpl extends AmpleImpl implements Ample {
     try {
       Scanner scanner = context.createScanner(DataLevel.USER.metaTable(), Authorizations.EMPTY);
       scanner.setRange(ScanServerFileReferenceSection.getRange());
-      scanner
-          .fetchColumnFamily(ScanServerRefTabletFile.createColf(serverAddress, scanServerLockUUID));
+      scanner.fetchColumn(new Text(serverAddress), new Text(scanServerLockUUID.toString()));
 
       int pLen = ScanServerFileReferenceSection.getRowPrefix().length();
       Set<ScanServerRefTabletFile> refsToDelete = StreamSupport.stream(scanner.spliterator(), false)
@@ -333,7 +332,7 @@ public class ServerAmpleImpl extends AmpleImpl implements Ample {
       String prefix = ScanServerFileReferenceSection.getRowPrefix();
       for (ScanServerRefTabletFile ref : refsToDelete) {
         Mutation m = new Mutation(prefix + ref.getRowSuffix());
-        m.putDelete(ref.getServerAddress(), ref.getClientAddress());
+        m.putDelete(ref.getServerAddress(), ref.getServerLockUUID());
         writer.addMutation(m);
       }
       log.debug("Deleted scan server file reference entries for files: {}", refsToDelete);

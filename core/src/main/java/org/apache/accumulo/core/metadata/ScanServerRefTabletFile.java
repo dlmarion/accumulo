@@ -18,14 +18,9 @@
  */
 package org.apache.accumulo.core.metadata;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
-
-import java.util.Objects;
 import java.util.UUID;
 
-import org.apache.accumulo.core.clientImpl.lexicoder.ByteUtils;
 import org.apache.accumulo.core.data.Value;
-import org.apache.accumulo.core.util.Pair;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Text;
 
@@ -35,27 +30,10 @@ public class ScanServerRefTabletFile extends TabletFile {
   private final Text colf;
   private final Text colq;
 
-  public static Text createColf(String serverAddress, UUID serverLockUUID) {
-    Objects.requireNonNull(serverAddress, "address must be supplied");
-    Objects.requireNonNull(serverLockUUID, "uuid must be supplied");
-    return new Text(
-        ByteUtils.concat(serverAddress.getBytes(UTF_8), serverLockUUID.toString().getBytes(UTF_8)));
-  }
-
-  public static Pair<String,UUID> parseColf(Text colf) {
-    byte[][] parts = ByteUtils.split(colf.getBytes());
-    if (parts.length != 2) {
-      throw new IllegalArgumentException(
-          "ScanServerRefTabletFile colf in wrong format: " + colf.toString());
-    }
-    return new Pair<>(new String(parts[0], UTF_8), UUID.fromString(new String(parts[1], UTF_8)));
-  }
-
-  public ScanServerRefTabletFile(String file, String serverAddress, UUID serverLockUUID,
-      String clientAddress) {
+  public ScanServerRefTabletFile(String file, String serverAddress, UUID serverLockUUID) {
     super(new Path(file));
-    this.colf = createColf(serverAddress, serverLockUUID);
-    this.colq = new Text(clientAddress.getBytes(UTF_8));
+    this.colf = new Text(serverAddress);
+    this.colq = new Text(serverLockUUID.toString());
   }
 
   public ScanServerRefTabletFile(String file, Text colf, Text colq) {
@@ -72,7 +50,7 @@ public class ScanServerRefTabletFile extends TabletFile {
     return this.colf;
   }
 
-  public Text getClientAddress() {
+  public Text getServerLockUUID() {
     return this.colq;
   }
 
@@ -113,8 +91,8 @@ public class ScanServerRefTabletFile extends TabletFile {
 
   @Override
   public String toString() {
-    return "ScanServerRefTabletFile [file=" + this.getRowSuffix() + ", server address="
-        + parseColf(colf) + ", client address=" + colq + "]";
+    return "ScanServerRefTabletFile [file=" + this.getRowSuffix() + ", server address=" + colf
+        + ", server lock uuid=" + colq + "]";
   }
 
 }
