@@ -137,7 +137,7 @@ public class DefaultScanServerDispatcherTest {
     }
   }
 
-  TabletId nti(String tableId, String endRow) {
+  public static TabletId nti(String tableId, String endRow) {
     return new TabletIdImpl(new KeyExtent(TableId.of(tableId), new Text(endRow), null));
   }
 

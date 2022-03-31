@@ -282,7 +282,7 @@ public class ScannerOptions implements ScannerBase {
   }
 
   public void setConsistencyLevel(ConsistencyLevel level) {
-    this.consistencyLevel = level;
+    this.consistencyLevel = Objects.requireNonNull(level);
   }
 
 }
