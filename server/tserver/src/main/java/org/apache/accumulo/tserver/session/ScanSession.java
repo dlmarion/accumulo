@@ -42,6 +42,8 @@ public abstract class ScanSession extends Session implements ScanInfo {
 
   public static interface TabletResolver {
     Tablet getTablet(KeyExtent extent);
+
+    void close();
   }
 
   public static class ScanMeasurer implements Runnable {
@@ -177,4 +179,12 @@ public abstract class ScanSession extends Session implements ScanInfo {
   public TabletResolver getTabletResolver() {
     return tabletResolver;
   }
+
+  @Override
+  public boolean cleanup() {
+    super.cleanup();
+    tabletResolver.close();
+    return true;
+  }
+
 }
