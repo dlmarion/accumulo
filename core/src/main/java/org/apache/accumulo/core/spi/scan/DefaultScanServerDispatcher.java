@@ -31,6 +31,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
+import com.google.common.hash.HashCode;
 import org.apache.accumulo.core.data.TabletId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -161,7 +162,7 @@ public class DefaultScanServerDispatcher implements ScanServerDispatcher {
 
       String serverToUse = null;
 
-      int hashCode = hashTablet(tablet);
+      var hashCode = hashTablet(tablet);
 
       int numServers;
 
@@ -173,7 +174,7 @@ public class DefaultScanServerDispatcher implements ScanServerDispatcher {
         numServers = orderedScanServers.size();
       }
 
-      int serverIndex = Math.abs(hashCode + RANDOM.nextInt(numServers)) % orderedScanServers.size();
+      int serverIndex = (Math.abs(hashCode.asInt()) + RANDOM.nextInt(numServers)) % orderedScanServers.size();
 
       // TODO could check if errors were seen on this server in past attempts
       serverToUse = orderedScanServers.get(serverIndex);
@@ -208,19 +209,23 @@ public class DefaultScanServerDispatcher implements ScanServerDispatcher {
     };
   }
 
-  private int hashTablet(TabletId tablet) {
-    var hasher = Hashing.murmur3_32_fixed().newHasher();
-
-    hasher.putString(tablet.getTable().canonical(), UTF_8);
+  private HashCode hashTablet(TabletId tablet) {
+    var hasher = Hashing.murmur3_128().newHasher();
 
     if (tablet.getEndRow() != null) {
       hasher.putBytes(tablet.getEndRow().getBytes(), 0, tablet.getEndRow().getLength());
+    } else {
+      hasher.putByte((byte)5);
     }
 
     if (tablet.getPrevEndRow() != null) {
       hasher.putBytes(tablet.getPrevEndRow().getBytes(), 0, tablet.getPrevEndRow().getLength());
+    }else {
+      hasher.putByte((byte)7);
     }
 
-    return hasher.hash().asInt();
+    hasher.putString(tablet.getTable().canonical(), UTF_8);
+
+    return hasher.hash();
   }
 }
