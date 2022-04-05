@@ -51,7 +51,7 @@ public class ScanServerMetadataEntries {
     // uuids for scan servers that are dead
     uuidsToDelete.removeAll(scanServers.values());
 
-    if(!uuidsToDelete.isEmpty()) {
+    if (!uuidsToDelete.isEmpty()) {
       final Set<ScanServerRefTabletFile> refsToDelete = new HashSet<>();
 
       context.getAmple().getScanServerFileReferences().forEach(ssrtf -> {

@@ -41,7 +41,8 @@ public abstract class BlockCacheManager {
      * tserver.cache.config.summary.size}. This method returns the values of those settings. The
      * settings are made available, but cache implementations are under no obligation to use them.
      *
-     * <p>When this plugin is running in a scan server, the value associated with
+     * <p>
+     * When this plugin is running in a scan server, the value associated with
      * {@code sserver.cache.config.data.size}, {@code sserver.cache.config.index.size}, and
      * {@code sserver.cache.config.summary.size} are returned instead of tserver values.
      *
@@ -54,7 +55,8 @@ public abstract class BlockCacheManager {
      * {@code tserver.default.blocksize}. This method returns the value of that setting. The setting
      * is made available, but cache implementations are under no obligation to use it.
      *
-     * <p>When this plugin is running in scan server, the value associated with
+     * <p>
+     * When this plugin is running in scan server, the value associated with
      * {@code sserver.default.blocksize} is returned instead.
      *
      */
@@ -152,7 +154,8 @@ public abstract class BlockCacheManager {
    * @param prefix
    *          A unique identifier that corresponds to a particular BlockCacheManager implementation.
    * @see Configuration#getProperties(String, CacheType)
-   * @deprecated since 2.1.0 because this method does not support scan servers, only tservers.  Use {@link Configuration#getProperties(String, CacheType)} instead.
+   * @deprecated since 2.1.0 because this method does not support scan servers, only tservers. Use
+   *             {@link Configuration#getProperties(String, CacheType)} instead.
    */
   @Deprecated(since = "2.1.0")
   public static String getFullyQualifiedPropertyPrefix(String prefix) {
@@ -168,11 +171,13 @@ public abstract class BlockCacheManager {
    *          A unique identifier that corresponds to a particular BlockCacheManager implementation.
    * @see Configuration#getProperties(String, CacheType)
    *
-   * @deprecated since 2.1.0 because this method does not support scan servers, only tservers.  Use {@link Configuration#getProperties(String, CacheType)} instead.
+   * @deprecated since 2.1.0 because this method does not support scan servers, only tservers. Use
+   *             {@link Configuration#getProperties(String, CacheType)} instead.
    */
   @Deprecated(since = "2.1.0")
   public static String getFullyQualifiedPropertyPrefix(String prefix, CacheType type) {
-    return BlockCacheConfiguration.getFullyQualifiedPropertyPrefix(Property.TSERV_PREFIX, prefix, type);
+    return BlockCacheConfiguration.getFullyQualifiedPropertyPrefix(Property.TSERV_PREFIX, prefix,
+        type);
   }
 
 }

@@ -387,8 +387,8 @@ public class AccumuloConfigurationTest {
     assertTrue(sec9.prioritizerOpts.isEmpty());
 
     tc.set(Property.SSERV_SCAN_EXECUTORS_DEFAULT_THREADS.getKey(), "17");
-    ScanExecutorConfig sec10 = tc.getScanExecutors(true).stream()
-        .filter(c -> c.name.equals(defName)).findFirst().get();
+    ScanExecutorConfig sec10 =
+        tc.getScanExecutors(true).stream().filter(c -> c.name.equals(defName)).findFirst().get();
     assertEquals(17, sec10.maxThreads);
   }
 }

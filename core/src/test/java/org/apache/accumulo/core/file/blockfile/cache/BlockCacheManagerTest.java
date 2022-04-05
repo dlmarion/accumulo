@@ -29,12 +29,12 @@ public class BlockCacheManagerTest {
   @Test
   @SuppressWarnings("deprecation")
   public void testGetPropertyPrefix() {
-    assertEquals("tserver.cache.config.lru.data.", BlockCacheManager
-        .getFullyQualifiedPropertyPrefix("lru", CacheType.DATA));
-    assertEquals("tserver.cache.config.lru.index.", BlockCacheManager
-        .getFullyQualifiedPropertyPrefix("lru", CacheType.INDEX));
-    assertEquals("tserver.cache.config.lru.summary.", BlockCacheManager
-        .getFullyQualifiedPropertyPrefix("lru", CacheType.SUMMARY));
+    assertEquals("tserver.cache.config.lru.data.",
+        BlockCacheManager.getFullyQualifiedPropertyPrefix("lru", CacheType.DATA));
+    assertEquals("tserver.cache.config.lru.index.",
+        BlockCacheManager.getFullyQualifiedPropertyPrefix("lru", CacheType.INDEX));
+    assertEquals("tserver.cache.config.lru.summary.",
+        BlockCacheManager.getFullyQualifiedPropertyPrefix("lru", CacheType.SUMMARY));
     assertEquals("tserver.cache.config.lru.default.",
         BlockCacheManager.getFullyQualifiedPropertyPrefix("lru"));
   }
