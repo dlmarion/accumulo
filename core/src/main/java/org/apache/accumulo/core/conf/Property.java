@@ -441,6 +441,12 @@ public enum Property {
   SSERV_SCAN_EXECUTORS_DEFAULT_THREADS("sserver.scan.executors.default.threads", "16",
       PropertyType.COUNT, "The number of threads for the scan executor that tables use by default.",
       "2.1.0"),
+  SSERV_SCAN_EXECUTORS_DEFAULT_PRIORITIZER("sserver.scan.executors.default.prioritizer", "",
+      PropertyType.STRING,
+      "Prioritizer for the default scan executor.  Defaults to none which "
+          + "results in FIFO priority.  Set to a class that implements "
+          + ScanPrioritizer.class.getName() + " to configure one.",
+      "2.1.0"),
   @Experimental
   SSERV_SCAN_EXECUTORS_META_THREADS("sserver.scan.executors.meta.threads", "8", PropertyType.COUNT,
       "The number of threads for the metadata table scan executor.", "2.1.0"),
