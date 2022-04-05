@@ -18,33 +18,26 @@
  */
 package org.apache.accumulo.core.spi.scan;
 
-import java.nio.charset.StandardCharsets;
-import java.security.SecureRandom;
+import static org.junit.jupiter.api.Assertions.*;
+
 import java.time.Duration;
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import com.google.common.hash.Hashing;
 import org.apache.accumulo.core.data.TableId;
 import org.apache.accumulo.core.data.TabletId;
 import org.apache.accumulo.core.dataImpl.KeyExtent;
 import org.apache.accumulo.core.dataImpl.TabletIdImpl;
 import org.apache.accumulo.core.spi.common.ServiceEnvironment;
 import org.apache.hadoop.io.Text;
-import org.junit.Assert;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-
-import static org.junit.jupiter.api.Assertions.*;
 
 public class DefaultScanServerDispatcherTest {
 
@@ -145,8 +138,8 @@ public class DefaultScanServerDispatcherTest {
   }
 
   public static TabletId nti(String tableId, String endRow) {
-    return new TabletIdImpl(new KeyExtent(TableId.of(tableId),
-        endRow == null ? null : new Text(endRow), null));
+    return new TabletIdImpl(
+        new KeyExtent(TableId.of(tableId), endRow == null ? null : new Text(endRow), null));
   }
 
   @Test
@@ -246,7 +239,7 @@ public class DefaultScanServerDispatcherTest {
         .collect(Collectors.toSet());
     dispatcher.init(new InitParams(servers));
 
-    Map<String, Long> allServersSeen = new HashMap<>();
+    Map<String,Long> allServersSeen = new HashMap<>();
 
     Random rand = new Random();
 
@@ -255,7 +248,7 @@ public class DefaultScanServerDispatcherTest {
 
       String endRow = Long.toString(Math.abs(rand.nextLong()), 36);
 
-      var tabletId = t%1000==0 ? nti("" + t, null) : nti("" + t, endRow);
+      var tabletId = t % 1000 == 0 ? nti("" + t, null) : nti("" + t, endRow);
 
       for (int i = 0; i < 100; i++) {
         ScanServerDispatcher.Actions actions = dispatcher.determineActions(new DaParams(tabletId));
@@ -296,10 +289,9 @@ public class DefaultScanServerDispatcherTest {
   }
 
   @Test
-  public void testNoScanServers(){
+  public void testNoScanServers() {
     DefaultScanServerDispatcher dispatcher = new DefaultScanServerDispatcher();
-    dispatcher.init(new InitParams(
-        Set.of()));
+    dispatcher.init(new InitParams(Set.of()));
 
     var tabletId = nti("1", "m");
     ScanServerDispatcher.Actions actions = dispatcher.determineActions(new DaParams(tabletId));

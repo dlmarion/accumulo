@@ -31,7 +31,6 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
-import com.google.common.hash.HashCode;
 import org.apache.accumulo.core.data.TabletId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,6 +38,7 @@ import org.slf4j.LoggerFactory;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Suppliers;
 import com.google.common.collect.Sets;
+import com.google.common.hash.HashCode;
 import com.google.common.hash.Hashing;
 
 /**
@@ -174,7 +174,8 @@ public class DefaultScanServerDispatcher implements ScanServerDispatcher {
         numServers = orderedScanServers.size();
       }
 
-      int serverIndex = (Math.abs(hashCode.asInt()) + RANDOM.nextInt(numServers)) % orderedScanServers.size();
+      int serverIndex =
+          (Math.abs(hashCode.asInt()) + RANDOM.nextInt(numServers)) % orderedScanServers.size();
 
       // TODO could check if errors were seen on this server in past attempts
       serverToUse = orderedScanServers.get(serverIndex);
@@ -215,13 +216,13 @@ public class DefaultScanServerDispatcher implements ScanServerDispatcher {
     if (tablet.getEndRow() != null) {
       hasher.putBytes(tablet.getEndRow().getBytes(), 0, tablet.getEndRow().getLength());
     } else {
-      hasher.putByte((byte)5);
+      hasher.putByte((byte) 5);
     }
 
     if (tablet.getPrevEndRow() != null) {
       hasher.putBytes(tablet.getPrevEndRow().getBytes(), 0, tablet.getPrevEndRow().getLength());
-    }else {
-      hasher.putByte((byte)7);
+    } else {
+      hasher.putByte((byte) 7);
     }
 
     hasher.putString(tablet.getTable().canonical(), UTF_8);
