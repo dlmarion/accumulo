@@ -32,9 +32,7 @@ import com.google.common.base.Preconditions;
 
 /**
  * A client side plugin that determines what scan servers to use for eventually consistent scans.
- * When a scanner sets
- * {@link org.apache.accumulo.core.client.ScannerBase#setConsistencyLevel(ScannerBase.ConsistencyLevel)}
- * to {@link org.apache.accumulo.core.client.ScannerBase.ConsistencyLevel#EVENTUAL} then this plugin
+ * When an eventualy consistent scanner is used then this plugin
  * is used to determine which scan servers to use for a given tablet. To configure a class to use
  * for this plugin set its name using the client config {@code scan.server.dispatcher.impl}
  *

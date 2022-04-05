@@ -277,13 +277,22 @@ public class ScannerOptions implements ScannerBase {
     this.executionHints = Map.copyOf(Objects.requireNonNull(hints));
   }
 
-  @Override
-  public ConsistencyLevel getConsistencyLevel() {
+  /**
+   * Get the configured consistency level
+   *
+   * @return consistency level
+   */
+  protected ConsistencyLevel getConsistencyLevel() {
     return consistencyLevel;
   }
 
-  @Override
-  public void setConsistencyLevel(ConsistencyLevel level) {
+  /**
+   * Set the desired consistency level for this scanner.
+   *
+   * @param level
+   *          consistency level
+   */
+  protected void setConsistencyLevel(ConsistencyLevel level) {
     this.consistencyLevel = level;
   }
 

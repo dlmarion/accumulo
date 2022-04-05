@@ -113,7 +113,13 @@ public class ScanCommand extends Command {
       // handle first argument, if present, the authorizations list to
       // scan with
       final Authorizations auths = getAuths(cl, shellState);
-      final Scanner scanner = shellState.getAccumuloClient().createScanner(tableName, auths);
+      Scanner scanner = null;
+      if (ConsistencyLevel.IMMEDIATE.equals(getConsistency(cl))) {
+        scanner = shellState.getAccumuloClient().createScanner(tableName, auths);
+      } else {
+        scanner =
+            shellState.getAccumuloClient().createEventuallyConsistentScanner(tableName, auths);
+      }
       if (classLoaderContext != null) {
         scanner.setClassLoaderContext(classLoaderContext);
       }
@@ -133,12 +139,6 @@ public class ScanCommand extends Command {
       setupSampling(tableName, cl, shellState, scanner);
 
       scanner.setExecutionHints(ShellUtil.parseMapOpt(cl, executionHintsOpt));
-
-      try {
-        scanner.setConsistencyLevel(getConsistency(cl));
-      } catch (IllegalArgumentException e) {
-        Shell.log.error("Consistency Level argument must be immediate or eventual", e);
-      }
 
       // output the records
 

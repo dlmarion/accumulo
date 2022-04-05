@@ -41,7 +41,6 @@ import org.apache.accumulo.core.client.Accumulo;
 import org.apache.accumulo.core.client.AccumuloClient;
 import org.apache.accumulo.core.client.BatchScanner;
 import org.apache.accumulo.core.client.Scanner;
-import org.apache.accumulo.core.client.ScannerBase.ConsistencyLevel;
 import org.apache.accumulo.core.conf.Property;
 import org.apache.accumulo.core.data.Key;
 import org.apache.accumulo.core.data.Range;
@@ -160,9 +159,9 @@ public class ScanServerMetadataEntriesIT extends SharedMiniClusterBase {
       ReadWriteIT.ingest(client, getClientInfo(), 10, 10, 50, 0, tableName);
       client.tableOperations().flush(tableName, null, null, true);
 
-      try (Scanner scanner = client.createScanner(tableName, Authorizations.EMPTY)) {
+      try (Scanner scanner =
+          client.createEventuallyConsistentScanner(tableName, Authorizations.EMPTY)) {
         scanner.setRange(new Range());
-        scanner.setConsistencyLevel(ConsistencyLevel.EVENTUAL);
         scanner.setBatchSize(10);
 
         Iterator<Entry<Key,Value>> iter = scanner.iterator();
@@ -201,9 +200,9 @@ public class ScanServerMetadataEntriesIT extends SharedMiniClusterBase {
       ReadWriteIT.ingest(client, getClientInfo(), 10, 10, 50, 0, tableName);
       client.tableOperations().flush(tableName, null, null, true);
 
-      try (BatchScanner scanner = client.createBatchScanner(tableName, Authorizations.EMPTY)) {
+      try (BatchScanner scanner =
+          client.createEventuallyConsistentBatchScanner(tableName, Authorizations.EMPTY)) {
         scanner.setRanges(Collections.singletonList(new Range()));
-        scanner.setConsistencyLevel(ConsistencyLevel.EVENTUAL);
 
         Iterator<Entry<Key,Value>> iter = scanner.iterator();
         assertTrue(iter.hasNext());
@@ -244,9 +243,9 @@ public class ScanServerMetadataEntriesIT extends SharedMiniClusterBase {
       ReadWriteIT.ingest(client, getClientInfo(), 10, 10, 50, 0, tableName);
       client.tableOperations().flush(tableName, null, null, true);
 
-      try (Scanner scanner = client.createScanner(tableName, Authorizations.EMPTY)) {
+      try (Scanner scanner =
+          client.createEventuallyConsistentScanner(tableName, Authorizations.EMPTY)) {
         scanner.setRange(new Range());
-        scanner.setConsistencyLevel(ConsistencyLevel.EVENTUAL);
         scanner.setBatchSize(10);
 
         Iterator<Entry<Key,Value>> iter = scanner.iterator();

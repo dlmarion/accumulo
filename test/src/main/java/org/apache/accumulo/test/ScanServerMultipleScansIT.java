@@ -35,7 +35,6 @@ import org.apache.accumulo.core.client.Accumulo;
 import org.apache.accumulo.core.client.AccumuloClient;
 import org.apache.accumulo.core.client.BatchScanner;
 import org.apache.accumulo.core.client.Scanner;
-import org.apache.accumulo.core.client.ScannerBase.ConsistencyLevel;
 import org.apache.accumulo.core.client.TableNotFoundException;
 import org.apache.accumulo.core.conf.Property;
 import org.apache.accumulo.core.data.Key;
@@ -112,9 +111,9 @@ public class ScanServerMultipleScansIT extends SharedMiniClusterBase {
           } catch (InterruptedException e1) {
             fail("InterruptedException waiting for latch");
           }
-          try (Scanner scanner = client.createScanner(tableName, Authorizations.EMPTY)) {
+          try (Scanner scanner =
+              client.createEventuallyConsistentScanner(tableName, Authorizations.EMPTY)) {
             scanner.setRange(new Range());
-            scanner.setConsistencyLevel(ConsistencyLevel.EVENTUAL);
             int count = 0;
             for (@SuppressWarnings("unused")
             Entry<Key,Value> entry : scanner) {
@@ -155,9 +154,9 @@ public class ScanServerMultipleScansIT extends SharedMiniClusterBase {
 
       client.tableOperations().flush(tableName, null, null, true);
 
-      try (Scanner scanner = client.createScanner(tableName, Authorizations.EMPTY)) {
+      try (Scanner scanner =
+          client.createEventuallyConsistentScanner(tableName, Authorizations.EMPTY)) {
         scanner.setRange(new Range());
-        scanner.setConsistencyLevel(ConsistencyLevel.EVENTUAL);
         int count = 0;
         for (@SuppressWarnings("unused")
         Entry<Key,Value> entry : scanner) {
@@ -202,7 +201,8 @@ public class ScanServerMultipleScansIT extends SharedMiniClusterBase {
           } catch (InterruptedException e1) {
             fail("InterruptedException waiting for latch");
           }
-          try (Scanner scanner = client.createScanner(tableName, Authorizations.EMPTY)) {
+          try (Scanner scanner =
+              client.createEventuallyConsistentScanner(tableName, Authorizations.EMPTY)) {
             switch (threadNum) {
               case 0:
                 scanner.setRange(new Range("row_0000000000", "row_0000000002"));
@@ -219,7 +219,6 @@ public class ScanServerMultipleScansIT extends SharedMiniClusterBase {
               default:
                 fail("Invalid threadNum");
             }
-            scanner.setConsistencyLevel(ConsistencyLevel.EVENTUAL);
             for (@SuppressWarnings("unused")
             Entry<Key,Value> entry : scanner) {
               counter.incrementAndGet();
@@ -260,9 +259,9 @@ public class ScanServerMultipleScansIT extends SharedMiniClusterBase {
           } catch (InterruptedException e1) {
             fail("InterruptedException waiting for latch");
           }
-          try (BatchScanner scanner = client.createBatchScanner(tableName, Authorizations.EMPTY)) {
+          try (BatchScanner scanner =
+              client.createEventuallyConsistentBatchScanner(tableName, Authorizations.EMPTY)) {
             scanner.setRanges(Collections.singletonList(new Range()));
-            scanner.setConsistencyLevel(ConsistencyLevel.EVENTUAL);
             int count = 0;
             for (@SuppressWarnings("unused")
             Entry<Key,Value> entry : scanner) {
@@ -304,10 +303,9 @@ public class ScanServerMultipleScansIT extends SharedMiniClusterBase {
 
       client.tableOperations().flush(tableName, null, null, true);
 
-      try (BatchScanner scanner =
-          client.createBatchScanner(tableName, Authorizations.EMPTY, NUM_SCANS)) {
+      try (BatchScanner scanner = client.createEventuallyConsistentBatchScanner(tableName,
+          Authorizations.EMPTY, NUM_SCANS)) {
         scanner.setRanges(Collections.singletonList(new Range()));
-        scanner.setConsistencyLevel(ConsistencyLevel.EVENTUAL);
         int count = 0;
         for (@SuppressWarnings("unused")
         Entry<Key,Value> entry : scanner) {
@@ -352,7 +350,8 @@ public class ScanServerMultipleScansIT extends SharedMiniClusterBase {
           } catch (InterruptedException e1) {
             fail("InterruptedException waiting for latch");
           }
-          try (BatchScanner scanner = client.createBatchScanner(tableName, Authorizations.EMPTY)) {
+          try (BatchScanner scanner =
+              client.createEventuallyConsistentBatchScanner(tableName, Authorizations.EMPTY)) {
             switch (threadNum) {
               case 0:
                 scanner.setRanges(
@@ -372,7 +371,6 @@ public class ScanServerMultipleScansIT extends SharedMiniClusterBase {
               default:
                 fail("Invalid threadNum");
             }
-            scanner.setConsistencyLevel(ConsistencyLevel.EVENTUAL);
             for (@SuppressWarnings("unused")
             Entry<Key,Value> entry : scanner) {
               counter.incrementAndGet();

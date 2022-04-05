@@ -29,7 +29,6 @@ import org.apache.accumulo.core.client.Accumulo;
 import org.apache.accumulo.core.client.AccumuloClient;
 import org.apache.accumulo.core.client.BatchScanner;
 import org.apache.accumulo.core.client.Scanner;
-import org.apache.accumulo.core.client.ScannerBase.ConsistencyLevel;
 import org.apache.accumulo.core.client.TableOfflineException;
 import org.apache.accumulo.core.conf.Property;
 import org.apache.accumulo.core.data.Key;
@@ -90,9 +89,9 @@ public class ScanServerIT_NoServers extends SharedMiniClusterBase {
 
       client.tableOperations().flush(tableName, null, null, true);
 
-      try (Scanner scanner = client.createScanner(tableName, Authorizations.EMPTY)) {
+      try (Scanner scanner =
+          client.createEventuallyConsistentScanner(tableName, Authorizations.EMPTY)) {
         scanner.setRange(new Range());
-        scanner.setConsistencyLevel(ConsistencyLevel.EVENTUAL);
         int count = 0;
         for (@SuppressWarnings("unused")
         Entry<Key,Value> entry : scanner) {
@@ -115,9 +114,9 @@ public class ScanServerIT_NoServers extends SharedMiniClusterBase {
 
       client.tableOperations().flush(tableName, null, null, true);
 
-      try (BatchScanner scanner = client.createBatchScanner(tableName, Authorizations.EMPTY)) {
+      try (BatchScanner scanner =
+          client.createEventuallyConsistentBatchScanner(tableName, Authorizations.EMPTY)) {
         scanner.setRanges(Collections.singletonList(new Range()));
-        scanner.setConsistencyLevel(ConsistencyLevel.EVENTUAL);
         int count = 0;
         for (@SuppressWarnings("unused")
         Entry<Key,Value> entry : scanner) {
@@ -141,9 +140,9 @@ public class ScanServerIT_NoServers extends SharedMiniClusterBase {
       client.tableOperations().offline(tableName, true);
 
       assertThrows(TableOfflineException.class, () -> {
-        try (Scanner scanner = client.createScanner(tableName, Authorizations.EMPTY)) {
+        try (Scanner scanner =
+            client.createEventuallyConsistentScanner(tableName, Authorizations.EMPTY)) {
           scanner.setRange(new Range());
-          scanner.setConsistencyLevel(ConsistencyLevel.EVENTUAL);
           int count = 0;
           for (@SuppressWarnings("unused")
           Entry<Key,Value> entry : scanner) {

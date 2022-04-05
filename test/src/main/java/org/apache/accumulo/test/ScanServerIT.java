@@ -36,7 +36,6 @@ import org.apache.accumulo.core.client.AccumuloClient;
 import org.apache.accumulo.core.client.BatchScanner;
 import org.apache.accumulo.core.client.IteratorSetting;
 import org.apache.accumulo.core.client.Scanner;
-import org.apache.accumulo.core.client.ScannerBase.ConsistencyLevel;
 import org.apache.accumulo.core.client.TableOfflineException;
 import org.apache.accumulo.core.client.TimedOutException;
 import org.apache.accumulo.core.conf.ClientProperty;
@@ -110,9 +109,9 @@ public class ScanServerIT extends SharedMiniClusterBase {
 
       client.tableOperations().flush(tableName, null, null, true);
 
-      try (Scanner scanner = client.createScanner(tableName, Authorizations.EMPTY)) {
+      try (Scanner scanner =
+          client.createEventuallyConsistentScanner(tableName, Authorizations.EMPTY)) {
         scanner.setRange(new Range());
-        scanner.setConsistencyLevel(ConsistencyLevel.EVENTUAL);
         int count = 0;
         for (@SuppressWarnings("unused")
         Entry<Key,Value> entry : scanner) {
@@ -135,9 +134,9 @@ public class ScanServerIT extends SharedMiniClusterBase {
 
       client.tableOperations().flush(tableName, null, null, true);
 
-      try (BatchScanner scanner = client.createBatchScanner(tableName, Authorizations.EMPTY)) {
+      try (BatchScanner scanner =
+          client.createEventuallyConsistentBatchScanner(tableName, Authorizations.EMPTY)) {
         scanner.setRanges(Collections.singletonList(new Range()));
-        scanner.setConsistencyLevel(ConsistencyLevel.EVENTUAL);
         int count = 0;
         for (@SuppressWarnings("unused")
         Entry<Key,Value> entry : scanner) {
@@ -161,9 +160,9 @@ public class ScanServerIT extends SharedMiniClusterBase {
       client.tableOperations().offline(tableName, true);
 
       assertThrows(TableOfflineException.class, () -> {
-        try (Scanner scanner = client.createScanner(tableName, Authorizations.EMPTY)) {
+        try (Scanner scanner =
+            client.createEventuallyConsistentScanner(tableName, Authorizations.EMPTY)) {
           scanner.setRange(new Range());
-          scanner.setConsistencyLevel(ConsistencyLevel.EVENTUAL);
           int count = 0;
           for (@SuppressWarnings("unused")
           Entry<Key,Value> entry : scanner) {
@@ -192,13 +191,12 @@ public class ScanServerIT extends SharedMiniClusterBase {
       ReadWriteIT.ingest(client, getClientInfo(), 10, 10, 50, 0, tName);
       client.tableOperations().flush(tName, null, null, true);
 
-      Scanner scanner = client.createScanner(tName, Authorizations.EMPTY);
+      Scanner scanner = client.createEventuallyConsistentScanner(tName, Authorizations.EMPTY);
       IteratorSetting slow = new IteratorSetting(30, "slow", SlowIterator.class);
       SlowIterator.setSleepTime(slow, 30000);
       SlowIterator.setSeekSleepTime(slow, 30000);
       scanner.addScanIterator(slow);
       scanner.setRange(new Range());
-      scanner.setConsistencyLevel(ConsistencyLevel.EVENTUAL);
       scanner.setTimeout(10, TimeUnit.SECONDS);
       Iterator<Entry<Key,Value>> iter = scanner.iterator();
       if (iter.hasNext()) {
@@ -224,9 +222,8 @@ public class ScanServerIT extends SharedMiniClusterBase {
       ReadWriteIT.ingest(client, getClientInfo(), 10, 10, 50, 0, tName);
       client.tableOperations().flush(tName, null, null, true);
 
-      try (BatchScanner bs = client.createBatchScanner(tName)) {
+      try (BatchScanner bs = client.createEventuallyConsistentBatchScanner(tName)) {
         bs.setRanges(Collections.singletonList(new Range()));
-        bs.setConsistencyLevel(ConsistencyLevel.EVENTUAL);
         // should not timeout
         for (Entry<Key,Value> entry : bs) {
           assertNotNull(entry.getKey());

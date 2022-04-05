@@ -382,19 +382,4 @@ public interface ScannerBase extends Iterable<Entry<Key,Value>>, AutoCloseable {
     }
   }
 
-  /**
-   * Get the configured consistency level
-   *
-   * @return consistency level
-   */
-  public ConsistencyLevel getConsistencyLevel();
-
-  /**
-   * Set the desired consistency level for this scanner.
-   *
-   * @param level
-   *          consistency level
-   */
-  public void setConsistencyLevel(ConsistencyLevel level);
-
 }

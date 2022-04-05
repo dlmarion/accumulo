@@ -126,6 +126,70 @@ public interface AccumuloClient extends AutoCloseable {
       throws TableNotFoundException, AccumuloSecurityException, AccumuloException;
 
   /**
+   * Factory method to create an eventually consistent BatchScanner connected to Accumulo.
+   *
+   * Note: This API method is experimental and is subject to change or removal in a future patch or
+   * minor version release
+   *
+   * @param tableName
+   *          the name of the table to query
+   * @param authorizations
+   *          A set of authorization labels that will be checked against the column visibility of
+   *          each key in order to filter data. The authorizations passed in must be a subset of the
+   *          accumulo user's set of authorizations. If the accumulo user has authorizations (A1,
+   *          A2) and authorizations (A2, A3) are passed, then an exception will be thrown.
+   * @param numQueryThreads
+   *          the number of concurrent threads to spawn for querying
+   *
+   * @return BatchScanner object for configuring and querying
+   * @throws TableNotFoundException
+   *           when the specified table doesn't exist
+   */
+  BatchScanner createEventuallyConsistentBatchScanner(String tableName,
+      Authorizations authorizations, int numQueryThreads) throws TableNotFoundException;
+
+  /**
+   * Factory method to create an eventually consistent BatchScanner connected to Accumulo. This
+   * method uses the number of query threads configured when AccumuloClient was created. If none
+   * were configured, defaults will be used.
+   *
+   * Note: This API method is experimental and is subject to change or removal in a future patch or
+   * minor version release
+   *
+   * @param tableName
+   *          the name of the table to query
+   * @param authorizations
+   *          A set of authorization labels that will be checked against the column visibility of
+   *          each key in order to filter data. The authorizations passed in must be a subset of the
+   *          accumulo user's set of authorizations. If the accumulo user has authorizations (A1,
+   *          A2) and authorizations (A2, A3) are passed, then an exception will be thrown.
+   *
+   * @return BatchScanner object for configuring and querying
+   * @throws TableNotFoundException
+   *           when the specified table doesn't exist
+   */
+  BatchScanner createEventuallyConsistentBatchScanner(String tableName,
+      Authorizations authorizations) throws TableNotFoundException;
+
+  /**
+   * Factory method to create an eventually consistent BatchScanner with all of user's
+   * authorizations and the number of query threads configured when AccumuloClient was created. If
+   * no query threads were configured, defaults will be used.
+   *
+   * Note: This API method is experimental and is subject to change or removal in a future patch or
+   * minor version release
+   *
+   * @param tableName
+   *          the name of the table to query
+   *
+   * @return BatchScanner object for configuring and querying
+   * @throws TableNotFoundException
+   *           when the specified table doesn't exist
+   */
+  BatchScanner createEventuallyConsistentBatchScanner(String tableName)
+      throws TableNotFoundException, AccumuloSecurityException, AccumuloException;
+
+  /**
    * Factory method to create BatchDeleter
    *
    * @param tableName
@@ -251,6 +315,48 @@ public interface AccumuloClient extends AutoCloseable {
    * @see IsolatedScanner
    */
   Scanner createScanner(String tableName)
+      throws TableNotFoundException, AccumuloSecurityException, AccumuloException;
+
+  /**
+   * Factory method to create an eventually consistent Scanner connected to Accumulo.
+   *
+   * Note: This API method is experimental and is subject to change or removal in a future patch or
+   * minor version release
+   *
+   * @param tableName
+   *          the name of the table to query data from
+   * @param authorizations
+   *          A set of authorization labels that will be checked against the column visibility of
+   *          each key in order to filter data. The authorizations passed in must be a subset of the
+   *          accumulo user's set of authorizations. If the accumulo user has authorizations (A1,
+   *          A2) and authorizations (A2, A3) are passed, then an exception will be thrown.
+   *
+   * @return Scanner object for configuring and querying data with
+   * @throws TableNotFoundException
+   *           when the specified table doesn't exist
+   *
+   * @see IsolatedScanner
+   */
+  Scanner createEventuallyConsistentScanner(String tableName, Authorizations authorizations)
+      throws TableNotFoundException;
+
+  /**
+   * Factory method to create an eventually consistent Scanner with all of the user's
+   * authorizations.
+   *
+   * Note: This API method is experimental and is subject to change or removal in a future patch or
+   * minor version release
+   *
+   * @param tableName
+   *          the name of the table to query data from
+   *
+   * @return Scanner object for configuring and querying data with
+   * @throws TableNotFoundException
+   *           when the specified table doesn't exist
+   *
+   * @see IsolatedScanner
+   */
+  Scanner createEventuallyConsistentScanner(String tableName)
       throws TableNotFoundException, AccumuloSecurityException, AccumuloException;
 
   /**

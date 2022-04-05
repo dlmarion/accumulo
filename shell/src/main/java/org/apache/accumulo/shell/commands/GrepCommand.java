@@ -23,6 +23,7 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.accumulo.core.client.BatchScanner;
 import org.apache.accumulo.core.client.IteratorSetting;
+import org.apache.accumulo.core.client.ScannerBase.ConsistencyLevel;
 import org.apache.accumulo.core.iterators.user.GrepIterator;
 import org.apache.accumulo.core.security.Authorizations;
 import org.apache.accumulo.core.util.format.Formatter;
@@ -66,13 +67,17 @@ public class GrepCommand extends ScanCommand {
       }
 
       final Authorizations auths = getAuths(cl, shellState);
-      final BatchScanner scanner =
-          shellState.getAccumuloClient().createBatchScanner(tableName, auths, numThreads);
+
+      BatchScanner scanner = null;
+      if (ConsistencyLevel.IMMEDIATE.equals(getConsistency(cl))) {
+        scanner = shellState.getAccumuloClient().createBatchScanner(tableName, auths, numThreads);
+      } else {
+        scanner = shellState.getAccumuloClient().createEventuallyConsistentBatchScanner(tableName,
+            auths, numThreads);
+      }
       scanner.setRanges(Collections.singletonList(getRange(cl, interpeter)));
 
       scanner.setTimeout(getTimeout(cl), TimeUnit.MILLISECONDS);
-
-      scanner.setConsistencyLevel(getConsistency(cl));
 
       setupSampling(tableName, cl, shellState, scanner);
       addScanIterators(shellState, cl, scanner, "");

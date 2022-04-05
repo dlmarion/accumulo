@@ -32,7 +32,6 @@ import org.apache.accumulo.core.Constants;
 import org.apache.accumulo.core.client.Accumulo;
 import org.apache.accumulo.core.client.AccumuloClient;
 import org.apache.accumulo.core.client.Scanner;
-import org.apache.accumulo.core.client.ScannerBase.ConsistencyLevel;
 import org.apache.accumulo.core.conf.ClientProperty;
 import org.apache.accumulo.core.conf.Property;
 import org.apache.accumulo.core.data.Key;
@@ -115,11 +114,10 @@ public class ScanServerConcurrentTabletScanIT extends SharedMiniClusterBase {
       ReadWriteIT.ingest(client, getClientInfo(), 10, 100, 50, 0, "COLA", tableName);
       client.tableOperations().flush(tableName, null, null, true);
 
-      Scanner scanner1 = client.createScanner(tableName, Authorizations.EMPTY);
+      Scanner scanner1 = client.createEventuallyConsistentScanner(tableName, Authorizations.EMPTY);
       scanner1.setRange(new Range());
       scanner1.setBatchSize(100);
       scanner1.setReadaheadThreshold(0);
-      scanner1.setConsistencyLevel(ConsistencyLevel.EVENTUAL);
 
       // iter1 should read 1000 k/v
       Iterator<Entry<Key,Value>> iter1 = scanner1.iterator();
@@ -172,11 +170,10 @@ public class ScanServerConcurrentTabletScanIT extends SharedMiniClusterBase {
       ReadWriteIT.ingest(client, getClientInfo(), 10, 100, 50, 0, "COLA", tableName);
       client.tableOperations().flush(tableName, null, null, true);
 
-      Scanner scanner1 = client.createScanner(tableName, Authorizations.EMPTY);
+      Scanner scanner1 = client.createEventuallyConsistentScanner(tableName, Authorizations.EMPTY);
       scanner1.setRange(new Range());
       scanner1.setBatchSize(100);
       scanner1.setReadaheadThreshold(0);
-      scanner1.setConsistencyLevel(ConsistencyLevel.EVENTUAL);
 
       // iter1 should read 1000 k/v
       Iterator<Entry<Key,Value>> iter1 = scanner1.iterator();

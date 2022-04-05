@@ -744,6 +744,33 @@ public class ClientContext implements AccumuloClient {
   }
 
   @Override
+  public BatchScanner createEventuallyConsistentBatchScanner(String tableName,
+      Authorizations authorizations, int numQueryThreads) throws TableNotFoundException {
+    ensureOpen();
+    checkArgument(authorizations != null, "authorizations is null");
+    return new EventuallyConsistentTabletServerBatchReader(this,
+        requireNotOffline(getTableId(tableName), tableName), tableName, authorizations,
+        numQueryThreads);
+  }
+
+  @Override
+  public BatchScanner createEventuallyConsistentBatchScanner(String tableName,
+      Authorizations authorizations) throws TableNotFoundException {
+    ensureOpen();
+    Integer numQueryThreads =
+        ClientProperty.BATCH_SCANNER_NUM_QUERY_THREADS.getInteger(getProperties());
+    Objects.requireNonNull(numQueryThreads);
+    return createEventuallyConsistentBatchScanner(tableName, authorizations, numQueryThreads);
+  }
+
+  @Override
+  public BatchScanner createEventuallyConsistentBatchScanner(String tableName)
+      throws TableNotFoundException, AccumuloSecurityException, AccumuloException {
+    Authorizations auths = securityOperations().getUserAuthorizations(getPrincipal());
+    return createEventuallyConsistentBatchScanner(tableName, auths);
+  }
+
+  @Override
   public BatchDeleter createBatchDeleter(String tableName, Authorizations authorizations,
       int numQueryThreads, BatchWriterConfig config) throws TableNotFoundException {
     ensureOpen();
@@ -824,6 +851,27 @@ public class ClientContext implements AccumuloClient {
       throws TableNotFoundException, AccumuloSecurityException, AccumuloException {
     Authorizations auths = securityOperations().getUserAuthorizations(getPrincipal());
     return createScanner(tableName, auths);
+  }
+
+  @Override
+  public Scanner createEventuallyConsistentScanner(String tableName, Authorizations authorizations)
+      throws TableNotFoundException {
+    ensureOpen();
+    checkArgument(authorizations != null, "authorizations is null");
+    Scanner scanner = new EventuallyConsistentScannerImpl(this,
+        requireNotOffline(getTableId(tableName), tableName), authorizations);
+    Integer batchSize = ClientProperty.SCANNER_BATCH_SIZE.getInteger(getProperties());
+    if (batchSize != null) {
+      scanner.setBatchSize(batchSize);
+    }
+    return scanner;
+  }
+
+  @Override
+  public Scanner createEventuallyConsistentScanner(String tableName)
+      throws TableNotFoundException, AccumuloSecurityException, AccumuloException {
+    Authorizations auths = securityOperations().getUserAuthorizations(getPrincipal());
+    return createEventuallyConsistentScanner(tableName, auths);
   }
 
   @Override

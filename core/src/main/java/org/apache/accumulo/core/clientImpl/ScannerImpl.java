@@ -50,28 +50,28 @@ public class ScannerImpl extends ScannerOptions implements Scanner {
   // hopefully, we can track all the state in the scanner on the client
   // and just query for the next highest row from the tablet server
 
-  private final ClientContext context;
-  private Authorizations authorizations;
-  private TableId tableId;
+  protected final ClientContext context;
+  protected Authorizations authorizations;
+  protected TableId tableId;
 
-  private int size;
+  protected int size;
 
-  private Range range;
-  private boolean isolated = false;
-  private long readaheadThreshold = Constants.SCANNER_DEFAULT_READAHEAD_THRESHOLD;
+  protected Range range;
+  protected boolean isolated = false;
+  protected long readaheadThreshold = Constants.SCANNER_DEFAULT_READAHEAD_THRESHOLD;
 
-  boolean closed = false;
+  protected boolean closed = false;
 
-  private static final int MAX_ENTRIES = 16;
+  protected static final int MAX_ENTRIES = 16;
 
-  private long iterCount = 0;
+  protected long iterCount = 0;
 
   // Create an LRU map of iterators that tracks the MAX_ENTRIES most recently used iterators. An LRU
   // map is used to support the use case of a long lived scanner that constantly creates iterators
   // and does not read all of the data. For this case do not want iterator tracking to consume too
   // much memory. Also it would be best to avoid an RPC storm of close methods for thousands
   // sessions that may have timed out.
-  private Map<ScannerIterator,Long> iters = new LinkedHashMap<>(MAX_ENTRIES + 1, .75F, true) {
+  protected Map<ScannerIterator,Long> iters = new LinkedHashMap<>(MAX_ENTRIES + 1, .75F, true) {
     private static final long serialVersionUID = 1L;
 
     // This method is called just after a new entry has been added
@@ -102,7 +102,7 @@ public class ScannerImpl extends ScannerOptions implements Scanner {
     }
   }
 
-  private synchronized void ensureOpen() {
+  protected synchronized void ensureOpen() {
     if (closed)
       throw new IllegalStateException("Scanner is closed");
   }
