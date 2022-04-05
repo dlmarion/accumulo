@@ -51,21 +51,23 @@ public class ScanServerMetadataEntries {
     // uuids for scan servers that are dead
     uuidsToDelete.removeAll(scanServers.values());
 
-    final Set<ScanServerRefTabletFile> refsToDelete = new HashSet<>();
+    if(!uuidsToDelete.isEmpty()) {
+      final Set<ScanServerRefTabletFile> refsToDelete = new HashSet<>();
 
-    context.getAmple().getScanServerFileReferences().forEach(ssrtf -> {
+      context.getAmple().getScanServerFileReferences().forEach(ssrtf -> {
 
-      var uuid = UUID.fromString(ssrtf.getServerLockUUID().toString());
+        var uuid = UUID.fromString(ssrtf.getServerLockUUID().toString());
 
-      if (uuidsToDelete.contains(uuid)) {
-        refsToDelete.add(ssrtf);
-        if (refsToDelete.size() > 5000) {
-          context.getAmple().deleteScanServerFileReferences(refsToDelete);
-          refsToDelete.clear();
+        if (uuidsToDelete.contains(uuid)) {
+          refsToDelete.add(ssrtf);
+          if (refsToDelete.size() > 5000) {
+            context.getAmple().deleteScanServerFileReferences(refsToDelete);
+            refsToDelete.clear();
+          }
         }
-      }
-    });
-    context.getAmple().deleteScanServerFileReferences(refsToDelete);
+      });
+      context.getAmple().deleteScanServerFileReferences(refsToDelete);
+    }
   }
 
   public static void main(String[] args) {
