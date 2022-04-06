@@ -453,7 +453,7 @@ public enum Property {
   @Experimental
   SSERVER_SCAN_REFERENCE_EXPIRATION_TIME("sserver.scan.reference.expiration", "5m",
       PropertyType.TIMEDURATION,
-      "The amount of time after a scan is closed that the file references should remain in the metadata table",
+      "The amount of time a scan reference is unused before its deleted from metadata table ",
       "2.1.0"),
   @Experimental
   SSERV_THREADCHECK("sserver.server.threadcheck.time", "1s", PropertyType.TIMEDURATION,

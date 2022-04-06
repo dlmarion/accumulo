@@ -142,34 +142,6 @@ import com.google.common.collect.Sets;
 
 public class ScanServer extends TabletServer implements TabletClientService.Iface {
 
-  static class ScanInformation extends MutableTriple<Long,KeyExtent,Tablet> {
-    private static final long serialVersionUID = 1L;
-
-    public Long getScanId() {
-      return getLeft();
-    }
-
-    public void setScanId(Long scanId) {
-      setLeft(scanId);
-    }
-
-    public KeyExtent getExtent() {
-      return getMiddle();
-    }
-
-    public void setExtent(KeyExtent extent) {
-      setMiddle(extent);
-    }
-
-    public Tablet getTablet() {
-      return getRight();
-    }
-
-    public void setTablet(Tablet tablet) {
-      setRight(tablet);
-    }
-  }
-
   /**
    * A compaction manager that does nothing
    */
