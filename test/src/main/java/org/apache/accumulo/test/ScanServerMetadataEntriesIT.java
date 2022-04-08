@@ -25,13 +25,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.TreeSet;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
@@ -283,7 +281,8 @@ public class ScanServerMetadataEntriesIT extends SharedMiniClusterBase {
         // server references
         assertEquals(6, tableRefs.size());
 
-        Set<String> deduplicatedReferences = tableRefs.stream().map(ref -> ref.ref).collect(Collectors.toSet());
+        Set<String> deduplicatedReferences =
+            tableRefs.stream().map(ref -> ref.ref).collect(Collectors.toSet());
 
         assertEquals(3, deduplicatedReferences.size());
       }

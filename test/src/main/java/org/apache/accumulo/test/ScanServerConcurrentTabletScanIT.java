@@ -28,7 +28,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Properties;
 
-import com.google.common.collect.Iterables;
 import org.apache.accumulo.core.Constants;
 import org.apache.accumulo.core.client.Accumulo;
 import org.apache.accumulo.core.client.AccumuloClient;
@@ -51,6 +50,8 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+
+import com.google.common.collect.Iterables;
 
 @Tag(MINI_CLUSTER_ONLY)
 public class ScanServerConcurrentTabletScanIT extends SharedMiniClusterBase {
@@ -154,7 +155,7 @@ public class ScanServerConcurrentTabletScanIT extends SharedMiniClusterBase {
 
       scanner1.close();
 
-      try(Scanner scanner2 = client.createScanner(tableName, Authorizations.EMPTY)) {
+      try (Scanner scanner2 = client.createScanner(tableName, Authorizations.EMPTY)) {
         assertEquals(1100, Iterables.size(scanner2));
       }
     }

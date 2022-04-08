@@ -26,7 +26,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map.Entry;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.concurrent.CountDownLatch;
@@ -34,7 +33,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import com.google.common.collect.Iterables;
 import org.apache.accumulo.core.Constants;
 import org.apache.accumulo.core.client.Accumulo;
 import org.apache.accumulo.core.client.AccumuloClient;
@@ -43,9 +41,7 @@ import org.apache.accumulo.core.client.Scanner;
 import org.apache.accumulo.core.client.ScannerBase.ConsistencyLevel;
 import org.apache.accumulo.core.client.TableNotFoundException;
 import org.apache.accumulo.core.conf.Property;
-import org.apache.accumulo.core.data.Key;
 import org.apache.accumulo.core.data.Range;
-import org.apache.accumulo.core.data.Value;
 import org.apache.accumulo.core.security.Authorizations;
 import org.apache.accumulo.fate.zookeeper.ZooReaderWriter;
 import org.apache.accumulo.harness.MiniClusterConfigurationCallback;
@@ -58,6 +54,8 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+
+import com.google.common.collect.Iterables;
 
 @Tag(MINI_CLUSTER_ONLY)
 public class ScanServerMultipleScansIT extends SharedMiniClusterBase {
@@ -113,7 +111,7 @@ public class ScanServerMultipleScansIT extends SharedMiniClusterBase {
 
       List<Future<?>> futures = new ArrayList<>(NUM_SCANS);
       for (int i = 0; i < NUM_SCANS; i++) {
-        var future = executor.submit(()->{
+        var future = executor.submit(() -> {
           try {
             latch.await();
           } catch (InterruptedException e1) {
@@ -374,7 +372,7 @@ public class ScanServerMultipleScansIT extends SharedMiniClusterBase {
             }
             scanner.setConsistencyLevel(ConsistencyLevel.EVENTUAL);
 
-            counter.addAndGet(Iterables.size(scanner))
+            counter.addAndGet(Iterables.size(scanner));
           } catch (TableNotFoundException e) {
             fail("Table not found");
           }

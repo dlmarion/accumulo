@@ -30,7 +30,6 @@ import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
-import com.google.common.collect.Iterables;
 import org.apache.accumulo.core.Constants;
 import org.apache.accumulo.core.client.Accumulo;
 import org.apache.accumulo.core.client.AccumuloClient;
@@ -58,6 +57,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+
+import com.google.common.collect.Iterables;
 
 @Tag(MINI_CLUSTER_ONLY)
 public class ScanServerIT extends SharedMiniClusterBase {
@@ -114,10 +115,10 @@ public class ScanServerIT extends SharedMiniClusterBase {
       try (Scanner scanner = client.createScanner(tableName, Authorizations.EMPTY)) {
         scanner.setRange(new Range());
         scanner.setConsistencyLevel(ConsistencyLevel.EVENTUAL);
-        assertEquals(100,  Iterables.size(scanner));
+        assertEquals(100, Iterables.size(scanner));
         // if scanning against tserver would see the following, but should not on scan server
         ReadWriteIT.ingest(client, getClientInfo(), 10, 10, 50, 10, tableName);
-        assertEquals(100,  Iterables.size(scanner));
+        assertEquals(100, Iterables.size(scanner));
         scanner.setConsistencyLevel(ConsistencyLevel.IMMEDIATE);
         assertEquals(200, Iterables.size(scanner));
       } // when the scanner is closed, all open sessions should be closed
