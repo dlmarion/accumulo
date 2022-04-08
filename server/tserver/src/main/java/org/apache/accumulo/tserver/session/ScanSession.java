@@ -182,8 +182,10 @@ public abstract class ScanSession extends Session implements ScanInfo {
 
   @Override
   public boolean cleanup() {
-    super.cleanup();
     tabletResolver.close();
+    if (!super.cleanup()) {
+      return false;
+    }
     return true;
   }
 
