@@ -169,8 +169,6 @@ public class ScanServerMetadataEntriesIT extends SharedMiniClusterBase {
         assertTrue(iter.hasNext());
         assertNotNull(iter.next());
 
-        Thread.sleep(6000); // wait twice the insert interval
-
         assertEquals(3, ctx.getAmple().getScanServerFileReferences().count());
 
       }
@@ -285,28 +283,9 @@ public class ScanServerMetadataEntriesIT extends SharedMiniClusterBase {
         // server references
         assertEquals(6, tableRefs.size());
 
-        TreeSet<Reference> deduplicatedReferences = new TreeSet<>(new Comparator<Reference>() {
-          @Override
-          public int compare(Reference r1, Reference r2) {
-            if (r1 == r2) {
-              return 0;
-            }
-            int ret = r1.id.compareTo(r2.id);
-            if (ret == 0) {
-              ret = Boolean.compare(r1.isDir, r2.isDir);
-              if (ret == 0) {
-                return r1.ref.compareTo(r2.ref);
-              } else {
-                return ret;
-              }
-            } else {
-              return ret;
-            }
-          }
-        });
-        deduplicatedReferences.addAll(tableRefs);
+        Set<String> deduplicatedReferences = tableRefs.stream().map(ref -> ref.ref).collect(Collectors.toSet());
+
         assertEquals(3, deduplicatedReferences.size());
-        deduplicatedReferences.forEach(ddr -> assertTrue(metadataScanFileRefs.contains(ddr.ref)));
       }
 
       client.tableOperations().delete(tableName);

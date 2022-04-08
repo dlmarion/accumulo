@@ -28,6 +28,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Properties;
 
+import com.google.common.collect.Iterables;
 import org.apache.accumulo.core.Constants;
 import org.apache.accumulo.core.client.Accumulo;
 import org.apache.accumulo.core.client.AccumuloClient;
@@ -152,6 +153,10 @@ public class ScanServerConcurrentTabletScanIT extends SharedMiniClusterBase {
       assertEquals(1000, count2);
 
       scanner1.close();
+
+      try(Scanner scanner2 = client.createScanner(tableName, Authorizations.EMPTY)) {
+        assertEquals(1100, Iterables.size(scanner2));
+      }
     }
   }
 
