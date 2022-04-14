@@ -639,6 +639,7 @@ public class ScanServer extends AbstractServer implements TabletHostingServer {
     return true;
   }
 
+  @Override
   public void requestStop() {
     serverStopRequested = true;
   }
