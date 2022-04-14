@@ -108,7 +108,7 @@ public class CompactableUtils {
       Set<StoredTabletFile> allFiles) throws IOException {
     final Map<StoredTabletFile,Pair<Key,Key>> result = new HashMap<>();
     final FileOperations fileFactory = FileOperations.getInstance();
-    final VolumeManager fs = tablet.getTabletServer().getVolumeManager();
+    final VolumeManager fs = tablet.getTabletServer().getContext().getVolumeManager();
     for (StoredTabletFile file : allFiles) {
       FileSystem ns = fs.getFileSystemByPath(file.getPath());
       try (FileSKVIterator openReader = fileFactory.newReaderBuilder()
@@ -150,7 +150,7 @@ public class CompactableUtils {
     BlockCache ic = trsm.getIndexCache();
     Cache<String,Long> fileLenCache = trsm.getFileLenCache();
     MajorCompactionRequest request = new MajorCompactionRequest(tablet.getExtent(),
-        CompactableUtils.from(kind), tablet.getTabletServer().getVolumeManager(),
+        CompactableUtils.from(kind), tablet.getTabletServer().getContext().getVolumeManager(),
         tablet.getTableConfiguration(), sc, ic, fileLenCache, tablet.getContext());
 
     request.setFiles(datafiles);
@@ -347,7 +347,8 @@ public class CompactableUtils {
         try {
           FileOperations fileFactory = FileOperations.getInstance();
           Path path = new Path(file.getUri());
-          FileSystem ns = tablet.getTabletServer().getVolumeManager().getFileSystemByPath(path);
+          FileSystem ns =
+              tablet.getTabletServer().getContext().getVolumeManager().getFileSystemByPath(path);
           var fiter = fileFactory.newReaderBuilder()
               .forFile(path.toString(), ns, ns.getConf(), tablet.getContext().getCryptoService())
               .withTableConfiguration(tablet.getTableConfiguration()).seekToBeginning().build();

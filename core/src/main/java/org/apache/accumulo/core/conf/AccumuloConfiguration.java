@@ -544,10 +544,10 @@ public abstract class AccumuloConfiguration implements Iterable<Entry<String,Str
   private static final String SCAN_EXEC_PRIORITIZER = "prioritizer";
   private static final String SCAN_EXEC_PRIORITIZER_OPTS = "prioritizer.opts.";
 
-  public Collection<ScanExecutorConfig> getScanExecutors(boolean isScanServer) {
+  public Collection<ScanExecutorConfig> getScanExecutors(boolean isReadOnly) {
 
     Property prefix =
-        isScanServer ? Property.SSERV_SCAN_EXECUTORS_PREFIX : Property.TSERV_SCAN_EXECUTORS_PREFIX;
+        isReadOnly ? Property.SSERV_SCAN_EXECUTORS_PREFIX : Property.TSERV_SCAN_EXECUTORS_PREFIX;
 
     Map<String,Map<String,String>> propsByName = new HashMap<>();
 
@@ -574,7 +574,7 @@ public abstract class AccumuloConfiguration implements Iterable<Entry<String,Str
         String val = subEntry.getValue();
 
         if (opt.equals(SCAN_EXEC_THREADS)) {
-          Integer depThreads = getDeprecatedScanThreads(name, isScanServer);
+          Integer depThreads = getDeprecatedScanThreads(name, isReadOnly);
           if (depThreads == null) {
             threads = Integer.parseInt(val);
           } else {
@@ -600,7 +600,7 @@ public abstract class AccumuloConfiguration implements Iterable<Entry<String,Str
 
       scanResources.add(new ScanExecutorConfig(name, threads,
           prio == null ? OptionalInt.empty() : OptionalInt.of(prio),
-          Optional.ofNullable(prioritizerClass), prioritizerOpts, isScanServer));
+          Optional.ofNullable(prioritizerClass), prioritizerOpts, isReadOnly));
     }
 
     return scanResources;

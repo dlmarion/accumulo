@@ -40,7 +40,7 @@ import org.apache.accumulo.core.dataImpl.thrift.TKeyValue;
 import org.apache.accumulo.core.dataImpl.thrift.TRange;
 import org.apache.accumulo.core.iteratorsImpl.system.IterationInterruptedException;
 import org.apache.accumulo.server.conf.TableConfiguration;
-import org.apache.accumulo.tserver.TabletServer;
+import org.apache.accumulo.tserver.TabletHostingServer;
 import org.apache.accumulo.tserver.session.MultiScanSession;
 import org.apache.accumulo.tserver.tablet.KVEntry;
 import org.apache.accumulo.tserver.tablet.Tablet;
@@ -54,14 +54,14 @@ public class LookupTask extends ScanTask<MultiScanResult> {
 
   private final long scanID;
 
-  public LookupTask(TabletServer server, long scanID) {
+  public LookupTask(TabletHostingServer server, long scanID) {
     super(server);
     this.scanID = scanID;
   }
 
   @Override
   public void run() {
-    MultiScanSession session = (MultiScanSession) server.getSession(scanID);
+    MultiScanSession session = (MultiScanSession) server.getSessionManager().getSession(scanID);
     String oldThreadName = Thread.currentThread().getName();
 
     try {
@@ -71,7 +71,8 @@ public class LookupTask extends ScanTask<MultiScanResult> {
       if (!transitionToRunning())
         return;
 
-      TableConfiguration acuTableConf = server.getTableConfiguration(session.threadPoolExtent);
+      TableConfiguration acuTableConf =
+          server.getContext().getTableConfiguration(session.threadPoolExtent.tableId());
       long maxResultsSize = acuTableConf.getAsBytes(Property.TABLE_SCAN_MAXMEM);
 
       Thread.currentThread().setName("Client: " + session.client + " User: " + session.getUser()

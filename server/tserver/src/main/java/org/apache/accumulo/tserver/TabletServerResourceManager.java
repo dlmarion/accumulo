@@ -248,7 +248,7 @@ public class TabletServerResourceManager {
 
   @SuppressFBWarnings(value = "DM_GC",
       justification = "GC is run to get a good estimate of memory availability")
-  public TabletServerResourceManager(ServerContext context, TabletServer tserver) {
+  public TabletServerResourceManager(ServerContext context, TabletHostingServer tserver) {
     this.context = context;
     final AccumuloConfiguration acuConf = context.getConfiguration();
 
@@ -357,9 +357,7 @@ public class TabletServerResourceManager {
         () -> context.getConfiguration().getCount(Property.TSERV_SUMMARY_PARTITION_THREADS),
         "summary partition", summaryPartitionPool);
 
-    boolean isScanServer = (tserver instanceof ScanServer);
-
-    Collection<ScanExecutorConfig> scanExecCfg = acuConf.getScanExecutors(isScanServer);
+    Collection<ScanExecutorConfig> scanExecCfg = acuConf.getScanExecutors(tserver.isReadOnly());
     Map<String,Queue<Runnable>> scanExecQueues = new HashMap<>();
     scanExecutors = scanExecCfg.stream().collect(
         toUnmodifiableMap(cfg -> cfg.name, cfg -> createPriorityExecutor(cfg, scanExecQueues)));

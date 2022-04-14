@@ -45,6 +45,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -115,7 +116,7 @@ import org.apache.accumulo.server.util.ReplicationTableUtil;
 import org.apache.accumulo.tserver.ConditionCheckerContext.ConditionChecker;
 import org.apache.accumulo.tserver.InMemoryMap;
 import org.apache.accumulo.tserver.MinorCompactionReason;
-import org.apache.accumulo.tserver.TabletServer;
+import org.apache.accumulo.tserver.TabletHostingServer;
 import org.apache.accumulo.tserver.TabletServerResourceManager.TabletResourceManager;
 import org.apache.accumulo.tserver.TabletStatsKeeper;
 import org.apache.accumulo.tserver.TabletStatsKeeper.Operation;
@@ -149,7 +150,7 @@ public class Tablet {
 
   private static final byte[] EMPTY_BYTES = new byte[0];
 
-  private final TabletServer tabletServer;
+  protected final TabletHostingServer tabletServer;
   private final ServerContext context;
   private final KeyExtent extent;
   private final TabletResourceManager tabletResources;
@@ -248,10 +249,10 @@ public class Tablet {
   // held.
   private final ConcurrentHashMap<Long,List<TabletFile>> bulkImported = new ConcurrentHashMap<>();
 
-  private final int logId;
+  private final Supplier<Integer> logId;
 
   public int getLogId() {
-    return logId;
+    return logId.get();
   }
 
   public static class LookupResult {
@@ -264,8 +265,10 @@ public class Tablet {
   private String chooseTabletDir() throws IOException {
     VolumeChooserEnvironment chooserEnv =
         new VolumeChooserEnvironmentImpl(extent.tableId(), extent.endRow(), context);
-    String dirUri = tabletServer.getVolumeManager().choose(chooserEnv, context.getBaseUris())
-        + Constants.HDFS_TABLES_DIR + Path.SEPARATOR + extent.tableId() + Path.SEPARATOR + dirName;
+    String dirUri =
+        tabletServer.getContext().getVolumeManager().choose(chooserEnv, context.getBaseUris())
+            + Constants.HDFS_TABLES_DIR + Path.SEPARATOR + extent.tableId() + Path.SEPARATOR
+            + dirName;
     checkTabletDir(new Path(dirUri));
     return dirUri;
   }
@@ -285,7 +288,7 @@ public class Tablet {
     if (!checkedTabletDirs.contains(path)) {
       FileStatus[] files = null;
       try {
-        files = getTabletServer().getVolumeManager().listStatus(path);
+        files = getTabletServer().getContext().getVolumeManager().listStatus(path);
       } catch (FileNotFoundException ex) {
         // ignored
       }
@@ -293,14 +296,14 @@ public class Tablet {
       if (files == null) {
         log.debug("Tablet {} had no dir, creating {}", extent, path);
 
-        getTabletServer().getVolumeManager().mkdirs(path);
+        getTabletServer().getContext().getVolumeManager().mkdirs(path);
       }
       checkedTabletDirs.add(path);
     }
   }
 
-  public Tablet(final TabletServer tabletServer, final KeyExtent extent,
-      final TabletResourceManager trm, TabletData data, boolean readOnly)
+  public Tablet(final TabletHostingServer tabletServer, final KeyExtent extent,
+      final TabletResourceManager trm, TabletData data)
       throws IOException, IllegalArgumentException {
 
     this.tabletServer = tabletServer;
@@ -313,12 +316,12 @@ public class Tablet {
     this.splitCreationTime = data.getSplitTime();
     this.tabletTime = TabletTime.getInstance(data.getTime());
     this.persistedTime = tabletTime.getTime();
-    this.logId = tabletServer.createLogId();
+    this.logId = () -> tabletServer.createLogId();
 
-    TableConfiguration tblConf = tabletServer.getTableConfiguration(extent);
+    TableConfiguration tblConf = tabletServer.getContext().getTableConfiguration(extent.tableId());
     if (tblConf == null) {
       tabletServer.getContext().clearTableListCache();
-      tblConf = tabletServer.getTableConfiguration(extent);
+      tblConf = tabletServer.getContext().getTableConfiguration(extent.tableId());
       requireNonNull(tblConf, "Could not get table configuration for " + extent.tableId());
     }
 
@@ -331,10 +334,8 @@ public class Tablet {
     TabletFiles tabletPaths =
         new TabletFiles(data.getDirectoryName(), data.getLogEntries(), data.getDataFiles());
 
-    if (!readOnly) {
-      tabletPaths = VolumeUtil.updateTabletVolumes(tabletServer.getContext(),
-          tabletServer.getLock(), extent, tabletPaths, replicationEnabled);
-    }
+    tabletPaths = VolumeUtil.updateTabletVolumes(tabletServer.getContext(), tabletServer.getLock(),
+        extent, tabletPaths, replicationEnabled);
 
     this.dirName = data.getDirectoryName();
 
@@ -358,77 +359,8 @@ public class Tablet {
     tabletMemory = new TabletMemory(this);
 
     // don't bother examining WALs for recovery if Table is being deleted
-    if (!readOnly && !logEntries.isEmpty() && !isBeingDeleted()) {
-      TabletLogger.recovering(extent, logEntries);
-      final AtomicLong entriesUsedOnTablet = new AtomicLong(0);
-      // track max time from walog entries without timestamps
-      final AtomicLong maxTime = new AtomicLong(Long.MIN_VALUE);
-      final CommitSession commitSession = getTabletMemory().getCommitSession();
-      try {
-        Set<String> absPaths = new HashSet<>();
-        for (TabletFile ref : datafiles.keySet()) {
-          absPaths.add(ref.getPathStr());
-        }
-
-        tabletServer.recover(this.getTabletServer().getVolumeManager(), extent, logEntries,
-            absPaths, m -> {
-              Collection<ColumnUpdate> muts = m.getUpdates();
-              for (ColumnUpdate columnUpdate : muts) {
-                if (!columnUpdate.hasTimestamp()) {
-                  // if it is not a user set timestamp, it must have been set
-                  // by the system
-                  maxTime.set(Math.max(maxTime.get(), columnUpdate.getTimestamp()));
-                }
-              }
-              getTabletMemory().mutate(commitSession, Collections.singletonList(m), 1);
-              entriesUsedOnTablet.incrementAndGet();
-            });
-
-        if (maxTime.get() != Long.MIN_VALUE) {
-          tabletTime.useMaxTimeFromWALog(maxTime.get());
-        }
-        commitSession.updateMaxCommittedTime(tabletTime.getTime());
-
-        @SuppressWarnings("deprecation")
-        boolean replicationEnabledForTable =
-            org.apache.accumulo.core.replication.ReplicationConfigurationUtil.isEnabled(extent,
-                tabletServer.getTableConfiguration(extent));
-        if (entriesUsedOnTablet.get() == 0) {
-          log.debug("No replayed mutations applied, removing unused entries for {}", extent);
-          MetadataTableUtil.removeUnusedWALEntries(getTabletServer().getContext(), extent,
-              logEntries, tabletServer.getLock());
-          logEntries.clear();
-        } else if (replicationEnabledForTable) {
-          // record that logs may have data for this extent
-          @SuppressWarnings("deprecation")
-          Status status = org.apache.accumulo.server.replication.StatusUtil.openWithUnknownLength();
-          for (LogEntry logEntry : logEntries) {
-            log.debug("Writing updated status to metadata table for {} {}", logEntry.filename,
-                ProtobufUtil.toString(status));
-            ReplicationTableUtil.updateFiles(tabletServer.getContext(), extent, logEntry.filename,
-                status);
-          }
-        }
-
-      } catch (Exception t) {
-        String msg = "Error recovering tablet " + extent + " from log files";
-        if (tableConfiguration.getBoolean(Property.TABLE_FAILURES_IGNORE)) {
-          log.warn(msg, t);
-        } else {
-          throw new RuntimeException(msg, t);
-        }
-      }
-      // make some closed references that represent the recovered logs
-      currentLogs = new HashSet<>();
-      for (LogEntry logEntry : logEntries) {
-        currentLogs.add(new DfsLogger(tabletServer.getContext(), tabletServer.getServerConfig(),
-            logEntry.filename, logEntry.getColumnQualifier().toString()));
-      }
-
-      rebuildReferencedLogs();
-
-      TabletLogger.recovered(extent, logEntries, entriesUsedOnTablet.get(),
-          getTabletMemory().getNumEntries());
+    if (!logEntries.isEmpty() && !isBeingDeleted()) {
+      recoverTablet(datafiles, logEntries);
     }
 
     // do this last after tablet is completely setup because it
@@ -437,25 +369,105 @@ public class Tablet {
 
     computeNumEntries();
 
-    if (!readOnly) {
-      getDatafileManager().removeFilesAfterScan(data.getScanFiles());
+    removeOldScanRefs(data.getScanFiles());
 
-      // look for hints of a failure on the previous tablet server
-      if (!logEntries.isEmpty()) {
-        // look for any temp files hanging around
-        removeOldTemporaryFiles(data.getExternalCompactions());
-      }
+    // look for hints of a failure on the previous tablet server
+    if (!logEntries.isEmpty()) {
+      // look for any temp files hanging around
+      removeOldTemporaryFiles(data.getExternalCompactions());
     }
 
-    this.compactable = new CompactableImpl(this, tabletServer.getCompactionManager(),
+    this.compactable = getCompactable(data);
+  }
+
+  protected void removeOldScanRefs(HashSet<StoredTabletFile> scanFiles) {
+    getDatafileManager().removeFilesAfterScan(scanFiles);
+  }
+
+  protected CompactableImpl getCompactable(TabletData data) {
+    return new CompactableImpl(this, tabletServer.getCompactionManager(),
         data.getExternalCompactions());
+  }
+
+  protected void recoverTablet(SortedMap<StoredTabletFile,DataFileValue> datafiles,
+      List<LogEntry> logEntries) {
+    TabletLogger.recovering(extent, logEntries);
+    final AtomicLong entriesUsedOnTablet = new AtomicLong(0);
+    // track max time from walog entries without timestamps
+    final AtomicLong maxTime = new AtomicLong(Long.MIN_VALUE);
+    final CommitSession commitSession = getTabletMemory().getCommitSession();
+    try {
+      Set<String> absPaths = new HashSet<>();
+      for (TabletFile ref : datafiles.keySet()) {
+        absPaths.add(ref.getPathStr());
+      }
+
+      tabletServer.recover(this.getTabletServer().getContext().getVolumeManager(), extent,
+          logEntries, absPaths, m -> {
+            Collection<ColumnUpdate> muts = m.getUpdates();
+            for (ColumnUpdate columnUpdate : muts) {
+              if (!columnUpdate.hasTimestamp()) {
+                // if it is not a user set timestamp, it must have been set
+                // by the system
+                maxTime.set(Math.max(maxTime.get(), columnUpdate.getTimestamp()));
+              }
+            }
+            getTabletMemory().mutate(commitSession, Collections.singletonList(m), 1);
+            entriesUsedOnTablet.incrementAndGet();
+          });
+
+      if (maxTime.get() != Long.MIN_VALUE) {
+        tabletTime.useMaxTimeFromWALog(maxTime.get());
+      }
+      commitSession.updateMaxCommittedTime(tabletTime.getTime());
+
+      @SuppressWarnings("deprecation")
+      boolean replicationEnabledForTable =
+          org.apache.accumulo.core.replication.ReplicationConfigurationUtil.isEnabled(extent,
+              tabletServer.getContext().getTableConfiguration(extent.tableId()));
+      if (entriesUsedOnTablet.get() == 0) {
+        log.debug("No replayed mutations applied, removing unused entries for {}", extent);
+        MetadataTableUtil.removeUnusedWALEntries(getTabletServer().getContext(), extent, logEntries,
+            tabletServer.getLock());
+        logEntries.clear();
+      } else if (replicationEnabledForTable) {
+        // record that logs may have data for this extent
+        @SuppressWarnings("deprecation")
+        Status status = org.apache.accumulo.server.replication.StatusUtil.openWithUnknownLength();
+        for (LogEntry logEntry : logEntries) {
+          log.debug("Writing updated status to metadata table for {} {}", logEntry.filename,
+              ProtobufUtil.toString(status));
+          ReplicationTableUtil.updateFiles(tabletServer.getContext(), extent, logEntry.filename,
+              status);
+        }
+      }
+
+    } catch (Exception t) {
+      String msg = "Error recovering tablet " + extent + " from log files";
+      if (tableConfiguration.getBoolean(Property.TABLE_FAILURES_IGNORE)) {
+        log.warn(msg, t);
+      } else {
+        throw new RuntimeException(msg, t);
+      }
+    }
+    // make some closed references that represent the recovered logs
+    currentLogs = new HashSet<>();
+    for (LogEntry logEntry : logEntries) {
+      currentLogs.add(new DfsLogger(tabletServer.getContext(), tabletServer.getServerConfig(),
+          logEntry.filename, logEntry.getColumnQualifier().toString()));
+    }
+
+    rebuildReferencedLogs();
+
+    TabletLogger.recovered(extent, logEntries, entriesUsedOnTablet.get(),
+        getTabletMemory().getNumEntries());
   }
 
   public ServerContext getContext() {
     return context;
   }
 
-  private void removeOldTemporaryFiles(
+  protected void removeOldTemporaryFiles(
       Map<ExternalCompactionId,ExternalCompactionMetadata> externalCompactions) {
     // remove any temporary files created by a previous tablet server
     try {
@@ -463,7 +475,7 @@ public class Tablet {
       var extCompactionFiles = externalCompactions.values().stream()
           .map(ecMeta -> ecMeta.getCompactTmpName().getPath()).collect(Collectors.toSet());
 
-      for (Volume volume : getTabletServer().getVolumeManager().getVolumes()) {
+      for (Volume volume : getTabletServer().getContext().getVolumeManager().getVolumes()) {
         String dirUri = volume.getBasePath() + Constants.HDFS_TABLES_DIR + Path.SEPARATOR
             + extent.tableId() + Path.SEPARATOR + dirName;
 
@@ -1016,8 +1028,8 @@ public class Tablet {
 
   public long getFlushID() throws NoNodeException {
     try {
-      String zTablePath = Constants.ZROOT + "/" + tabletServer.getInstanceID() + Constants.ZTABLES
-          + "/" + extent.tableId() + Constants.ZTABLE_FLUSH_ID;
+      String zTablePath = Constants.ZROOT + "/" + tabletServer.getContext().getInstanceID()
+          + Constants.ZTABLES + "/" + extent.tableId() + Constants.ZTABLE_FLUSH_ID;
       String id = new String(context.getZooReaderWriter().getData(zTablePath), UTF_8);
       return Long.parseLong(id);
     } catch (InterruptedException | NumberFormatException e) {
@@ -1032,16 +1044,16 @@ public class Tablet {
   }
 
   long getCompactionCancelID() {
-    String zTablePath = Constants.ZROOT + "/" + tabletServer.getInstanceID() + Constants.ZTABLES
-        + "/" + extent.tableId() + Constants.ZTABLE_COMPACT_CANCEL_ID;
+    String zTablePath = Constants.ZROOT + "/" + tabletServer.getContext().getInstanceID()
+        + Constants.ZTABLES + "/" + extent.tableId() + Constants.ZTABLE_COMPACT_CANCEL_ID;
     String id = new String(context.getZooCache().get(zTablePath), UTF_8);
     return Long.parseLong(id);
   }
 
   public Pair<Long,CompactionConfig> getCompactionID() throws NoNodeException {
     try {
-      String zTablePath = Constants.ZROOT + "/" + tabletServer.getInstanceID() + Constants.ZTABLES
-          + "/" + extent.tableId() + Constants.ZTABLE_COMPACT_ID;
+      String zTablePath = Constants.ZROOT + "/" + tabletServer.getContext().getInstanceID()
+          + Constants.ZTABLES + "/" + extent.tableId() + Constants.ZTABLE_COMPACT_ID;
 
       String[] tokens =
           new String(context.getZooReaderWriter().getData(zTablePath), UTF_8).split(",");
@@ -2267,7 +2279,7 @@ public class Tablet {
     timer.incrementStatusMajor();
   }
 
-  TabletServer getTabletServer() {
+  TabletHostingServer getTabletServer() {
     return tabletServer;
   }
 

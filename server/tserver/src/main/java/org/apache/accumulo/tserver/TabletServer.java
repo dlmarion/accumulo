@@ -69,7 +69,6 @@ import org.apache.accumulo.core.clientImpl.DurabilityImpl;
 import org.apache.accumulo.core.clientImpl.TabletLocator;
 import org.apache.accumulo.core.conf.AccumuloConfiguration;
 import org.apache.accumulo.core.conf.Property;
-import org.apache.accumulo.core.data.InstanceId;
 import org.apache.accumulo.core.data.TableId;
 import org.apache.accumulo.core.dataImpl.KeyExtent;
 import org.apache.accumulo.core.file.blockfile.cache.impl.BlockCacheConfiguration;
@@ -149,7 +148,6 @@ import org.apache.accumulo.tserver.metrics.TabletServerMinCMetrics;
 import org.apache.accumulo.tserver.metrics.TabletServerScanMetrics;
 import org.apache.accumulo.tserver.metrics.TabletServerUpdateMetrics;
 import org.apache.accumulo.tserver.scan.ScanRunState;
-import org.apache.accumulo.tserver.session.Session;
 import org.apache.accumulo.tserver.session.SessionManager;
 import org.apache.accumulo.tserver.tablet.BulkImportCacheCleaner;
 import org.apache.accumulo.tserver.tablet.CommitSession;
@@ -174,11 +172,11 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.context.Scope;
 
-public class TabletServer extends AbstractServer {
+public class TabletServer extends AbstractServer implements TabletHostingServer {
 
   private static final SecureRandom random = new SecureRandom();
   private static final Logger log = LoggerFactory.getLogger(TabletServer.class);
-  private static final long TIME_BETWEEN_GC_CHECKS = TimeUnit.SECONDS.toMillis(5);
+  public static final long TIME_BETWEEN_GC_CHECKS = TimeUnit.SECONDS.toMillis(5);
   private static final long TIME_BETWEEN_LOCATOR_CACHE_CLEARS = TimeUnit.HOURS.toMillis(1);
 
   final GarbageCollectionLogger gcLogger = new GarbageCollectionLogger();
@@ -219,7 +217,7 @@ public class TabletServer extends AbstractServer {
 
   private final BlockingDeque<ManagerMessage> managerMessages = new LinkedBlockingDeque<>();
 
-  HostAndPort clientAddress;
+  private HostAndPort clientAddress;
 
   protected volatile boolean serverStopRequested = false;
   private volatile boolean shutdownComplete = false;
@@ -256,7 +254,7 @@ public class TabletServer extends AbstractServer {
     this.managerLockCache = new ZooCache(context.getZooReader(), null);
     final AccumuloConfiguration aconf = getConfiguration();
     log.info("Version " + Constants.VERSION);
-    log.info("Instance " + getInstanceID());
+    log.info("Instance " + context.getInstanceID());
     this.sessionManager = new SessionManager(context);
 
     if (!scanOnly) {
@@ -394,15 +392,36 @@ public class TabletServer extends AbstractServer {
     ThreadPools.watchNonCriticalScheduledTask(future);
   }
 
-  public InstanceId getInstanceID() {
-    return getContext().getInstanceID();
+  @Override
+  public GarbageCollectionLogger getGCLogger() {
+    return this.gcLogger;
+  }
+
+  @Override
+  public SessionManager getSessionManager() {
+    return this.sessionManager;
+  }
+
+  @Override
+  public HostAndPort getClientAddress() {
+    return this.clientAddress;
+  }
+
+  @Override
+  public ZooCache getZooCache() {
+    return this.managerLockCache;
+  }
+
+  @Override
+  public boolean isReadOnly() {
+    return false;
   }
 
   public String getVersion() {
     return Constants.VERSION;
   }
 
-  private static long jitter() {
+  public static long jitter() {
     // add a random 10% wait
     return (long) ((1. + (random.nextDouble() / 10))
         * TabletServer.TIME_BETWEEN_LOCATOR_CACHE_CLEARS);
@@ -443,8 +462,9 @@ public class TabletServer extends AbstractServer {
     return totalQueuedMutationSize.addAndGet(additionalMutationSize);
   }
 
-  public Session getSession(long sessionId) {
-    return sessionManager.getSession(sessionId);
+  @Override
+  public TabletServerResourceManager getResourceManager() {
+    return this.resourceManager;
   }
 
   public void executeSplit(Tablet tablet) {
@@ -521,12 +541,12 @@ public class TabletServer extends AbstractServer {
     Entry<KeyExtent,TabletData> first = tabletInfo.firstEntry();
     TabletResourceManager newTrm0 = resourceManager.createTabletResourceManager(first.getKey(),
         getTableConfiguration(first.getKey()));
-    newTablets[0] = new Tablet(TabletServer.this, first.getKey(), newTrm0, first.getValue(), false);
+    newTablets[0] = new Tablet(TabletServer.this, first.getKey(), newTrm0, first.getValue());
 
     Entry<KeyExtent,TabletData> last = tabletInfo.lastEntry();
     TabletResourceManager newTrm1 = resourceManager.createTabletResourceManager(last.getKey(),
         getTableConfiguration(last.getKey()));
-    newTablets[1] = new Tablet(TabletServer.this, last.getKey(), newTrm1, last.getValue(), false);
+    newTablets[1] = new Tablet(TabletServer.this, last.getKey(), newTrm1, last.getValue());
 
     // roll tablet stats over into tablet server's statsKeeper object as
     // historical data
@@ -1008,27 +1028,6 @@ public class TabletServer extends AbstractServer {
     ScheduledFuture<?> future = context.getScheduledExecutor()
         .scheduleWithFixedDelay(replicationWorkThreadPoolResizer, 10, 30, TimeUnit.SECONDS);
     watchNonCriticalScheduledTask(future);
-  }
-
-  public String getClientAddressString() {
-    if (clientAddress == null) {
-      return null;
-    }
-    return clientAddress.getHost() + ":" + clientAddress.getPort();
-  }
-
-  public TServerInstance getTabletSession() {
-    String address = getClientAddressString();
-    if (address == null) {
-      return null;
-    }
-
-    try {
-      return new TServerInstance(address, tabletServerLock.getSessionId());
-    } catch (Exception ex) {
-      log.warn("Unable to read session from tablet server lock" + ex);
-      return null;
-    }
   }
 
   private static void checkWalCanSync(ServerContext context) {

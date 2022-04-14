@@ -108,7 +108,7 @@ class UnloadTabletHandler implements Runnable {
 
     try {
       TServerInstance instance =
-          new TServerInstance(server.clientAddress, server.getLock().getSessionId());
+          new TServerInstance(server.getClientAddress(), server.getLock().getSessionId());
       TabletLocationState tls = null;
       try {
         tls = new TabletLocationState(extent, null, instance, null, null, null, false);
