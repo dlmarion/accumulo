@@ -182,7 +182,7 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
   final GarbageCollectionLogger gcLogger = new GarbageCollectionLogger();
   final ZooCache managerLockCache;
 
-  TabletServerLogger logger;
+  final TabletServerLogger logger;
 
   private TabletServerMetrics metrics;
   TabletServerUpdateMetrics updateMetrics;
@@ -198,10 +198,10 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
     return mincMetrics;
   }
 
-  private LogSorter logSorter;
+  private final LogSorter logSorter;
   @SuppressWarnings("deprecation")
   private org.apache.accumulo.tserver.replication.ReplicationWorker replWorker = null;
-  TabletStatsKeeper statsKeeper;
+  final TabletStatsKeeper statsKeeper;
   private final AtomicInteger logIdGenerator = new AtomicInteger();
 
   private final AtomicLong flushCounter = new AtomicLong(0);
@@ -219,10 +219,10 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
 
   private HostAndPort clientAddress;
 
-  protected volatile boolean serverStopRequested = false;
+  private volatile boolean serverStopRequested = false;
   private volatile boolean shutdownComplete = false;
 
-  protected ServiceLock tabletServerLock;
+  private ServiceLock tabletServerLock;
 
   private TServer server;
   private volatile TServer replServer;
@@ -236,18 +236,18 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
   private final AtomicLong totalMinorCompactions = new AtomicLong(0);
 
   private final ZooAuthenticationKeyWatcher authKeyWatcher;
-  private WalStateManager walMarker;
+  private final WalStateManager walMarker;
   private final ServerContext context;
 
   public static void main(String[] args) throws Exception {
-    try (TabletServer tserver = new TabletServer(new ServerOpts(), args, false)) {
+    try (TabletServer tserver = new TabletServer(new ServerOpts(), args)) {
       tserver.runServer();
     }
   }
 
   @SuppressFBWarnings(value = "SC_START_IN_CTOR",
       justification = "bad practice to start threads in constructor; probably needs rewrite")
-  protected TabletServer(ServerOpts opts, String[] args, boolean scanOnly) {
+  protected TabletServer(ServerOpts opts, String[] args) {
     super("tserver", opts, args);
     context = super.getContext();
     context.setupCrypto();
@@ -256,120 +256,114 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
     log.info("Version " + Constants.VERSION);
     log.info("Instance " + context.getInstanceID());
     this.sessionManager = new SessionManager(context);
+    this.logSorter = new LogSorter(context, aconf);
+    @SuppressWarnings("deprecation")
+    var replWorker = new org.apache.accumulo.tserver.replication.ReplicationWorker(context);
+    this.replWorker = replWorker;
+    this.statsKeeper = new TabletStatsKeeper();
+    final int numBusyTabletsToLog = aconf.getCount(Property.TSERV_LOG_BUSY_TABLETS_COUNT);
+    final long logBusyTabletsDelay =
+        aconf.getTimeInMillis(Property.TSERV_LOG_BUSY_TABLETS_INTERVAL);
 
-    if (!scanOnly) {
-      this.logSorter = new LogSorter(context, aconf);
-      @SuppressWarnings("deprecation")
-      var replWorker = new org.apache.accumulo.tserver.replication.ReplicationWorker(context);
-      this.replWorker = replWorker;
-      this.statsKeeper = new TabletStatsKeeper();
-      final int numBusyTabletsToLog = aconf.getCount(Property.TSERV_LOG_BUSY_TABLETS_COUNT);
-      final long logBusyTabletsDelay =
-          aconf.getTimeInMillis(Property.TSERV_LOG_BUSY_TABLETS_INTERVAL);
+    // check early whether the WAL directory supports sync. issue warning if
+    // it doesn't
+    checkWalCanSync(context);
 
-      // check early whether the WAL directory supports sync. issue warning if
-      // it doesn't
-      checkWalCanSync(context);
-
-      // This thread will calculate and log out the busiest tablets based on ingest count and
-      // query count every #{logBusiestTabletsDelay}
-      if (numBusyTabletsToLog > 0) {
-        ScheduledFuture<?> future = context.getScheduledExecutor()
-            .scheduleWithFixedDelay(Threads.createNamedRunnable("BusyTabletLogger", new Runnable() {
-              private BusiestTracker ingestTracker =
-                  BusiestTracker.newBusiestIngestTracker(numBusyTabletsToLog);
-              private BusiestTracker queryTracker =
-                  BusiestTracker.newBusiestQueryTracker(numBusyTabletsToLog);
-
-              @Override
-              public void run() {
-                Collection<Tablet> tablets = onlineTablets.snapshot().values();
-                logBusyTablets(ingestTracker.computeBusiest(tablets), "ingest count");
-                logBusyTablets(queryTracker.computeBusiest(tablets), "query count");
-              }
-
-              private void logBusyTablets(List<ComparablePair<Long,KeyExtent>> busyTablets,
-                  String label) {
-
-                int i = 1;
-                for (Pair<Long,KeyExtent> pair : busyTablets) {
-                  log.debug("{} busiest tablet by {}: {} -- extent: {} ", i, label.toLowerCase(),
-                      pair.getFirst(), pair.getSecond());
-                  i++;
-                }
-              }
-            }), logBusyTabletsDelay, logBusyTabletsDelay, TimeUnit.MILLISECONDS);
-        watchNonCriticalScheduledTask(future);
-      }
-
+    // This thread will calculate and log out the busiest tablets based on ingest count and
+    // query count every #{logBusiestTabletsDelay}
+    if (numBusyTabletsToLog > 0) {
       ScheduledFuture<?> future = context.getScheduledExecutor()
-          .scheduleWithFixedDelay(Threads.createNamedRunnable("TabletRateUpdater", new Runnable() {
+          .scheduleWithFixedDelay(Threads.createNamedRunnable("BusyTabletLogger", new Runnable() {
+            private BusiestTracker ingestTracker =
+                BusiestTracker.newBusiestIngestTracker(numBusyTabletsToLog);
+            private BusiestTracker queryTracker =
+                BusiestTracker.newBusiestQueryTracker(numBusyTabletsToLog);
+
             @Override
             public void run() {
-              long now = System.currentTimeMillis();
-              for (Tablet tablet : getOnlineTablets().values()) {
-                try {
-                  tablet.updateRates(now);
-                } catch (Exception ex) {
-                  log.error("Error updating rates for {}", tablet.getExtent(), ex);
-                }
+              Collection<Tablet> tablets = onlineTablets.snapshot().values();
+              logBusyTablets(ingestTracker.computeBusiest(tablets), "ingest count");
+              logBusyTablets(queryTracker.computeBusiest(tablets), "query count");
+            }
+
+            private void logBusyTablets(List<ComparablePair<Long,KeyExtent>> busyTablets,
+                String label) {
+
+              int i = 1;
+              for (Pair<Long,KeyExtent> pair : busyTablets) {
+                log.debug("{} busiest tablet by {}: {} -- extent: {} ", i, label.toLowerCase(),
+                    pair.getFirst(), pair.getSecond());
+                i++;
               }
             }
-          }), 5, 5, TimeUnit.SECONDS);
+          }), logBusyTabletsDelay, logBusyTabletsDelay, TimeUnit.MILLISECONDS);
       watchNonCriticalScheduledTask(future);
-
-      @SuppressWarnings("deprecation")
-      final long walMaxSize = aconf
-          .getAsBytes(aconf.resolve(Property.TSERV_WAL_MAX_SIZE, Property.TSERV_WALOG_MAX_SIZE));
-      @SuppressWarnings("deprecation")
-      final long walMaxAge = aconf
-          .getTimeInMillis(aconf.resolve(Property.TSERV_WAL_MAX_AGE, Property.TSERV_WALOG_MAX_AGE));
-      final long minBlockSize =
-          context.getHadoopConf().getLong("dfs.namenode.fs-limits.min-block-size", 0);
-      if (minBlockSize != 0 && minBlockSize > walMaxSize) {
-        throw new RuntimeException("Unable to start TabletServer. Logger is set to use blocksize "
-            + walMaxSize + " but hdfs minimum block size is " + minBlockSize
-            + ". Either increase the " + Property.TSERV_WAL_MAX_SIZE
-            + " or decrease dfs.namenode.fs-limits.min-block-size in hdfs-site.xml.");
-      }
-
-      @SuppressWarnings("deprecation")
-      final long toleratedWalCreationFailures =
-          aconf.getCount(aconf.resolve(Property.TSERV_WAL_TOLERATED_CREATION_FAILURES,
-              Property.TSERV_WALOG_TOLERATED_CREATION_FAILURES));
-      @SuppressWarnings("deprecation")
-      final long walFailureRetryIncrement =
-          aconf.getTimeInMillis(aconf.resolve(Property.TSERV_WAL_TOLERATED_WAIT_INCREMENT,
-              Property.TSERV_WALOG_TOLERATED_WAIT_INCREMENT));
-      @SuppressWarnings("deprecation")
-      final long walFailureRetryMax =
-          aconf.getTimeInMillis(aconf.resolve(Property.TSERV_WAL_TOLERATED_MAXIMUM_WAIT_DURATION,
-              Property.TSERV_WALOG_TOLERATED_MAXIMUM_WAIT_DURATION));
-      final RetryFactory walCreationRetryFactory =
-          Retry.builder().maxRetries(toleratedWalCreationFailures)
-              .retryAfter(walFailureRetryIncrement, TimeUnit.MILLISECONDS)
-              .incrementBy(walFailureRetryIncrement, TimeUnit.MILLISECONDS)
-              .maxWait(walFailureRetryMax, TimeUnit.MILLISECONDS).backOffFactor(1.5)
-              .logInterval(3, TimeUnit.MINUTES).createFactory();
-      // Tolerate infinite failures for the write, however backing off the same as for creation
-      // failures.
-      final RetryFactory walWritingRetryFactory = Retry.builder().infiniteRetries()
-          .retryAfter(walFailureRetryIncrement, TimeUnit.MILLISECONDS)
-          .incrementBy(walFailureRetryIncrement, TimeUnit.MILLISECONDS)
-          .maxWait(walFailureRetryMax, TimeUnit.MILLISECONDS).backOffFactor(1.5)
-          .logInterval(3, TimeUnit.MINUTES).createFactory();
-
-      logger = new TabletServerLogger(this, walMaxSize, syncCounter, flushCounter,
-          walCreationRetryFactory, walWritingRetryFactory, walMaxAge);
-      Threads.createThread("Split/MajC initiator", new MajorCompactor(context)).start();
-      FileSystemMonitor.start(aconf, Property.TSERV_MONITOR_FS);
-      walMarker = new WalStateManager(context);
     }
 
+    ScheduledFuture<?> future = context.getScheduledExecutor()
+        .scheduleWithFixedDelay(Threads.createNamedRunnable("TabletRateUpdater", new Runnable() {
+          @Override
+          public void run() {
+            long now = System.currentTimeMillis();
+            for (Tablet tablet : getOnlineTablets().values()) {
+              try {
+                tablet.updateRates(now);
+              } catch (Exception ex) {
+                log.error("Error updating rates for {}", tablet.getExtent(), ex);
+              }
+            }
+          }
+        }), 5, 5, TimeUnit.SECONDS);
+    watchNonCriticalScheduledTask(future);
+
+    @SuppressWarnings("deprecation")
+    final long walMaxSize =
+        aconf.getAsBytes(aconf.resolve(Property.TSERV_WAL_MAX_SIZE, Property.TSERV_WALOG_MAX_SIZE));
+    @SuppressWarnings("deprecation")
+    final long walMaxAge = aconf
+        .getTimeInMillis(aconf.resolve(Property.TSERV_WAL_MAX_AGE, Property.TSERV_WALOG_MAX_AGE));
+    final long minBlockSize =
+        context.getHadoopConf().getLong("dfs.namenode.fs-limits.min-block-size", 0);
+    if (minBlockSize != 0 && minBlockSize > walMaxSize) {
+      throw new RuntimeException("Unable to start TabletServer. Logger is set to use blocksize "
+          + walMaxSize + " but hdfs minimum block size is " + minBlockSize
+          + ". Either increase the " + Property.TSERV_WAL_MAX_SIZE
+          + " or decrease dfs.namenode.fs-limits.min-block-size in hdfs-site.xml.");
+    }
+
+    @SuppressWarnings("deprecation")
+    final long toleratedWalCreationFailures =
+        aconf.getCount(aconf.resolve(Property.TSERV_WAL_TOLERATED_CREATION_FAILURES,
+            Property.TSERV_WALOG_TOLERATED_CREATION_FAILURES));
+    @SuppressWarnings("deprecation")
+    final long walFailureRetryIncrement =
+        aconf.getTimeInMillis(aconf.resolve(Property.TSERV_WAL_TOLERATED_WAIT_INCREMENT,
+            Property.TSERV_WALOG_TOLERATED_WAIT_INCREMENT));
+    @SuppressWarnings("deprecation")
+    final long walFailureRetryMax =
+        aconf.getTimeInMillis(aconf.resolve(Property.TSERV_WAL_TOLERATED_MAXIMUM_WAIT_DURATION,
+            Property.TSERV_WALOG_TOLERATED_MAXIMUM_WAIT_DURATION));
+    final RetryFactory walCreationRetryFactory =
+        Retry.builder().maxRetries(toleratedWalCreationFailures)
+            .retryAfter(walFailureRetryIncrement, TimeUnit.MILLISECONDS)
+            .incrementBy(walFailureRetryIncrement, TimeUnit.MILLISECONDS)
+            .maxWait(walFailureRetryMax, TimeUnit.MILLISECONDS).backOffFactor(1.5)
+            .logInterval(3, TimeUnit.MINUTES).createFactory();
+    // Tolerate infinite failures for the write, however backing off the same as for creation
+    // failures.
+    final RetryFactory walWritingRetryFactory = Retry.builder().infiniteRetries()
+        .retryAfter(walFailureRetryIncrement, TimeUnit.MILLISECONDS)
+        .incrementBy(walFailureRetryIncrement, TimeUnit.MILLISECONDS)
+        .maxWait(walFailureRetryMax, TimeUnit.MILLISECONDS).backOffFactor(1.5)
+        .logInterval(3, TimeUnit.MINUTES).createFactory();
+
+    logger = new TabletServerLogger(this, walMaxSize, syncCounter, flushCounter,
+        walCreationRetryFactory, walWritingRetryFactory, walMaxAge);
     this.resourceManager = new TabletServerResourceManager(context, this);
     this.security = AuditedSecurityOperation.getInstance(context);
     watchCriticalScheduledTask(context.getScheduledExecutor().scheduleWithFixedDelay(
         TabletLocator::clearLocators, jitter(), jitter(), TimeUnit.MILLISECONDS));
+    walMarker = new WalStateManager(context);
 
     // Create the secret manager
     context.setSecretManager(new AuthenticationTokenSecretManager(context.getInstanceID(),
@@ -383,13 +377,7 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
     } else {
       authKeyWatcher = null;
     }
-    log.info("Tablet server starting on {}", getHostname());
-    clientAddress = HostAndPort.fromParts(getHostname(), 0);
-
-    Runnable gcDebugTask = () -> gcLogger.logGCInfo(getConfiguration());
-    ScheduledFuture<?> future = context.getScheduledExecutor().scheduleWithFixedDelay(gcDebugTask,
-        0, TIME_BETWEEN_GC_CHECKS, TimeUnit.MILLISECONDS);
-    ThreadPools.watchNonCriticalScheduledTask(future);
+    config();
   }
 
   @Override
@@ -435,7 +423,7 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
   private ThriftClientHandler thriftClientHandler;
   private ThriftScanClientHandler scanClientHandler;
   private final ServerBulkImportStatus bulkImportStatus = new ServerBulkImportStatus();
-  protected CompactionManager compactionManager;
+  private CompactionManager compactionManager;
 
   String getLockID() {
     return lockID;
@@ -1057,6 +1045,23 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
             + " Data loss may occur.", logPath);
       }
     }
+  }
+
+  private void config() {
+    log.info("Tablet server starting on {}", getHostname());
+    Threads.createThread("Split/MajC initiator", new MajorCompactor(context)).start();
+
+    clientAddress = HostAndPort.fromParts(getHostname(), 0);
+
+    final AccumuloConfiguration aconf = getConfiguration();
+
+    FileSystemMonitor.start(aconf, Property.TSERV_MONITOR_FS);
+
+    Runnable gcDebugTask = () -> gcLogger.logGCInfo(getConfiguration());
+
+    ScheduledFuture<?> future = context.getScheduledExecutor().scheduleWithFixedDelay(gcDebugTask,
+        0, TIME_BETWEEN_GC_CHECKS, TimeUnit.MILLISECONDS);
+    watchNonCriticalScheduledTask(future);
   }
 
   public TabletServerStatus getStats(Map<TableId,MapCounter<ScanRunState>> scanCounts) {
