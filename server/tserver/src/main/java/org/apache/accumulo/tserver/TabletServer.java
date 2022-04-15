@@ -190,10 +190,12 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
   TabletServerMinCMetrics mincMetrics;
   CompactionExecutorsMetrics ceMetrics;
 
+  @Override
   public TabletServerScanMetrics getScanMetrics() {
     return scanMetrics;
   }
 
+  @Override
   public TabletServerMinCMetrics getMinCMetrics() {
     return mincMetrics;
   }
@@ -429,6 +431,7 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
     return lockID;
   }
 
+  @Override
   public void requestStop() {
     serverStopRequested = true;
   }
@@ -455,6 +458,7 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
     return this.resourceManager;
   }
 
+  @Override
   public void executeSplit(Tablet tablet) {
     resourceManager.executeSplit(tablet.getExtent(), new SplitRunner(tablet));
   }
@@ -557,6 +561,7 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
   }
 
   // add a message for the main thread to send back to the manager
+  @Override
   public void enqueueManagerMessage(ManagerMessage m) {
     managerMessages.addLast(m);
   }
