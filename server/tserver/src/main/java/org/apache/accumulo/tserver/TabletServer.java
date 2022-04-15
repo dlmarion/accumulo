@@ -687,6 +687,7 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
     }
   }
 
+  @Override
   public ServiceLock getLock() {
     return tabletServerLock;
   }
@@ -1176,6 +1177,7 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
     return DurabilityImpl.fromString(conf.get(Property.TABLE_DURABILITY));
   }
 
+  @Override
   public void minorCompactionFinished(CommitSession tablet, long walogSeq) throws IOException {
     Durability durability = getMincEventDurability(tablet.getExtent());
     totalMinorCompactions.incrementAndGet();
@@ -1183,12 +1185,14 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
     markUnusedWALs();
   }
 
+  @Override
   public void minorCompactionStarted(CommitSession tablet, long lastUpdateSequence,
       String newMapfileLocation) throws IOException {
     Durability durability = getMincEventDurability(tablet.getExtent());
     logger.minorCompactionStarted(tablet, lastUpdateSequence, newMapfileLocation, durability);
   }
 
+  @Override
   public void recover(VolumeManager fs, KeyExtent extent, List<LogEntry> logEntries,
       Set<String> tabletFiles, MutationReceiver mutationReceiver) throws IOException {
     List<Path> recoveryDirs = new ArrayList<>();
@@ -1211,6 +1215,7 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
     logger.recover(getContext(), extent, recoveryDirs, tabletFiles, mutationReceiver);
   }
 
+  @Override
   public int createLogId() {
     int logId = logIdGenerator.incrementAndGet();
     if (logId < 0) {
@@ -1223,6 +1228,7 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
     return getContext().getTableConfiguration(extent.tableId());
   }
 
+  @Override
   public DfsLogger.ServerResources getServerConfig() {
     return new DfsLogger.ServerResources() {
 
@@ -1242,6 +1248,7 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
     return onlineTablets.snapshot();
   }
 
+  @Override
   public Tablet getOnlineTablet(KeyExtent extent) {
     return onlineTablets.snapshot().get(extent);
   }
@@ -1367,18 +1374,22 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
     }
   }
 
+  @Override
   public void updateBulkImportState(List<String> files, BulkImportState state) {
     bulkImportStatus.updateBulkImportStatus(files, state);
   }
 
+  @Override
   public void removeBulkImportState(List<String> files) {
     bulkImportStatus.removeBulkImportStatus(files);
   }
 
+  @Override
   public CompactionManager getCompactionManager() {
     return compactionManager;
   }
 
+  @Override
   public BlockCacheConfiguration getBlockCacheConfiguration(AccumuloConfiguration acuConf) {
     return new BlockCacheConfiguration(acuConf, Property.TSERV_PREFIX,
         Property.TSERV_INDEXCACHE_SIZE, Property.TSERV_DATACACHE_SIZE,
