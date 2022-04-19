@@ -121,7 +121,7 @@ import org.apache.accumulo.server.log.WalStateManager.WalMarkerException;
 import org.apache.accumulo.server.manager.recovery.RecoveryPath;
 import org.apache.accumulo.server.rpc.ServerAddress;
 import org.apache.accumulo.server.rpc.TServerUtils;
-import org.apache.accumulo.server.rpc.ThriftServerTypes;
+import org.apache.accumulo.server.rpc.ThriftProcessorTypes;
 import org.apache.accumulo.server.security.AuditedSecurityOperation;
 import org.apache.accumulo.server.security.SecurityOperation;
 import org.apache.accumulo.server.security.SecurityUtil;
@@ -422,7 +422,7 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
   private final AtomicLong totalQueuedMutationSize = new AtomicLong(0);
   private final ReentrantLock recoveryLock = new ReentrantLock(true);
   private ClientServiceHandler clientHandler;
-  private ThriftClientHandler thriftClientHandler;
+  private TabletClientHandler thriftClientHandler;
   private ThriftScanClientHandler scanClientHandler;
   private final ServerBulkImportStatus bulkImportStatus = new ServerBulkImportStatus();
   private CompactionManager compactionManager;
@@ -618,16 +618,16 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
     return null;
   }
 
-  protected ClientServiceHandler getClientHandler() {
-    return new ClientServiceHandler(context, new TransactionWatcher(context));
+  protected ClientServiceHandler newClientHandler(TransactionWatcher watcher) {
+    return new ClientServiceHandler(context, watcher);
   }
 
   // exists to be overridden in tests
-  protected ThriftClientHandler getThriftClientHandler() {
-    return new ThriftClientHandler(this);
+  protected TabletClientHandler newTabletClientHandler(TransactionWatcher watcher) {
+    return new TabletClientHandler(this, watcher);
   }
 
-  protected ThriftScanClientHandler getThriftScanClientHandler() {
+  protected ThriftScanClientHandler newThriftScanClientHandler() {
     return new ThriftScanClientHandler(this);
   }
 
@@ -637,12 +637,13 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
 
   private HostAndPort startTabletClientService() throws UnknownHostException {
     // start listening for client connection last
-    clientHandler = getClientHandler();
-    thriftClientHandler = getThriftClientHandler();
-    scanClientHandler = getThriftScanClientHandler();
+    TransactionWatcher watcher = new TransactionWatcher(context);
+    clientHandler = newClientHandler(watcher);
+    thriftClientHandler = newTabletClientHandler(watcher);
+    scanClientHandler = newThriftScanClientHandler();
 
     try {
-      TProcessor processor = ThriftServerTypes.getTabletServerThriftServer(clientHandler,
+      TProcessor processor = ThriftProcessorTypes.getTabletServerTProcessor(clientHandler,
           thriftClientHandler, scanClientHandler, getContext(), getConfiguration());
       HostAndPort address = startServer(getConfiguration(), clientAddress.getHost(), processor);
       log.info("address = {}", address);
@@ -659,7 +660,7 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
         new org.apache.accumulo.tserver.replication.ReplicationServicerHandler(this);
     TProcessor processor = null;
     try {
-      processor = ThriftServerTypes.getReplicationClientThriftServer(handler, getContext(),
+      processor = ThriftProcessorTypes.getReplicationClientTProcessor(handler, getContext(),
           getConfiguration());
     } catch (Exception e) {
       throw new RuntimeException("Error creating thrift server processor", e);

@@ -39,7 +39,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
-import java.util.stream.StreamSupport;
 
 import org.apache.accumulo.core.Constants;
 import org.apache.accumulo.core.client.AccumuloClient;
@@ -88,7 +87,7 @@ import org.apache.accumulo.server.manager.LiveTServerSet;
 import org.apache.accumulo.server.replication.proto.Replication.Status;
 import org.apache.accumulo.server.rpc.ServerAddress;
 import org.apache.accumulo.server.rpc.TServerUtils;
-import org.apache.accumulo.server.rpc.ThriftServerTypes;
+import org.apache.accumulo.server.rpc.ThriftProcessorTypes;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.thrift.TProcessor;
@@ -229,7 +228,7 @@ public class SimpleGarbageCollector extends AbstractServer implements Iface {
       var scanner =
           new IsolatedScanner(getContext().createScanner(level.metaTable(), Authorizations.EMPTY));
       scanner.setRange(BlipSection.getRange());
-      return StreamSupport.stream(scanner.spliterator(), false)
+      return scanner.stream()
           .map(entry -> entry.getKey().getRow().toString().substring(blipPrefixLen))
           .onClose(scanner::close);
     }
@@ -670,7 +669,7 @@ public class SimpleGarbageCollector extends AbstractServer implements Iface {
 
     try {
       TProcessor processor =
-          ThriftServerTypes.getGcThriftServer(this, getContext(), getConfiguration());
+          ThriftProcessorTypes.getGcTProcessor(this, getContext(), getConfiguration());
       IntStream port = getConfiguration().getPortStream(Property.GC_PORT);
       HostAndPort[] addresses = TServerUtils.getHostAndPorts(getHostname(), port);
       long maxMessageSize = getConfiguration().getAsBytes(Property.GENERAL_MAX_MESSAGE_SIZE);
