@@ -923,17 +923,6 @@ public class ScanServer extends TabletServer implements TabletScanClientService.
   }
 
   @Override
-  public void halt(TInfo tinfo, TCredentials credentials, String lock)
-      throws ThriftSecurityException, TException {
-    delegate.halt(tinfo, credentials, lock);
-  }
-
-  @Override
-  public void fastHalt(TInfo tinfo, TCredentials credentials, String lock) throws TException {
-    delegate.fastHalt(tinfo, credentials, lock);
-  }
-
-  @Override
   public BlockCacheConfiguration getBlockCacheConfiguration(AccumuloConfiguration acuConf) {
     return new BlockCacheConfiguration(acuConf, Property.SSERV_PREFIX,
         Property.SSERV_INDEXCACHE_SIZE, Property.SSERV_DATACACHE_SIZE,

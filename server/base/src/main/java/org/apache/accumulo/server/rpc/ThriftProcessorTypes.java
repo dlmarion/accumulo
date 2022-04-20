@@ -99,7 +99,7 @@ public class ThriftProcessorTypes {
 
   private static final ProcessorType<TabletScanClientService.Client,
       TabletScanClientService.Client.Factory> TABLET_SERVER_SCAN =
-          new ProcessorType<>(ThriftClientTypes.TABLET_SERVER_SCAN);
+          new ProcessorType<>(ThriftClientTypes.TABLET_SCAN);
 
   public static TMultiplexedProcessor getCompactorTProcessor(CompactorService.Iface serviceHandler,
       ServerContext context, AccumuloConfiguration conf) {

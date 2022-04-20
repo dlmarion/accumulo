@@ -108,7 +108,7 @@ public class ThriftScanner {
     try {
       TInfo tinfo = TraceUtil.traceInfo();
       TabletScanClientService.Client client =
-          ThriftUtil.getClient(ThriftClientTypes.TABLET_SERVER_SCAN, parsedServer, context);
+          ThriftUtil.getClient(ThriftClientTypes.TABLET_SCAN, parsedServer, context);
       try {
         // not reading whole rows (or stopping on row boundaries) so there is no need to enable
         // isolation below
@@ -583,7 +583,7 @@ public class ThriftScanner {
 
     final HostAndPort parsedLocation = HostAndPort.fromString(loc.tablet_location);
     TabletScanClientService.Client client =
-        ThriftUtil.getClient(ThriftClientTypes.TABLET_SERVER_SCAN, parsedLocation, context);
+        ThriftUtil.getClient(ThriftClientTypes.TABLET_SCAN, parsedLocation, context);
 
     String old = Thread.currentThread().getName();
     try {
@@ -716,8 +716,8 @@ public class ThriftScanner {
       HostAndPort parsedLocation = HostAndPort.fromString(scanState.prevLoc.tablet_location);
       TabletScanClientService.Client client = null;
       try {
-        client = ThriftUtil.getClient(ThriftClientTypes.TABLET_SERVER_SCAN, parsedLocation,
-            scanState.context);
+        client =
+            ThriftUtil.getClient(ThriftClientTypes.TABLET_SCAN, parsedLocation, scanState.context);
         client.closeScan(tinfo, scanState.scanID);
       } catch (TException e) {
         // ignore this is a best effort

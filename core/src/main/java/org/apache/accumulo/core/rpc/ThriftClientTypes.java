@@ -95,10 +95,8 @@ public class ThriftClientTypes {
       TabletClientService.Client.Factory> TABLET_SERVER =
           new ThriftClientType<>("TabletClientService", new TabletClientService.Client.Factory());
 
-  // Client needs to be multiplexed because the Scan thrift server is run on the TabletServer
-  // which is using a MultiplexedProcessor
   public static final ThriftClientType<TabletScanClientService.Client,
-      TabletScanClientService.Client.Factory> TABLET_SERVER_SCAN = new ThriftClientType<>(
+      TabletScanClientService.Client.Factory> TABLET_SCAN = new ThriftClientType<>(
           "TabletScanClientService", new TabletScanClientService.Client.Factory());
 
 }

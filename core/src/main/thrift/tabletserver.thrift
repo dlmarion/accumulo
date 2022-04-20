@@ -290,20 +290,6 @@ service TabletScanClientService {
     1:client.ThriftSecurityException sec
   )
 
-  void halt(
-    3:trace.TInfo tinfo
-    1:security.TCredentials credentials
-    2:string lock
-  ) throws (
-    1:client.ThriftSecurityException sec
-  )
-
-  oneway void fastHalt(
-    3:trace.TInfo tinfo
-    1:security.TCredentials credentials
-    2:string lock
-  )
-
 }
 
 service TabletClientService {
@@ -560,7 +546,21 @@ service TabletClientService {
     3:string externalCompactionId
     4:data.TKeyExtent extent
   )
-  
+
+  void halt(
+    3:trace.TInfo tinfo
+    1:security.TCredentials credentials
+    2:string lock
+  ) throws (
+    1:client.ThriftSecurityException sec
+  )
+
+  oneway void fastHalt(
+    3:trace.TInfo tinfo
+    1:security.TCredentials credentials
+    2:string lock
+  )
+
 }
 
 typedef i32 TabletID
