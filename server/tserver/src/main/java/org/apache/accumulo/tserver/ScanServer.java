@@ -230,7 +230,7 @@ public class ScanServer extends TabletServer implements TabletScanClientService.
 
   private static final Logger LOG = LoggerFactory.getLogger(ScanServer.class);
 
-  protected ThriftScanClientHandler handler;
+  protected ThriftScanClientHandler delegate;
   private UUID serverLockUUID;
   private final TabletMetadataLoader tabletMetadataLoader;
   private final LoadingCache<KeyExtent,TabletMetadata> tabletMetadataCache;
@@ -264,7 +264,8 @@ public class ScanServer extends TabletServer implements TabletScanClientService.
           Caffeine.newBuilder().expireAfterWrite(cacheExpiration, TimeUnit.MILLISECONDS)
               .scheduler(Scheduler.systemScheduler()).build(tabletMetadataLoader);
     }
-    handler = getHandler();
+
+    delegate = newThriftScanClientHandler();
 
     ThreadPools.watchCriticalScheduledTask(getContext().getScheduledExecutor()
         .scheduleWithFixedDelay(() -> cleanUpReservedFiles(scanServerReservationExpiration),
@@ -274,7 +275,7 @@ public class ScanServer extends TabletServer implements TabletScanClientService.
   }
 
   @VisibleForTesting
-  protected ThriftScanClientHandler getHandler() {
+  protected ThriftScanClientHandler newThriftScanClientHandler() {
     return new ThriftScanClientHandler(this);
   }
 
@@ -287,13 +288,10 @@ public class ScanServer extends TabletServer implements TabletScanClientService.
    */
   protected ServerAddress startScanServerClientService() throws UnknownHostException {
 
-    TProcessor processor = null;
-    try {
-      processor =
-          ThriftProcessorTypes.getScanServerTProcessor(this, getContext(), getConfiguration());
-    } catch (Exception e) {
-      throw new RuntimeException("Error creating thrift server processor", e);
-    }
+    // This class implements TabletClientService.Iface and then delegates calls. Be sure
+    // to set up the ThriftProcessor using this class, not the delegate.
+    TProcessor processor =
+        ThriftProcessorTypes.getScanServerTProcessor(this, getContext(), getConfiguration());
 
     Property maxMessageSizeProperty =
         (getConfiguration().get(Property.SSERV_MAX_MESSAGE_SIZE) != null
@@ -563,7 +561,7 @@ public class ScanServer extends TabletServer implements TabletScanClientService.
   private Map<KeyExtent,TabletMetadata> reserveFilesInner(Collection<KeyExtent> extents,
       long myReservationId) throws NotServingTabletException, AccumuloException {
     // RFS is an acronym for Reference files for scan
-    LOG.trace("RFFS {} ensuring files are referenced for scan of extents {}", myReservationId,
+    LOG.debug("RFFS {} ensuring files are referenced for scan of extents {}", myReservationId,
         extents);
 
     Map<KeyExtent,TabletMetadata> tabletsMetadata = getTabletMetadata(extents);
@@ -571,13 +569,13 @@ public class ScanServer extends TabletServer implements TabletScanClientService.
     for (KeyExtent extent : extents) {
       var tabletMetadata = tabletsMetadata.get(extent);
       if (tabletMetadata == null) {
-        LOG.trace("RFFS {} extent not found in metadata table {}", myReservationId, extent);
+        LOG.info("RFFS {} extent not found in metadata table {}", myReservationId, extent);
         throw new NotServingTabletException(extent.toThrift());
       }
 
       if (!AssignmentHandler.checkTabletMetadata(extent, getTabletSession(), tabletMetadata,
           true)) {
-        LOG.trace("RFFS {} extent unable to load {} as AssignmentHandler returned false",
+        LOG.info("RFFS {} extent unable to load {} as AssignmentHandler returned false",
             myReservationId, extent);
         throw new NotServingTabletException(extent.toThrift());
       }
@@ -624,6 +622,8 @@ public class ScanServer extends TabletServer implements TabletScanClientService.
           TabletMetadata metadataAfter = tabletsToCheckMetadata.get(extent);
           if (metadataAfter == null) {
             getContext().getAmple().deleteScanServerFileReferences(refs);
+            LOG.info("RFFS {} extent unable to load {} as metadata no longer referencing files",
+                myReservationId, extent);
             throw new NotServingTabletException(extent.toThrift());
           }
 
@@ -635,7 +635,7 @@ public class ScanServer extends TabletServer implements TabletScanClientService.
         // tablets. This means there could have been a time gap where nothing referenced a file
         // meaning it could have been GCed.
         if (!filesToReserve.isEmpty()) {
-          LOG.trace("RFFS {} tablet files changed while attempting to reference files {}",
+          LOG.info("RFFS {} tablet files changed while attempting to reference files {}",
               myReservationId, filesToReserve);
           getContext().getAmple().deleteScanServerFileReferences(refs);
           return null;
@@ -772,6 +772,8 @@ public class ScanServer extends TabletServer implements TabletScanClientService.
         if (extent.equals(t.getExtent())) {
           return t;
         } else {
+          LOG.warn("TabletResolver passed the wrong tablet. Known extent: {}, requested extent: {}",
+              t.getExtent(), extent);
           return null;
         }
       }
@@ -822,7 +824,7 @@ public class ScanServer extends TabletServer implements TabletScanClientService.
 
       Tablet tablet = reservation.newTablet(extent);
 
-      InitialScan is = handler.startScan(tinfo, credentials, extent, range, columns, batchSize,
+      InitialScan is = delegate.startScan(tinfo, credentials, extent, range, columns, batchSize,
           ssiList, ssio, authorizations, waitForWrites, isolated, readaheadThreshold, samplerConfig,
           batchTimeOut, classLoaderContext, executionHints, getScanTabletResolver(tablet),
           busyTimeout);
@@ -842,14 +844,14 @@ public class ScanServer extends TabletServer implements TabletScanClientService.
     LOG.debug("continue scan: {}", scanID);
 
     try (ScanReservation reservation = reserveFiles(scanID)) {
-      return handler.continueScan(tinfo, scanID, busyTimeout);
+      return delegate.continueScan(tinfo, scanID, busyTimeout);
     }
   }
 
   @Override
   public void closeScan(TInfo tinfo, long scanID) throws TException {
     LOG.debug("close scan: {}", scanID);
-    handler.closeScan(tinfo, scanID);
+    delegate.closeScan(tinfo, scanID);
   }
 
   @Override
@@ -882,7 +884,7 @@ public class ScanServer extends TabletServer implements TabletScanClientService.
         }
       });
 
-      InitialMultiScan ims = handler.startMultiScan(tinfo, credentials, tcolumns, ssiList, batch,
+      InitialMultiScan ims = delegate.startMultiScan(tinfo, credentials, tcolumns, ssiList, batch,
           ssio, authorizations, waitForWrites, tSamplerConfig, batchTimeOut, contextArg,
           executionHints, getBatchScanTabletResolver(tablets), busyTimeout);
 
@@ -903,31 +905,31 @@ public class ScanServer extends TabletServer implements TabletScanClientService.
     LOG.debug("continue multi scan: {}", scanID);
 
     try (ScanReservation reservation = reserveFiles(scanID)) {
-      return handler.continueMultiScan(tinfo, scanID, busyTimeout);
+      return delegate.continueMultiScan(tinfo, scanID, busyTimeout);
     }
   }
 
   @Override
   public void closeMultiScan(TInfo tinfo, long scanID) throws NoSuchScanIDException, TException {
     LOG.debug("close multi scan: {}", scanID);
-    handler.closeMultiScan(tinfo, scanID);
+    delegate.closeMultiScan(tinfo, scanID);
   }
 
   @Override
   public List<ActiveScan> getActiveScans(TInfo tinfo, TCredentials credentials)
       throws ThriftSecurityException, TException {
-    return handler.getActiveScans(tinfo, credentials);
+    return delegate.getActiveScans(tinfo, credentials);
   }
 
   @Override
   public void halt(TInfo tinfo, TCredentials credentials, String lock)
       throws ThriftSecurityException, TException {
-    handler.halt(tinfo, credentials, lock);
+    delegate.halt(tinfo, credentials, lock);
   }
 
   @Override
   public void fastHalt(TInfo tinfo, TCredentials credentials, String lock) throws TException {
-    handler.fastHalt(tinfo, credentials, lock);
+    delegate.fastHalt(tinfo, credentials, lock);
   }
 
   @Override

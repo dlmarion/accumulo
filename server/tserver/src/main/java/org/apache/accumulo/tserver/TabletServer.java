@@ -629,16 +629,11 @@ public class TabletServer extends AbstractServer {
     thriftClientHandler = newTabletClientHandler(watcher);
     scanClientHandler = newThriftScanClientHandler();
 
-    try {
-      TProcessor processor = ThriftProcessorTypes.getTabletServerTProcessor(clientHandler,
-          thriftClientHandler, scanClientHandler, getContext(), getConfiguration());
-      HostAndPort address = startServer(getConfiguration(), clientAddress.getHost(), processor);
-      log.info("address = {}", address);
-      return address;
-    } catch (Exception e) {
-      throw new RuntimeException("Error creating thrift server processor", e);
-    }
-
+    TProcessor processor = ThriftProcessorTypes.getTabletServerTProcessor(clientHandler,
+        thriftClientHandler, scanClientHandler, getContext(), getConfiguration());
+    HostAndPort address = startServer(getConfiguration(), clientAddress.getHost(), processor);
+    log.info("address = {}", address);
+    return address;
   }
 
   @Deprecated

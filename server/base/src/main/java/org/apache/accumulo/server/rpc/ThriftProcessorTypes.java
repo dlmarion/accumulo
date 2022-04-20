@@ -46,19 +46,23 @@ public class ThriftProcessorTypes {
       extends ThriftClientType<C,F> {
 
     public ProcessorType(ThriftClientType<C,F> type) {
-      super(type.getServiceName(), type.isMultiplexed(), type.getClientFactory());
+      super(type.getServiceName(), type.getClientFactory());
     }
 
     private <I,H extends I,P extends TBaseProcessor<?>> TProcessor getTProcessor(
         Class<P> processorClass, Class<I> interfaceClass, H serviceHandler, ServerContext context,
-        AccumuloConfiguration conf) throws Exception {
+        AccumuloConfiguration conf) {
       I rpcProxy = TraceUtil.wrapService(serviceHandler);
       if (context.getThriftServerType() == ThriftServerType.SASL) {
         @SuppressWarnings("unchecked")
         Class<H> clazz = (Class<H>) serviceHandler.getClass();
         rpcProxy = TCredentialsUpdatingWrapper.service(rpcProxy, clazz, conf);
       }
-      return processorClass.getConstructor(interfaceClass).newInstance(rpcProxy);
+      try {
+        return processorClass.getConstructor(interfaceClass).newInstance(rpcProxy);
+      } catch (ReflectiveOperationException e) {
+        throw new IllegalArgumentException("Error constructing TProcessor instance", e);
+      }
     }
   }
 
@@ -97,28 +101,37 @@ public class ThriftProcessorTypes {
       TabletScanClientService.Client.Factory> TABLET_SERVER_SCAN =
           new ProcessorType<>(ThriftClientTypes.TABLET_SERVER_SCAN);
 
-  public static TProcessor getCompactorTProcessor(CompactorService.Iface serviceHandler,
-      ServerContext context, AccumuloConfiguration conf) throws Exception {
-    return COMPACTOR.getTProcessor(CompactorService.Processor.class, CompactorService.Iface.class,
-        serviceHandler, context, conf);
+  public static TMultiplexedProcessor getCompactorTProcessor(CompactorService.Iface serviceHandler,
+      ServerContext context, AccumuloConfiguration conf) {
+    TMultiplexedProcessor muxProcessor = new TMultiplexedProcessor();
+    muxProcessor.registerProcessor(COMPACTOR.getServiceName(),
+        COMPACTOR.getTProcessor(CompactorService.Processor.class, CompactorService.Iface.class,
+            serviceHandler, context, conf));
+    return muxProcessor;
   }
 
-  public static TProcessor getCoordinatorTProcessor(
+  public static TMultiplexedProcessor getCoordinatorTProcessor(
       CompactionCoordinatorService.Iface serviceHandler, ServerContext context,
-      AccumuloConfiguration conf) throws Exception {
-    return COORDINATOR.getTProcessor(CompactionCoordinatorService.Processor.class,
-        CompactionCoordinatorService.Iface.class, serviceHandler, context, conf);
+      AccumuloConfiguration conf) {
+    TMultiplexedProcessor muxProcessor = new TMultiplexedProcessor();
+    muxProcessor.registerProcessor(COORDINATOR.getServiceName(),
+        COORDINATOR.getTProcessor(CompactionCoordinatorService.Processor.class,
+            CompactionCoordinatorService.Iface.class, serviceHandler, context, conf));
+    return muxProcessor;
   }
 
-  public static TProcessor getGcTProcessor(GCMonitorService.Iface serviceHandler,
-      ServerContext context, AccumuloConfiguration conf) throws Exception {
-    return GC.getTProcessor(GCMonitorService.Processor.class, GCMonitorService.Iface.class,
-        serviceHandler, context, conf);
+  public static TMultiplexedProcessor getGcTProcessor(GCMonitorService.Iface serviceHandler,
+      ServerContext context, AccumuloConfiguration conf) {
+    TMultiplexedProcessor muxProcessor = new TMultiplexedProcessor();
+    muxProcessor.registerProcessor(GC.getServiceName(),
+        GC.getTProcessor(GCMonitorService.Processor.class, GCMonitorService.Iface.class,
+            serviceHandler, context, conf));
+    return muxProcessor;
   }
 
-  public static TProcessor getManagerTProcessor(FateService.Iface fateServiceHandler,
+  public static TMultiplexedProcessor getManagerTProcessor(FateService.Iface fateServiceHandler,
       ManagerClientService.Iface managerServiceHandler, ServerContext context,
-      AccumuloConfiguration conf) throws Exception {
+      AccumuloConfiguration conf) {
     TMultiplexedProcessor muxProcessor = new TMultiplexedProcessor();
     muxProcessor.registerProcessor(FATE.getServiceName(), FATE.getTProcessor(
         FateService.Processor.class, FateService.Iface.class, fateServiceHandler, context, conf));
@@ -128,42 +141,48 @@ public class ThriftProcessorTypes {
     return muxProcessor;
   }
 
-  public static TProcessor getReplicationCoordinatorTProcessor(
+  public static TMultiplexedProcessor getReplicationCoordinatorTProcessor(
       ReplicationCoordinator.Iface serviceHandler, ServerContext context,
-      AccumuloConfiguration conf) throws Exception {
-    return REPLICATION_COORDINATOR.getTProcessor(ReplicationCoordinator.Processor.class,
-        ReplicationCoordinator.Iface.class, serviceHandler, context, conf);
+      AccumuloConfiguration conf) {
+    TMultiplexedProcessor muxProcessor = new TMultiplexedProcessor();
+    muxProcessor.registerProcessor(REPLICATION_COORDINATOR.getServiceName(),
+        REPLICATION_COORDINATOR.getTProcessor(ReplicationCoordinator.Processor.class,
+            ReplicationCoordinator.Iface.class, serviceHandler, context, conf));
+    return muxProcessor;
   }
 
-  public static TProcessor getReplicationClientTProcessor(ReplicationServicer.Iface serviceHandler,
-      ServerContext context, AccumuloConfiguration conf) throws Exception {
-    return REPLICATION_SERVICER.getTProcessor(ReplicationServicer.Processor.class,
-        ReplicationServicer.Iface.class, serviceHandler, context, conf);
+  public static TMultiplexedProcessor getReplicationClientTProcessor(
+      ReplicationServicer.Iface serviceHandler, ServerContext context, AccumuloConfiguration conf) {
+    TMultiplexedProcessor muxProcessor = new TMultiplexedProcessor();
+    muxProcessor.registerProcessor(REPLICATION_SERVICER.getServiceName(),
+        REPLICATION_SERVICER.getTProcessor(ReplicationServicer.Processor.class,
+            ReplicationServicer.Iface.class, serviceHandler, context, conf));
+    return muxProcessor;
+  }
+
+  public static TMultiplexedProcessor getScanServerTProcessor(
+      TabletScanClientService.Iface tserverHandler, ServerContext context,
+      AccumuloConfiguration conf) {
+    TMultiplexedProcessor muxProcessor = new TMultiplexedProcessor();
+    muxProcessor.registerProcessor(TABLET_SERVER_SCAN.getServiceName(),
+        TABLET_SERVER_SCAN.getTProcessor(TabletScanClientService.Processor.class,
+            TabletScanClientService.Iface.class, tserverHandler, context, conf));
+    return muxProcessor;
   }
 
   public static TProcessor getTabletServerTProcessor(ClientServiceHandler clientHandler,
       TabletClientService.Iface tserverHandler, TabletScanClientService.Iface tserverScanHandler,
-      ServerContext context, AccumuloConfiguration conf) throws Exception {
+      ServerContext context, AccumuloConfiguration conf) {
     TMultiplexedProcessor muxProcessor = new TMultiplexedProcessor();
     muxProcessor.registerProcessor(CLIENT.getServiceName(), CLIENT.getTProcessor(
         ClientService.Processor.class, ClientService.Iface.class, clientHandler, context, conf));
     muxProcessor.registerProcessor(TABLET_SERVER.getServiceName(),
         TABLET_SERVER.getTProcessor(TabletClientService.Processor.class,
             TabletClientService.Iface.class, tserverHandler, context, conf));
-    muxProcessor.registerProcessor("TabletScanClientService",
+    muxProcessor.registerProcessor(TABLET_SERVER_SCAN.getServiceName(),
         TABLET_SERVER_SCAN.getTProcessor(TabletScanClientService.Processor.class,
             TabletScanClientService.Iface.class, tserverScanHandler, context, conf));
     return muxProcessor;
   }
 
-  public static TProcessor getScanServerTProcessor(TabletScanClientService.Iface tserverScanHandler,
-      ServerContext context, AccumuloConfiguration conf) throws Exception {
-    // Server needs to be multiplexed because the TabletScanClientService is also serviced
-    // by the TabletServer which is using a MultiplexedProcessor
-    TMultiplexedProcessor muxProcessor = new TMultiplexedProcessor();
-    muxProcessor.registerProcessor("TabletScanClientService",
-        TABLET_SERVER_SCAN.getTProcessor(TabletScanClientService.Processor.class,
-            TabletScanClientService.Iface.class, tserverScanHandler, context, conf));
-    return muxProcessor;
-  }
 }
