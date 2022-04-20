@@ -726,13 +726,8 @@ public class ScanServer extends AbstractServer implements TabletHostingServer {
    */
   protected ServerAddress startScanServerClientService() throws UnknownHostException {
 
-    TProcessor processor = null;
-    try {
-      processor =
-          ThriftProcessorTypes.getScanServerTProcessor(delegate, getContext(), getConfiguration());
-    } catch (Exception e) {
-      throw new RuntimeException("Error creating thrift server processor", e);
-    }
+    TProcessor processor =
+        ThriftProcessorTypes.getScanServerTProcessor(delegate, getContext(), getConfiguration());
 
     Property maxMessageSizeProperty =
         (getConfiguration().get(Property.SSERV_MAX_MESSAGE_SIZE) != null
