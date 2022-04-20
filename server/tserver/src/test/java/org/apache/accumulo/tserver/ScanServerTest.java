@@ -73,7 +73,7 @@ public class ScanServerTest {
     }
 
     @Override
-    protected ThriftScanClientHandler newThriftScanClientHandler() {
+    protected ThriftScanClientHandler newThriftScanClientHandler(WriteTracker writeTracker) {
       return delegate;
     }
 

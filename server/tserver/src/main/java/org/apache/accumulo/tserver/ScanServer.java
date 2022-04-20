@@ -265,7 +265,7 @@ public class ScanServer extends TabletServer implements TabletScanClientService.
               .scheduler(Scheduler.systemScheduler()).build(tabletMetadataLoader);
     }
 
-    delegate = newThriftScanClientHandler();
+    delegate = newThriftScanClientHandler(new WriteTracker());
 
     ThreadPools.watchCriticalScheduledTask(getContext().getScheduledExecutor()
         .scheduleWithFixedDelay(() -> cleanUpReservedFiles(scanServerReservationExpiration),
@@ -275,8 +275,9 @@ public class ScanServer extends TabletServer implements TabletScanClientService.
   }
 
   @VisibleForTesting
-  protected ThriftScanClientHandler newThriftScanClientHandler() {
-    return new ThriftScanClientHandler(this, new WriteTracker());
+  @Override
+  protected ThriftScanClientHandler newThriftScanClientHandler(WriteTracker writeTracker) {
+    return new ThriftScanClientHandler(this, writeTracker);
   }
 
   /**
