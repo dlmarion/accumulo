@@ -146,13 +146,15 @@ public class TabletClientHandler implements TabletClientService.Iface {
   protected final TransactionWatcher watcher;
   protected final ServerContext context;
   protected final SecurityOperation security;
-  private final WriteTracker writeTracker = new WriteTracker();
+  private final WriteTracker writeTracker;
   private final RowLocks rowLocks = new RowLocks();
 
-  public TabletClientHandler(TabletServer server, TransactionWatcher watcher) {
+  public TabletClientHandler(TabletServer server, TransactionWatcher watcher,
+      WriteTracker writeTracker) {
     this.server = server;
     this.context = server.getContext();
     this.watcher = watcher;
+    this.writeTracker = writeTracker;
     this.security = AuditedSecurityOperation.getInstance(context);
     MAX_TIME_TO_WAIT_FOR_SCAN_RESULT_MILLIS = server.getContext().getConfiguration()
         .getTimeInMillis(Property.TSERV_SCAN_RESULTS_MAX_TIMEOUT);

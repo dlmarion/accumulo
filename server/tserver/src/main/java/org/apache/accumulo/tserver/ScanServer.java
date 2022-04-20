@@ -276,7 +276,7 @@ public class ScanServer extends TabletServer implements TabletScanClientService.
 
   @VisibleForTesting
   protected ThriftScanClientHandler newThriftScanClientHandler() {
-    return new ThriftScanClientHandler(this);
+    return new ThriftScanClientHandler(this, new WriteTracker());
   }
 
   /**
