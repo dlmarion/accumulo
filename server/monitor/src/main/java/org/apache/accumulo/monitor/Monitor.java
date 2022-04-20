@@ -693,7 +693,7 @@ public class Monitor extends AbstractServer implements HighlyAvailableService {
       final HostAndPort parsedServer = HostAndPort.fromString(server);
       TabletScanClientService.Client tserver = null;
       try {
-        tserver = ThriftUtil.getClient(ThriftClientTypes.TABLET_SERVER_SCAN, parsedServer, context);
+        tserver = ThriftUtil.getClient(ThriftClientTypes.TABLET_SCAN, parsedServer, context);
         List<ActiveScan> scans = tserver.getActiveScans(null, context.rpcCreds());
         allScans.put(parsedServer, new ScanStats(scans));
         scansFetchedNanos = System.nanoTime();

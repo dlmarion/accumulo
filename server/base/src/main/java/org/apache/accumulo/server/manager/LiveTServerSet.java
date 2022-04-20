@@ -42,7 +42,6 @@ import org.apache.accumulo.core.rpc.ThriftUtil;
 import org.apache.accumulo.core.tabletserver.thrift.NotServingTabletException;
 import org.apache.accumulo.core.tabletserver.thrift.TUnloadTabletGoal;
 import org.apache.accumulo.core.tabletserver.thrift.TabletClientService;
-import org.apache.accumulo.core.tabletserver.thrift.TabletScanClientService;
 import org.apache.accumulo.core.trace.TraceUtil;
 import org.apache.accumulo.core.util.AddressUtil;
 import org.apache.accumulo.core.util.Halt;
@@ -148,8 +147,8 @@ public class LiveTServerSet implements Watcher {
     }
 
     public void halt(ServiceLock lock) throws TException, ThriftSecurityException {
-      TabletScanClientService.Client client =
-          ThriftUtil.getClient(ThriftClientTypes.TABLET_SERVER_SCAN, address, context);
+      TabletClientService.Client client =
+          ThriftUtil.getClient(ThriftClientTypes.TABLET_SERVER, address, context);
       try {
         client.halt(TraceUtil.traceInfo(), context.rpcCreds(), lockString(lock));
       } finally {
@@ -158,8 +157,8 @@ public class LiveTServerSet implements Watcher {
     }
 
     public void fastHalt(ServiceLock lock) throws TException {
-      TabletScanClientService.Client client =
-          ThriftUtil.getClient(ThriftClientTypes.TABLET_SERVER_SCAN, address, context);
+      TabletClientService.Client client =
+          ThriftUtil.getClient(ThriftClientTypes.TABLET_SERVER, address, context);
       try {
         client.fastHalt(TraceUtil.traceInfo(), context.rpcCreds(), lockString(lock));
       } finally {

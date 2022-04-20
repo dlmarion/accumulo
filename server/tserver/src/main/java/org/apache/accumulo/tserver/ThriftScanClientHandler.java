@@ -591,31 +591,4 @@ public class ThriftScanClientHandler implements TabletScanClientService.Iface {
     return server.getSessionManager().getActiveScans();
   }
 
-  @Override
-  public void halt(TInfo tinfo, TCredentials credentials, String lock)
-      throws ThriftSecurityException {
-
-    checkPermission(credentials, lock, "halt");
-
-    Halt.halt(0, () -> {
-      log.info("Manager requested tablet server halt");
-      server.getGCLogger().logGCInfo(server.getConfiguration());
-      server.requestStop();
-      try {
-        server.getLock().unlock();
-      } catch (Exception e) {
-        log.error("Caught exception unlocking TabletServer lock", e);
-      }
-    });
-  }
-
-  @Override
-  public void fastHalt(TInfo info, TCredentials credentials, String lock) {
-    try {
-      halt(info, credentials, lock);
-    } catch (Exception e) {
-      log.warn("Error halting", e);
-    }
-  }
-
 }

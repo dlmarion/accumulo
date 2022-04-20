@@ -166,7 +166,7 @@ public class InstanceOperationsImpl implements InstanceOperations {
     final var parsedTserver = HostAndPort.fromString(tserver);
     TabletScanClientService.Client client = null;
     try {
-      client = getClient(ThriftClientTypes.TABLET_SERVER_SCAN, parsedTserver, context);
+      client = getClient(ThriftClientTypes.TABLET_SCAN, parsedTserver, context);
 
       List<ActiveScan> as = new ArrayList<>();
       for (var activeScan : client.getActiveScans(TraceUtil.traceInfo(), context.rpcCreds())) {

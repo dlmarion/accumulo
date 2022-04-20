@@ -781,10 +781,10 @@ public class TabletServerBatchReaderIterator implements Iterator<Entry<Key,Value
       final HostAndPort parsedServer = HostAndPort.fromString(server);
       final TabletScanClientService.Client client;
       if (timeoutTracker.getTimeOut() < context.getClientTimeoutInMillis())
-        client = ThriftUtil.getClient(ThriftClientTypes.TABLET_SERVER_SCAN, parsedServer, context,
+        client = ThriftUtil.getClient(ThriftClientTypes.TABLET_SCAN, parsedServer, context,
             timeoutTracker.getTimeOut());
       else
-        client = ThriftUtil.getClient(ThriftClientTypes.TABLET_SERVER_SCAN, parsedServer, context);
+        client = ThriftUtil.getClient(ThriftClientTypes.TABLET_SCAN, parsedServer, context);
 
       try {
 

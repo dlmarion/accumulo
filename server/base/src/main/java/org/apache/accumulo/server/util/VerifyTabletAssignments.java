@@ -161,7 +161,7 @@ public class VerifyTabletAssignments {
       Entry<HostAndPort,List<KeyExtent>> entry, HashSet<KeyExtent> failures)
       throws ThriftSecurityException, TException, NoSuchScanIDException {
     TabletScanClientService.Iface client =
-        ThriftUtil.getClient(ThriftClientTypes.TABLET_SERVER_SCAN, entry.getKey(), context);
+        ThriftUtil.getClient(ThriftClientTypes.TABLET_SCAN, entry.getKey(), context);
 
     Map<TKeyExtent,List<TRange>> batch = new TreeMap<>();
 
