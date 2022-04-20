@@ -74,8 +74,8 @@ public class ScanServerTest {
     }
 
     @Override
-    protected ScanServerThriftScanClientHandler getHandler() {
-      return handler;
+    protected ThriftScanClientHandler newThriftScanClientHandler(WriteTracker writeTracker) {
+      return delegate;
     }
 
     @Override
@@ -149,8 +149,7 @@ public class ScanServerTest {
     replay(reservation, handler);
 
     TestScanServer ss = partialMockBuilder(TestScanServer.class).createMock();
-    handler.sserver = ss;
-    ss.handler = handler;
+    ss.delegate = handler;
     ss.extent = sextent;
     ss.resolver = resolver;
     ss.reservation = reservation;
@@ -188,8 +187,8 @@ public class ScanServerTest {
 
     TestScanServer ss = partialMockBuilder(TestScanServer.class).createMock();
     handler.sserver = ss;
-    ss.handler = handler;
     ss.extent = sextent;
+    ss.delegate = handler;
     ss.loadTabletFailure = true;
 
     assertThrows(NotServingTabletException.class, () -> {
@@ -242,7 +241,7 @@ public class ScanServerTest {
 
     TestScanServer ss = partialMockBuilder(TestScanServer.class).createMock();
     handler.sserver = ss;
-    ss.handler = handler;
+    ss.delegate = handler;
     ss.extent = extent;
     ss.resolver = resolver;
     ss.reservation = reservation;
@@ -289,7 +288,7 @@ public class ScanServerTest {
 
     TestScanServer ss = partialMockBuilder(TestScanServer.class).createMock();
     handler.sserver = ss;
-    ss.handler = handler;
+    ss.delegate = handler;
     ss.resolver = resolver;
     ss.lockedFiles = new HashSet<>();
     ss.reservedFiles = new ConcurrentHashMap<>();

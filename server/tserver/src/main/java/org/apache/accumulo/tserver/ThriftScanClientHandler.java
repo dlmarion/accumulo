@@ -99,12 +99,13 @@ public class ThriftScanClientHandler implements TabletScanClientService.Iface {
   private final TabletHostingServer server;
   protected final ServerContext context;
   protected final SecurityOperation security;
-  private final WriteTracker writeTracker = new WriteTracker();
+  private final WriteTracker writeTracker;
   private final long MAX_TIME_TO_WAIT_FOR_SCAN_RESULT_MILLIS;
 
-  public ThriftScanClientHandler(TabletHostingServer server) {
+  public ThriftScanClientHandler(TabletHostingServer server, WriteTracker writeTracker) {
     this.server = server;
     this.context = server.getContext();
+    this.writeTracker = writeTracker;
     this.security = AuditedSecurityOperation.getInstance(context);
     MAX_TIME_TO_WAIT_FOR_SCAN_RESULT_MILLIS = server.getContext().getConfiguration()
         .getTimeInMillis(Property.TSERV_SCAN_RESULTS_MAX_TIMEOUT);

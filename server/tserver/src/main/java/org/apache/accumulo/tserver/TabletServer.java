@@ -623,12 +623,13 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
   }
 
   // exists to be overridden in tests
-  protected TabletClientHandler newTabletClientHandler(TransactionWatcher watcher) {
-    return new TabletClientHandler(this, watcher);
+  protected TabletClientHandler newTabletClientHandler(TransactionWatcher watcher,
+      WriteTracker writeTracker) {
+    return new TabletClientHandler(this, watcher, writeTracker);
   }
 
-  protected ThriftScanClientHandler newThriftScanClientHandler() {
-    return new ThriftScanClientHandler(this);
+  protected ThriftScanClientHandler newThriftScanClientHandler(WriteTracker writeTracker) {
+    return new ThriftScanClientHandler(this, writeTracker);
   }
 
   private void returnManagerConnection(ManagerClientService.Client client) {
@@ -638,20 +639,16 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
   private HostAndPort startTabletClientService() throws UnknownHostException {
     // start listening for client connection last
     TransactionWatcher watcher = new TransactionWatcher(context);
+    WriteTracker writeTracker = new WriteTracker();
     clientHandler = newClientHandler(watcher);
-    thriftClientHandler = newTabletClientHandler(watcher);
-    scanClientHandler = newThriftScanClientHandler();
+    thriftClientHandler = newTabletClientHandler(watcher, writeTracker);
+    scanClientHandler = newThriftScanClientHandler(writeTracker);
 
-    try {
-      TProcessor processor = ThriftProcessorTypes.getTabletServerTProcessor(clientHandler,
-          thriftClientHandler, scanClientHandler, getContext(), getConfiguration());
-      HostAndPort address = startServer(getConfiguration(), clientAddress.getHost(), processor);
-      log.info("address = {}", address);
-      return address;
-    } catch (Exception e) {
-      throw new RuntimeException("Error creating thrift server processor", e);
-    }
-
+    TProcessor processor = ThriftProcessorTypes.getTabletServerTProcessor(clientHandler,
+        thriftClientHandler, scanClientHandler, getContext(), getConfiguration());
+    HostAndPort address = startServer(getConfiguration(), clientAddress.getHost(), processor);
+    log.info("address = {}", address);
+    return address;
   }
 
   @Deprecated

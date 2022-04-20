@@ -396,8 +396,8 @@ public class ScanServer extends AbstractServer implements TabletHostingServer {
 
     protected ScanServer sserver;
 
-    public ScanServerThriftScanClientHandler(ScanServer server) {
-      super(server);
+    public ScanServerThriftScanClientHandler(ScanServer server, WriteTracker writeTracker) {
+      super(server, writeTracker);
       this.sserver = server;
     }
 
@@ -510,7 +510,7 @@ public class ScanServer extends AbstractServer implements TabletHostingServer {
 
   private static final Logger LOG = LoggerFactory.getLogger(ScanServer.class);
 
-  protected ScanServerThriftScanClientHandler handler;
+  protected ThriftScanClientHandler delegate;
   private UUID serverLockUUID;
   private final TabletMetadataLoader tabletMetadataLoader;
   private final LoadingCache<KeyExtent,TabletMetadata> tabletMetadataCache;
@@ -590,7 +590,8 @@ public class ScanServer extends AbstractServer implements TabletHostingServer {
           Caffeine.newBuilder().expireAfterWrite(cacheExpiration, TimeUnit.MILLISECONDS)
               .scheduler(Scheduler.systemScheduler()).build(tabletMetadataLoader);
     }
-    handler = getHandler();
+
+    delegate = newThriftScanClientHandler(new WriteTracker());
 
     ThreadPools.watchCriticalScheduledTask(getContext().getScheduledExecutor()
         .scheduleWithFixedDelay(() -> cleanUpReservedFiles(scanServerReservationExpiration),
@@ -707,8 +708,13 @@ public class ScanServer extends AbstractServer implements TabletHostingServer {
   }
 
   @VisibleForTesting
-  protected ScanServerThriftScanClientHandler getHandler() {
-    return new ScanServerThriftScanClientHandler(this);
+  protected ThriftScanClientHandler newThriftScanClientHandler(WriteTracker writeTracker) {
+    return new ScanServerThriftScanClientHandler(this, writeTracker);
+  }
+
+  @VisibleForTesting
+  protected ThriftScanClientHandler getHandler() {
+    return delegate;
   }
 
   /**
@@ -722,8 +728,8 @@ public class ScanServer extends AbstractServer implements TabletHostingServer {
 
     TProcessor processor = null;
     try {
-      processor = ThriftProcessorTypes.getScanServerTProcessor(getHandler(), getContext(),
-          getConfiguration());
+      processor =
+          ThriftProcessorTypes.getScanServerTProcessor(delegate, getContext(), getConfiguration());
     } catch (Exception e) {
       throw new RuntimeException("Error creating thrift server processor", e);
     }
@@ -918,7 +924,7 @@ public class ScanServer extends AbstractServer implements TabletHostingServer {
   private Map<KeyExtent,TabletMetadata> reserveFilesInner(Collection<KeyExtent> extents,
       long myReservationId) throws NotServingTabletException, AccumuloException {
     // RFS is an acronym for Reference files for scan
-    LOG.trace("RFFS {} ensuring files are referenced for scan of extents {}", myReservationId,
+    LOG.debug("RFFS {} ensuring files are referenced for scan of extents {}", myReservationId,
         extents);
 
     Map<KeyExtent,TabletMetadata> tabletsMetadata = getTabletMetadata(extents);
@@ -926,13 +932,13 @@ public class ScanServer extends AbstractServer implements TabletHostingServer {
     for (KeyExtent extent : extents) {
       var tabletMetadata = tabletsMetadata.get(extent);
       if (tabletMetadata == null) {
-        LOG.trace("RFFS {} extent not found in metadata table {}", myReservationId, extent);
+        LOG.info("RFFS {} extent not found in metadata table {}", myReservationId, extent);
         throw new NotServingTabletException(extent.toThrift());
       }
 
       if (!AssignmentHandler.checkTabletMetadata(extent, getTabletSession(), tabletMetadata,
           true)) {
-        LOG.trace("RFFS {} extent unable to load {} as AssignmentHandler returned false",
+        LOG.info("RFFS {} extent unable to load {} as AssignmentHandler returned false",
             myReservationId, extent);
         throw new NotServingTabletException(extent.toThrift());
       }
@@ -979,6 +985,8 @@ public class ScanServer extends AbstractServer implements TabletHostingServer {
           TabletMetadata metadataAfter = tabletsToCheckMetadata.get(extent);
           if (metadataAfter == null) {
             getContext().getAmple().deleteScanServerFileReferences(refs);
+            LOG.info("RFFS {} extent unable to load {} as metadata no longer referencing files",
+                myReservationId, extent);
             throw new NotServingTabletException(extent.toThrift());
           }
 
@@ -990,7 +998,7 @@ public class ScanServer extends AbstractServer implements TabletHostingServer {
         // tablets. This means there could have been a time gap where nothing referenced a file
         // meaning it could have been GCed.
         if (!filesToReserve.isEmpty()) {
-          LOG.trace("RFFS {} tablet files changed while attempting to reference files {}",
+          LOG.info("RFFS {} tablet files changed while attempting to reference files {}",
               myReservationId, filesToReserve);
           getContext().getAmple().deleteScanServerFileReferences(refs);
           return null;
@@ -1127,6 +1135,8 @@ public class ScanServer extends AbstractServer implements TabletHostingServer {
         if (extent.equals(t.getExtent())) {
           return t;
         } else {
+          LOG.warn("TabletResolver passed the wrong tablet. Known extent: {}, requested extent: {}",
+              t.getExtent(), extent);
           return null;
         }
       }
