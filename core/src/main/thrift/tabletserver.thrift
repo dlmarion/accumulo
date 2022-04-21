@@ -199,6 +199,7 @@ struct TCompactionStats{
 }
 
 service TabletScanClientService {
+
   // scan a range of keys
   data.InitialScan startScan(
     11:trace.TInfo tinfo
@@ -460,6 +461,20 @@ service TabletClientService {
     1:client.ThriftSecurityException sec
   )
 
+  void halt(
+    3:trace.TInfo tinfo
+    1:security.TCredentials credentials
+    2:string lock
+  ) throws (
+    1:client.ThriftSecurityException sec
+  )
+
+  oneway void fastHalt(
+    3:trace.TInfo tinfo
+    1:security.TCredentials credentials
+    2:string lock
+  )
+
   list<ActiveCompaction> getActiveCompactions(
     2:trace.TInfo tinfo
     1:security.TCredentials credentials
@@ -545,20 +560,6 @@ service TabletClientService {
     2:security.TCredentials credentials
     3:string externalCompactionId
     4:data.TKeyExtent extent
-  )
-
-  void halt(
-    3:trace.TInfo tinfo
-    1:security.TCredentials credentials
-    2:string lock
-  ) throws (
-    1:client.ThriftSecurityException sec
-  )
-
-  oneway void fastHalt(
-    3:trace.TInfo tinfo
-    1:security.TCredentials credentials
-    2:string lock
   )
 
 }

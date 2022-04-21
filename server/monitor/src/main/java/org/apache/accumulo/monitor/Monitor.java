@@ -182,6 +182,7 @@ public class Monitor extends AbstractServer implements HighlyAvailableService {
           + "'accumulo compaction-coordinator'.";
 
   private EmbeddedWebServer server;
+  private int livePort = 0;
 
   private ServiceLock monitorLock;
 
@@ -448,12 +449,13 @@ public class Monitor extends AbstractServer implements HighlyAvailableService {
     int[] ports = getConfiguration().getPort(Property.MONITOR_PORT);
     for (int port : ports) {
       try {
-        log.debug("Creating monitor on port {}", port);
+        log.debug("Trying monitor on port {}", port);
         server = new EmbeddedWebServer(this, port);
         server.addServlet(getDefaultServlet(), "/resources/*");
         server.addServlet(getRestServlet(), "/rest/*");
         server.addServlet(getViewServlet(), "/*");
         server.start();
+        livePort = port;
         break;
       } catch (Exception ex) {
         log.error("Unable to start embedded web server", ex);
@@ -462,6 +464,8 @@ public class Monitor extends AbstractServer implements HighlyAvailableService {
     if (!server.isRunning()) {
       throw new RuntimeException(
           "Unable to start embedded web server on ports: " + Arrays.toString(ports));
+    } else {
+      log.debug("Monitor started on port {}", livePort);
     }
 
     try {
@@ -967,5 +971,9 @@ public class Monitor extends AbstractServer implements HighlyAvailableService {
 
   public Optional<HostAndPort> getCoordinatorHost() {
     return coordinatorHost;
+  }
+
+  public int getLivePort() {
+    return livePort;
   }
 }
