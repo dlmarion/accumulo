@@ -728,16 +728,16 @@ public class Monitor extends AbstractServer implements HighlyAvailableService {
     // Scan Servers
     for (String server : context.instanceOperations().getScanServers()) {
       final HostAndPort parsedServer = HostAndPort.fromString(server);
-      TabletScanClientService.Client tserver = null;
+      TabletScanClientService.Client sserver = null;
       try {
-        tserver = ThriftUtil.getClient(ThriftClientTypes.TABLET_SCAN, parsedServer, context);
-        List<ActiveScan> scans = tserver.getActiveScans(null, context.rpcCreds());
+        sserver = ThriftUtil.getClient(ThriftClientTypes.TABLET_SCAN, parsedServer, context);
+        List<ActiveScan> scans = sserver.getActiveScans(null, context.rpcCreds());
         sserverScans.put(parsedServer, new ScanStats(scans));
         scansFetchedNanos = System.nanoTime();
       } catch (Exception ex) {
         log.error("Failed to get active scans from {}", server, ex);
       } finally {
-        ThriftUtil.returnClient(tserver, context);
+        ThriftUtil.returnClient(sserver, context);
       }
     }
     // Age off old scan information
