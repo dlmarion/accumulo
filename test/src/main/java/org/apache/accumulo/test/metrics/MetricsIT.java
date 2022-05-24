@@ -144,7 +144,7 @@ public class MetricsIT extends ConfigurableMacBase implements MetricsProducer {
       }
       client.tableOperations().compact(tableName, new CompactionConfig());
       try (Scanner scanner = client.createScanner(tableName)) {
-        scanner.forEach((k,v) -> {});
+        scanner.forEach((k, v) -> {});
       }
       client.tableOperations().delete(tableName);
       while (client.tableOperations().exists(tableName)) {
