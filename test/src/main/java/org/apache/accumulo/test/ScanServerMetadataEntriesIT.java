@@ -32,6 +32,7 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
 import org.apache.accumulo.core.Constants;
@@ -45,6 +46,7 @@ import org.apache.accumulo.core.data.Key;
 import org.apache.accumulo.core.data.Range;
 import org.apache.accumulo.core.data.TableId;
 import org.apache.accumulo.core.data.Value;
+import org.apache.accumulo.core.metadata.Reference;
 import org.apache.accumulo.core.metadata.ScanServerRefTabletFile;
 import org.apache.accumulo.core.metadata.schema.Ample.DataLevel;
 import org.apache.accumulo.core.metadata.schema.MetadataSchema.ScanServerFileReferenceSection;
@@ -52,7 +54,6 @@ import org.apache.accumulo.core.security.Authorizations;
 import org.apache.accumulo.core.util.HostAndPort;
 import org.apache.accumulo.fate.zookeeper.ZooReaderWriter;
 import org.apache.accumulo.gc.GCRun;
-import org.apache.accumulo.gc.GarbageCollectionEnvironment.Reference;
 import org.apache.accumulo.harness.MiniClusterConfigurationCallback;
 import org.apache.accumulo.harness.SharedMiniClusterBase;
 import org.apache.accumulo.minicluster.ServerType;
@@ -108,14 +109,10 @@ public class ScanServerMetadataEntriesIT extends SharedMiniClusterBase {
       HostAndPort server = HostAndPort.fromParts("127.0.0.1", 1234);
       UUID serverLockUUID = UUID.randomUUID();
 
-      String[] files =
-          new String[] {"hdfs://localhost:8020/accumulo/tables/2a/default_tablet/F0000070.rf",
-              "hdfs://localhost:8020/accumulo/tables/2a/default_tablet/F0000071.rf"};
-
-      Set<ScanServerRefTabletFile> scanRefs = new HashSet<>();
-      for (String file : files) {
-        scanRefs.add(new ScanServerRefTabletFile(file, server.toString(), serverLockUUID));
-      }
+      Set<ScanServerRefTabletFile> scanRefs = Stream.of("F0000070.rf", "F0000071.rf")
+          .map(f -> "hdfs://localhost:8020/accumulo/tables/2a/default_tablet/" + f)
+          .map(f -> new ScanServerRefTabletFile(f, server.toString(), serverLockUUID))
+          .collect(Collectors.toSet());
 
       ServerContext ctx = getCluster().getServerContext();
 
@@ -266,8 +263,8 @@ public class ScanServerMetadataEntriesIT extends SharedMiniClusterBase {
         Set<Reference> refs = gc.getReferences().collect(Collectors.toSet());
         List<Reference> tableRefs = new ArrayList<>();
         refs.forEach(r -> {
-          if (r.id.equals(tid) && !r.isDir) {
-            assertTrue(metadataScanFileRefs.contains(r.ref));
+          if (r.tableId.equals(tid) && !r.isDirectory()) {
+            assertTrue(metadataScanFileRefs.contains(r.metadataEntry));
             tableRefs.add(r);
           }
         });
@@ -277,7 +274,7 @@ public class ScanServerMetadataEntriesIT extends SharedMiniClusterBase {
         assertEquals(6, tableRefs.size());
 
         Set<String> deduplicatedReferences =
-            tableRefs.stream().map(ref -> ref.ref).collect(Collectors.toSet());
+            tableRefs.stream().map(ref -> ref.metadataEntry).collect(Collectors.toSet());
 
         assertEquals(3, deduplicatedReferences.size());
       }

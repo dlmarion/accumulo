@@ -16,16 +16,36 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.accumulo.server.fs;
+package org.apache.accumulo.core.metadata;
 
-import org.apache.accumulo.core.spi.fs.DelegatingChooser;
-import org.slf4j.LoggerFactory;
+import org.apache.accumulo.core.data.TableId;
 
-@Deprecated(since = "2.1.0")
-public class PerTableVolumeChooser extends DelegatingChooser implements VolumeChooser {
-  public PerTableVolumeChooser() {
-    LoggerFactory.getLogger(PerTableVolumeChooser.class).warn(
-        "The class {} is deprecated.  Please configure {} instead.",
-        PerTableVolumeChooser.class.getName(), DelegatingChooser.class.getName());
+/**
+ * The Tablet directory that may exist in the metadata table.
+ */
+public class TabletDirectory extends RelativeTabletDirectory {
+  // parts of an absolute URI, like "hdfs://1.2.3.4/accumulo/tables/2a/t-0003"
+  private final String volume; // hdfs://1.2.3.4/accumulo
+
+  public TabletDirectory(String volume, TableId tableId, String tabletDir) {
+    super(tableId, tabletDir);
+    this.volume = volume;
+  }
+
+  public String getVolume() {
+    return volume;
+  }
+
+  public TableId getTableId() {
+    return tableId;
+  }
+
+  public String getTabletDir() {
+    return tabletDir;
+  }
+
+  @Override
+  public String toString() {
+    return tabletDir;
   }
 }

@@ -16,16 +16,22 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.accumulo.server.fs;
+package org.apache.accumulo.core.metadata;
 
-import org.apache.accumulo.core.spi.fs.DelegatingChooser;
-import org.slf4j.LoggerFactory;
+import org.apache.accumulo.core.data.TableId;
 
-@Deprecated(since = "2.1.0")
-public class PerTableVolumeChooser extends DelegatingChooser implements VolumeChooser {
-  public PerTableVolumeChooser() {
-    LoggerFactory.getLogger(PerTableVolumeChooser.class).warn(
-        "The class {} is deprecated.  Please configure {} instead.",
-        PerTableVolumeChooser.class.getName(), DelegatingChooser.class.getName());
+/**
+ * Part of the Tablet File path that is definitely a directory.
+ */
+public class RelativeTabletDirectory extends Reference {
+
+  public RelativeTabletDirectory(TableId tableId, String dirName) {
+    super(tableId, dirName);
   }
+
+  @Override
+  public boolean isDirectory() {
+    return true;
+  }
+
 }
