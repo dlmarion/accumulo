@@ -284,7 +284,7 @@ public class Tablet extends TabletBase {
       final TabletResourceManager trm, TabletData data)
       throws IOException, IllegalArgumentException {
 
-    super(tabletServer.getContext(), extent);
+    super(tabletServer, extent);
 
     this.tabletServer = tabletServer;
     this.tabletResources = trm;
@@ -1543,7 +1543,7 @@ public class Tablet extends TabletBase {
   }
 
   public long totalQueriesResults() {
-    return this.queryResultCount.get();
+    return this.getScanMetrics().getQueryResultCount();
   }
 
   public long totalIngest() {
@@ -1555,24 +1555,24 @@ public class Tablet extends TabletBase {
   }
 
   public long totalQueryResultsBytes() {
-    return this.queryResultBytes.get();
+    return this.getScanMetrics().getQueryByteCount();
   }
 
   public long totalScannedCount() {
-    return this.scannedCount.get();
+    return this.getScanMetrics().getScannedCount();
   }
 
   public long totalLookupCount() {
-    return this.lookupCount.get();
+    return this.getScanMetrics().getLookupCount();
   }
 
   // synchronized?
   public void updateRates(long now) {
-    queryRate.update(now, queryResultCount.get());
-    queryByteRate.update(now, queryResultBytes.get());
+    queryRate.update(now, this.getScanMetrics().getQueryResultCount());
+    queryByteRate.update(now, this.getScanMetrics().getQueryByteCount());
     ingestRate.update(now, ingestCount);
     ingestByteRate.update(now, ingestBytes);
-    scannedRate.update(now, scannedCount.get());
+    scannedRate.update(now, this.getScanMetrics().getScannedCount());
   }
 
   public long getSplitCreationTime() {

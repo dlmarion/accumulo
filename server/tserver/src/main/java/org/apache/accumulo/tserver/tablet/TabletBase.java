@@ -30,7 +30,7 @@ import java.util.Set;
 import java.util.SortedMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.LongAdder;
 
 import org.apache.accumulo.core.conf.AccumuloConfiguration;
 import org.apache.accumulo.core.conf.Property;
@@ -55,6 +55,7 @@ import org.apache.accumulo.server.ServerContext;
 import org.apache.accumulo.server.conf.TableConfiguration;
 import org.apache.accumulo.server.fs.TooManyFilesException;
 import org.apache.accumulo.tserver.InMemoryMap;
+import org.apache.accumulo.tserver.TabletHostingServer;
 import org.apache.accumulo.tserver.TabletServerResourceManager;
 import org.apache.accumulo.tserver.metrics.TabletServerScanMetrics;
 import org.apache.accumulo.tserver.scan.ScanParameters;
@@ -73,10 +74,7 @@ public abstract class TabletBase {
 
   protected final KeyExtent extent;
   protected final ServerContext context;
-
-  protected AtomicLong lookupCount = new AtomicLong(0);
-  protected AtomicLong queryResultCount = new AtomicLong(0);
-  protected AtomicLong queryResultBytes = new AtomicLong(0);
+  private final TabletHostingServer server;
 
   protected final Set<ScanDataSource> activeScans = new HashSet<>();
 
@@ -84,10 +82,9 @@ public abstract class TabletBase {
 
   protected final TableConfiguration tableConfiguration;
 
-  protected final AtomicLong scannedCount = new AtomicLong(0);
-
-  public TabletBase(ServerContext context, KeyExtent extent) {
-    this.context = context;
+  public TabletBase(TabletHostingServer server, KeyExtent extent) {
+    this.context = server.getContext();
+    this.server = server;
     this.extent = extent;
 
     TableConfiguration tblConf = context.getTableConfiguration(extent.tableId());
@@ -143,8 +140,8 @@ public abstract class TabletBase {
     return new Scanner(this, range, scanParams, interruptFlag);
   }
 
-  public AtomicLong getScannedCounter() {
-    return scannedCount;
+  public LongAdder getScannedCounter() {
+    return this.server.getScanMetrics().getScannedCounter();
   }
 
   public ServerContext getContext() {
@@ -201,7 +198,7 @@ public abstract class TabletBase {
 
     try {
       SortedKeyValueIterator<Key,Value> iter = new SourceSwitchingIterator(dataSource);
-      lookupCount.incrementAndGet();
+      this.server.getScanMetrics().incrementLookupCount(1);
       result = lookup(iter, ranges, results, scanParams, maxResultSize);
       return result;
     } catch (IOException ioe) {
@@ -213,9 +210,9 @@ public abstract class TabletBase {
       dataSource.close(false);
 
       synchronized (this) {
-        queryResultCount.addAndGet(results.size());
+        this.server.getScanMetrics().incrementQueryResultCount(results.size());
         if (result != null) {
-          queryResultBytes.addAndGet(result.dataSize);
+          this.server.getScanMetrics().incrementQueryResultBytes(result.dataSize);
         }
       }
     }
@@ -457,7 +454,7 @@ public abstract class TabletBase {
   }
 
   public synchronized void updateQueryStats(int size, long numBytes) {
-    queryResultCount.addAndGet(size);
-    queryResultBytes.addAndGet(numBytes);
+    this.server.getScanMetrics().incrementQueryResultCount(size);
+    this.server.getScanMetrics().incrementQueryResultBytes(numBytes);
   }
 }

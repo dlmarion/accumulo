@@ -21,6 +21,7 @@ package org.apache.accumulo.core.iteratorsImpl.system;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.LongAdder;
 
 import org.apache.accumulo.core.data.ByteSequence;
 import org.apache.accumulo.core.data.Key;
@@ -34,10 +35,10 @@ public class StatsIterator extends ServerWrappingIterator {
 
   private int numRead = 0;
   private AtomicLong seekCounter;
-  private AtomicLong readCounter;
+  private LongAdder readCounter;
 
   public StatsIterator(SortedKeyValueIterator<Key,Value> source, AtomicLong seekCounter,
-      AtomicLong readCounter) {
+      LongAdder readCounter) {
     super(source);
     this.seekCounter = seekCounter;
     this.readCounter = readCounter;
@@ -49,7 +50,7 @@ public class StatsIterator extends ServerWrappingIterator {
     numRead++;
 
     if (numRead % 23 == 0) {
-      readCounter.addAndGet(numRead);
+      readCounter.add(numRead);
       numRead = 0;
     }
   }
@@ -64,12 +65,12 @@ public class StatsIterator extends ServerWrappingIterator {
       throws IOException {
     source.seek(range, columnFamilies, inclusive);
     seekCounter.incrementAndGet();
-    readCounter.addAndGet(numRead);
+    readCounter.add(numRead);
     numRead = 0;
   }
 
   public void report() {
-    readCounter.addAndGet(numRead);
+    readCounter.add(numRead);
     numRead = 0;
   }
 }
