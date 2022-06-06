@@ -1543,7 +1543,7 @@ public class Tablet extends TabletBase {
   }
 
   public long totalQueriesResults() {
-    return this.getScanMetrics().getQueryResultCount();
+    return this.queryResultCount.get();
   }
 
   public long totalIngest() {
@@ -1555,24 +1555,24 @@ public class Tablet extends TabletBase {
   }
 
   public long totalQueryResultsBytes() {
-    return this.getScanMetrics().getQueryByteCount();
+    return this.queryResultBytes.get();
   }
 
   public long totalScannedCount() {
-    return this.getScanMetrics().getScannedCount();
+    return this.scannedCount.get();
   }
 
   public long totalLookupCount() {
-    return this.getScanMetrics().getLookupCount();
+    return this.lookupCount.get();
   }
 
   // synchronized?
   public void updateRates(long now) {
-    queryRate.update(now, this.getScanMetrics().getQueryResultCount());
-    queryByteRate.update(now, this.getScanMetrics().getQueryByteCount());
+    queryRate.update(now, this.queryResultCount.get());
+    queryByteRate.update(now, this.queryResultBytes.get());
     ingestRate.update(now, ingestCount);
     ingestByteRate.update(now, ingestBytes);
-    scannedRate.update(now, this.getScanMetrics().getScannedCount());
+    scannedRate.update(now, this.scannedCount.get());
   }
 
   public long getSplitCreationTime() {

@@ -35,13 +35,15 @@ public class StatsIterator extends ServerWrappingIterator {
 
   private int numRead = 0;
   private AtomicLong seekCounter;
-  private LongAdder readCounter;
+  private AtomicLong scanCounter;
+  private LongAdder serverScanCounter;
 
   public StatsIterator(SortedKeyValueIterator<Key,Value> source, AtomicLong seekCounter,
-      LongAdder readCounter) {
+      AtomicLong tabletScanCounter, LongAdder serverScanCounter) {
     super(source);
     this.seekCounter = seekCounter;
-    this.readCounter = readCounter;
+    this.scanCounter = tabletScanCounter;
+    this.serverScanCounter = serverScanCounter;
   }
 
   @Override
@@ -50,14 +52,15 @@ public class StatsIterator extends ServerWrappingIterator {
     numRead++;
 
     if (numRead % 23 == 0) {
-      readCounter.add(numRead);
+      scanCounter.addAndGet(numRead);
+      serverScanCounter.add(numRead);
       numRead = 0;
     }
   }
 
   @Override
   public SortedKeyValueIterator<Key,Value> deepCopy(IteratorEnvironment env) {
-    return new StatsIterator(source.deepCopy(env), seekCounter, readCounter);
+    return new StatsIterator(source.deepCopy(env), seekCounter, scanCounter, serverScanCounter);
   }
 
   @Override
@@ -65,12 +68,14 @@ public class StatsIterator extends ServerWrappingIterator {
       throws IOException {
     source.seek(range, columnFamilies, inclusive);
     seekCounter.incrementAndGet();
-    readCounter.add(numRead);
+    scanCounter.addAndGet(numRead);
+    serverScanCounter.add(numRead);
     numRead = 0;
   }
 
   public void report() {
-    readCounter.add(numRead);
+    scanCounter.addAndGet(numRead);
+    serverScanCounter.add(numRead);
     numRead = 0;
   }
 }

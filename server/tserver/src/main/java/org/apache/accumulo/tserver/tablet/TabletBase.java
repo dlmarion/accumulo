@@ -30,7 +30,7 @@ import java.util.Set;
 import java.util.SortedMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.LongAdder;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.accumulo.core.conf.AccumuloConfiguration;
 import org.apache.accumulo.core.conf.Property;
@@ -75,6 +75,11 @@ public abstract class TabletBase {
   protected final KeyExtent extent;
   protected final ServerContext context;
   private final TabletHostingServer server;
+
+  protected AtomicLong lookupCount = new AtomicLong(0);
+  protected AtomicLong queryResultCount = new AtomicLong(0);
+  protected AtomicLong queryResultBytes = new AtomicLong(0);
+  protected final AtomicLong scannedCount = new AtomicLong(0);
 
   protected final Set<ScanDataSource> activeScans = new HashSet<>();
 
@@ -140,8 +145,8 @@ public abstract class TabletBase {
     return new Scanner(this, range, scanParams, interruptFlag);
   }
 
-  public LongAdder getScannedCounter() {
-    return this.server.getScanMetrics().getScannedCounter();
+  public AtomicLong getScannedCounter() {
+    return this.scannedCount;
   }
 
   public ServerContext getContext() {
@@ -198,6 +203,7 @@ public abstract class TabletBase {
 
     try {
       SortedKeyValueIterator<Key,Value> iter = new SourceSwitchingIterator(dataSource);
+      this.lookupCount.incrementAndGet();
       this.server.getScanMetrics().incrementLookupCount(1);
       result = lookup(iter, ranges, results, scanParams, maxResultSize);
       return result;
@@ -210,8 +216,10 @@ public abstract class TabletBase {
       dataSource.close(false);
 
       synchronized (this) {
+        queryResultCount.addAndGet(results.size());
         this.server.getScanMetrics().incrementQueryResultCount(results.size());
         if (result != null) {
+          this.queryResultBytes.addAndGet(result.dataSize);
           this.server.getScanMetrics().incrementQueryResultBytes(result.dataSize);
         }
       }
@@ -454,7 +462,9 @@ public abstract class TabletBase {
   }
 
   public synchronized void updateQueryStats(int size, long numBytes) {
+    this.queryResultCount.addAndGet(size);
     this.server.getScanMetrics().incrementQueryResultCount(size);
+    this.queryResultBytes.addAndGet(numBytes);
     this.server.getScanMetrics().incrementQueryResultBytes(numBytes);
   }
 }
