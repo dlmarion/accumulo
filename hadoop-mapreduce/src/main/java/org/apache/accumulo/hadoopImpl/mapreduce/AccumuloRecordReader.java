@@ -41,6 +41,7 @@ import org.apache.accumulo.core.client.IsolatedScanner;
 import org.apache.accumulo.core.client.IteratorSetting;
 import org.apache.accumulo.core.client.Scanner;
 import org.apache.accumulo.core.client.ScannerBase;
+import org.apache.accumulo.core.client.ScannerBase.ConsistencyLevel;
 import org.apache.accumulo.core.client.TableNotFoundException;
 import org.apache.accumulo.core.client.TableOfflineException;
 import org.apache.accumulo.core.client.sample.SamplerConfiguration;
@@ -181,7 +182,9 @@ public abstract class AccumuloRecordReader<K,V> extends RecordReader<K,V> {
         throw new IOException(e);
       }
 
-      scanner.setConsistencyLevel(tableConfig.getConsistencyLevel());
+      ConsistencyLevel tcl = tableConfig.getConsistencyLevel();
+      scanner.setConsistencyLevel(tcl == null ? ConsistencyLevel.IMMEDIATE : tcl);
+      log.info("Using consistency level: {}", scanner.getConsistencyLevel());
       scanner.setRanges(batchSplit.getRanges());
       scannerBase = scanner;
     } else {
@@ -209,7 +212,9 @@ public abstract class AccumuloRecordReader<K,V> extends RecordReader<K,V> {
           // Not using public API to create scanner so that we can use table ID
           // Table ID is used in case of renames during M/R job
           scanner = new ScannerImpl(context, TableId.of(split.getTableId()), authorizations);
-          scanner.setConsistencyLevel(tableConfig.getConsistencyLevel());
+          ConsistencyLevel tcl = tableConfig.getConsistencyLevel();
+          scanner.setConsistencyLevel(tcl == null ? ConsistencyLevel.IMMEDIATE : tcl);
+          log.info("Using consistency level: {}", scanner.getConsistencyLevel());
         }
         if (isIsolated) {
           log.info("Creating isolated scanner");
