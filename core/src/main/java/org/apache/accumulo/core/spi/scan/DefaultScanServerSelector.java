@@ -34,8 +34,6 @@ import java.util.function.Supplier;
 
 import org.apache.accumulo.core.conf.ConfigurationTypeHelper;
 import org.apache.accumulo.core.data.TabletId;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Suppliers;
@@ -46,7 +44,7 @@ import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
 /**
- * The default Accumulo dispatcher for scan servers. This dispatcher will :
+ * The default Accumulo selector for scan servers. This dispatcher will :
  *
  * <ul>
  * <li>Hash each tablet to a per attempt configurable number of scan servers and then randomly
@@ -57,11 +55,11 @@ import com.google.gson.reflect.TypeToken;
  *
  * <p>
  * This class accepts a single configuration that has a json value. To configure this class set
- * {@code scan.server.dispatcher.opts.profiles=<json>} in the accumulo client configuration along
- * with the config for the class. The following is the default configuration value.
+ * {@code scan.server.selector.opts.profiles=<json>} in the accumulo client configuration along with
+ * the config for the class. The following is the default configuration value.
  * </p>
  * <p>
- * {@value DefaultScanServerDispatcher#PROFILES_DEFAULT}
+ * {@value DefaultScanServerSelector#PROFILES_DEFAULT}
  * </p>
  *
  * The json is structured as a list of profiles, with each profile having the following fields.
@@ -137,9 +135,7 @@ import com.google.gson.reflect.TypeToken;
  * reached.
  * </p>
  */
-public class DefaultScanServerDispatcher implements ScanServerDispatcher {
-
-  private static final Logger LOG = LoggerFactory.getLogger(DefaultScanServerDispatcher.class);
+public class DefaultScanServerSelector implements ScanServerSelector {
 
   private static final SecureRandom RANDOM = new SecureRandom();
   public static final String PROFILES_DEFAULT = "[{'isDefault':true,'maxBusyTimeout':'5m',"
@@ -297,7 +293,7 @@ public class DefaultScanServerDispatcher implements ScanServerDispatcher {
   }
 
   @Override
-  public Actions determineActions(DispatcherParameters params) {
+  public Actions determineActions(SelectorParameters params) {
 
     // only get this once and use it for the entire method so that the method uses a consistent
     // snapshot

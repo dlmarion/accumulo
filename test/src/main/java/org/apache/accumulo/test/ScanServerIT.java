@@ -176,11 +176,11 @@ public class ScanServerIT extends SharedMiniClusterBase {
   @Disabled("Scanner.setTimeout does not work, issue #2606")
   @Timeout(value = 20)
   public void testScannerTimeout() throws Exception {
-    // Configure the client to use different scan server dispatcher property values
+    // Configure the client to use different scan server selector property values
     Properties props = getClientProps();
-    props.put(ClientProperty.SCAN_SERVER_DISPATCHER_OPTS_PREFIX.getKey() + "initialBusyTimeout",
+    props.put(ClientProperty.SCAN_SERVER_SELECTOR_OPTS_PREFIX.getKey() + "initialBusyTimeout",
         "PT0.100S");
-    props.put(ClientProperty.SCAN_SERVER_DISPATCHER_OPTS_PREFIX.getKey() + "maxBusyTimeout",
+    props.put(ClientProperty.SCAN_SERVER_SELECTOR_OPTS_PREFIX.getKey() + "maxBusyTimeout",
         "PT1.000S");
 
     String tName = null;
@@ -208,11 +208,11 @@ public class ScanServerIT extends SharedMiniClusterBase {
   @Test
   @Timeout(value = 20)
   public void testBatchScannerTimeout() throws Exception {
-    // Configure the client to use different scan server dispatcher property values
+    // Configure the client to use different scan server selector property values
     Properties props = getClientProps();
-    props.put(ClientProperty.SCAN_SERVER_DISPATCHER_OPTS_PREFIX.getKey() + "initialBusyTimeout",
+    props.put(ClientProperty.SCAN_SERVER_SELECTOR_OPTS_PREFIX.getKey() + "initialBusyTimeout",
         "PT0.100S");
-    props.put(ClientProperty.SCAN_SERVER_DISPATCHER_OPTS_PREFIX.getKey() + "maxBusyTimeout",
+    props.put(ClientProperty.SCAN_SERVER_SELECTOR_OPTS_PREFIX.getKey() + "maxBusyTimeout",
         "PT1.000S");
 
     String tName = null;
