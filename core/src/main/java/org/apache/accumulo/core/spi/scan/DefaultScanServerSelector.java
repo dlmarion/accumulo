@@ -43,6 +43,8 @@ import com.google.common.hash.Hashing;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+
 /**
  * The default Accumulo selector for scan servers. This dispatcher will :
  *
@@ -139,7 +141,7 @@ public class DefaultScanServerSelector implements ScanServerSelector {
 
   private static final SecureRandom RANDOM = new SecureRandom();
   public static final String PROFILES_DEFAULT = "[{'isDefault':true,'maxBusyTimeout':'5m',"
-      + "'busyTimeoutMultiplier':8, " + "'scanTypeActivations':[], "
+      + "'busyTimeoutMultiplier':8, 'scanTypeActivations':[], "
       + "'attemptPlans':[{'servers':'3', 'busyTimeout':'33ms', 'salt':'one'},"
       + "{'servers':'13', 'busyTimeout':'33ms', 'salt':'two'},"
       + "{'servers':'100%', 'busyTimeout':'33ms'}]}]";
@@ -151,6 +153,8 @@ public class DefaultScanServerSelector implements ScanServerSelector {
 
   private static final Set<String> OPT_NAMES = Set.of("profiles");
 
+  @SuppressFBWarnings(value = {"NP_UNWRITTEN_FIELD", "UWF_UNWRITTEN_FIELD"},
+      justification = "Object deserialized by GSON")
   private static class AttemptPlan {
     String servers;
     String busyTimeout;
@@ -201,6 +205,8 @@ public class DefaultScanServerSelector implements ScanServerSelector {
     }
   }
 
+  @SuppressFBWarnings(value = {"NP_UNWRITTEN_PUBLIC_OR_PROTECTED_FIELD", "UWF_UNWRITTEN_FIELD"},
+      justification = "Object deserialized by GSON")
   private static class Profile {
     public List<AttemptPlan> attemptPlans;
     List<String> scanTypeActivations;
