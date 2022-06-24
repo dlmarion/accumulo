@@ -151,7 +151,11 @@ public class ScanServer extends AbstractServer
       long t1 = System.currentTimeMillis();
       var tm = ample.readTablet(keyExtent);
       long t2 = System.currentTimeMillis();
-      LOG.trace("Read metadata for 1 tablet in {} ms", t2 - t1);
+      LOG.trace("Read metadata for 1 tablet ({}) in {} ms", keyExtent, t2 - t1);
+      if (tm.getFiles().size() == 0) {
+        LOG.trace("Tablet ({}) has no files, not caching it", keyExtent);
+        return null;
+      }
       return tm;
     }
 
@@ -164,6 +168,14 @@ public class ScanServer extends AbstractServer
           .collect(Collectors.toMap(tm -> tm.getExtent(), tm -> tm));
       long t2 = System.currentTimeMillis();
       LOG.trace("Read metadata for {} tablets in {} ms", keys.size(), t2 - t1);
+      var iter = tms.entrySet().iterator();
+      while (iter.hasNext()) {
+        Entry<KeyExtent,TabletMetadata> e = iter.next();
+        if (e.getValue().getFiles().size() == 0) {
+          LOG.trace("Tablet ({}) has no files, not caching it", e.getKey());
+          iter.remove();
+        }
+      }
       return tms;
     }
   }
