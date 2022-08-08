@@ -147,16 +147,11 @@ public class ScanServerIT extends SharedMiniClusterBase {
     try (AccumuloClient client = Accumulo.newClient().from(getClientProps()).build()) {
       String tableName = getUniqueNames(1)[0];
 
-      createTableAndIngest(client, tableName);
+      client.tableOperations().create(tableName);
       client.tableOperations().offline(tableName, true);
 
-      assertThrows(TableOfflineException.class, () -> {
-        try (Scanner scanner = client.createScanner(tableName, Authorizations.EMPTY)) {
-          scanner.setRange(new Range());
-          scanner.setConsistencyLevel(ConsistencyLevel.EVENTUAL);
-          assertEquals(EXPECTED_INGEST_ENTRIES_COUNT, Iterables.size(scanner));
-        } // when the scanner is closed, all open sessions should be closed
-      });
+      assertThrows(TableOfflineException.class,
+          () -> client.createScanner(tableName, Authorizations.EMPTY));
     }
   }
 
