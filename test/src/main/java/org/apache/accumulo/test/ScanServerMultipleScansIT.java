@@ -41,6 +41,7 @@ import org.apache.accumulo.core.client.BatchScanner;
 import org.apache.accumulo.core.client.Scanner;
 import org.apache.accumulo.core.client.ScannerBase.ConsistencyLevel;
 import org.apache.accumulo.core.client.TableNotFoundException;
+import org.apache.accumulo.core.client.admin.NewTableConfiguration;
 import org.apache.accumulo.core.conf.Property;
 import org.apache.accumulo.core.data.Range;
 import org.apache.accumulo.core.security.Authorizations;
@@ -57,11 +58,15 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.common.collect.Iterables;
 
 @Tag(MINI_CLUSTER_ONLY)
 public class ScanServerMultipleScansIT extends SharedMiniClusterBase {
+
+  private static final Logger log = LoggerFactory.getLogger(ScanServerMultipleScansIT.class);
 
   private static class ScanServerITConfiguration implements MiniClusterConfigurationCallback {
 
@@ -74,6 +79,8 @@ public class ScanServerMultipleScansIT extends SharedMiniClusterBase {
   }
 
   private static final int NUM_SCANS = 4;
+  private static final int INGEST_ROW_COUNT = 10, INGEST_COL_COUNT = 10;
+  private static final int EXPECTED_INGEST_ENTRIES_COUNT = INGEST_ROW_COUNT * INGEST_COL_COUNT;
 
   @BeforeAll
   public static void start() throws Exception {
@@ -109,16 +116,12 @@ public class ScanServerMultipleScansIT extends SharedMiniClusterBase {
   private ExecutorService executor;
 
   @Test
-  public void testMutipleScansSameTablet() throws Exception {
+  public void testMultipleScansSameTablet() throws Exception {
 
     try (AccumuloClient client = Accumulo.newClient().from(getClientProps()).build()) {
-      String tableName = getUniqueNames(1)[0];
+      final String tableName = getUniqueNames(1)[0];
 
-      client.tableOperations().create(tableName);
-
-      ReadWriteIT.ingest(client, 10, 10, 50, 0, tableName);
-
-      client.tableOperations().flush(tableName, null, null, true);
+      createTableAndIngest(client, tableName);
 
       final CountDownLatch latch = new CountDownLatch(1);
 
@@ -133,7 +136,7 @@ public class ScanServerMultipleScansIT extends SharedMiniClusterBase {
           try (Scanner scanner = client.createScanner(tableName, Authorizations.EMPTY)) {
             scanner.setRange(new Range());
             scanner.setConsistencyLevel(ConsistencyLevel.EVENTUAL);
-            assertEquals(100, Iterables.size(scanner));
+            assertEquals(EXPECTED_INGEST_ENTRIES_COUNT, Iterables.size(scanner));
           } catch (TableNotFoundException e) {
             fail("Table not found");
           }
@@ -145,34 +148,25 @@ public class ScanServerMultipleScansIT extends SharedMiniClusterBase {
       for (Future<?> future : futures) {
         future.get();
       }
-
     }
   }
 
   @Test
   public void testSingleScanDifferentTablets() throws Exception {
     try (AccumuloClient client = Accumulo.newClient().from(getClientProps()).build()) {
-      String tableName = getUniqueNames(1)[0];
+      final String tableName = getUniqueNames(1)[0];
 
-      client.tableOperations().create(tableName);
       SortedSet<Text> splitPoints = new TreeSet<>();
       splitPoints.add(new Text("row_0000000002\\0"));
       splitPoints.add(new Text("row_0000000005\\0"));
       splitPoints.add(new Text("row_0000000008\\0"));
-      client.tableOperations().addSplits(tableName, splitPoints);
 
-      @SuppressWarnings("deprecation")
-      Collection<Text> splits = client.tableOperations().getSplits(tableName);
-      assertEquals(3, splits.size());
-
-      ReadWriteIT.ingest(client, 10, 10, 50, 0, tableName);
-
-      client.tableOperations().flush(tableName, null, null, true);
+      createTableAndIngest(client, tableName, new NewTableConfiguration().withSplits(splitPoints));
 
       try (Scanner scanner = client.createScanner(tableName, Authorizations.EMPTY)) {
         scanner.setRange(new Range());
         scanner.setConsistencyLevel(ConsistencyLevel.EVENTUAL);
-        assertEquals(100, Iterables.size(scanner));
+        assertEquals(EXPECTED_INGEST_ENTRIES_COUNT, Iterables.size(scanner));
       }
     }
   }
@@ -180,23 +174,18 @@ public class ScanServerMultipleScansIT extends SharedMiniClusterBase {
   @Test
   public void testMultipleScansDifferentTablets() throws Exception {
     try (AccumuloClient client = Accumulo.newClient().from(getClientProps()).build()) {
-      String tableName = getUniqueNames(1)[0];
+      final String tableName = getUniqueNames(1)[0];
 
-      client.tableOperations().create(tableName);
       SortedSet<Text> splitPoints = new TreeSet<>();
       splitPoints.add(new Text("row_0000000002\\0"));
       splitPoints.add(new Text("row_0000000005\\0"));
       splitPoints.add(new Text("row_0000000008\\0"));
-      client.tableOperations().addSplits(tableName, splitPoints);
 
-      @SuppressWarnings("deprecation")
-      Collection<Text> splits = client.tableOperations().getSplits(tableName);
-      assertEquals(3, splits.size());
-      System.out.println(splits);
+      createTableAndIngest(client, tableName, new NewTableConfiguration().withSplits(splitPoints));
 
-      ReadWriteIT.ingest(client, 10, 10, 50, 0, tableName);
-
-      client.tableOperations().flush(tableName, null, null, true);
+      Collection<Text> splitsFound = client.tableOperations().listSplits(tableName);
+      assertEquals(splitPoints, new TreeSet<>(splitsFound));
+      log.debug("Splits found: {}", splitsFound);
 
       final CountDownLatch latch = new CountDownLatch(1);
 
@@ -245,20 +234,16 @@ public class ScanServerMultipleScansIT extends SharedMiniClusterBase {
         future.get();
       }
 
-      assertEquals(100, counter.get());
+      assertEquals(EXPECTED_INGEST_ENTRIES_COUNT, counter.get());
     }
   }
 
   @Test
-  public void testMutipleBatchScansSameTablet() throws Exception {
+  public void testMultipleBatchScansSameTablet() throws Exception {
     try (AccumuloClient client = Accumulo.newClient().from(getClientProps()).build()) {
-      String tableName = getUniqueNames(1)[0];
+      final String tableName = getUniqueNames(1)[0];
 
-      client.tableOperations().create(tableName);
-
-      ReadWriteIT.ingest(client, 10, 10, 50, 0, tableName);
-
-      client.tableOperations().flush(tableName, null, null, true);
+      createTableAndIngest(client, tableName);
 
       final CountDownLatch latch = new CountDownLatch(1);
 
@@ -274,7 +259,7 @@ public class ScanServerMultipleScansIT extends SharedMiniClusterBase {
           try (BatchScanner scanner = client.createBatchScanner(tableName, Authorizations.EMPTY)) {
             scanner.setRanges(Collections.singletonList(new Range()));
             scanner.setConsistencyLevel(ConsistencyLevel.EVENTUAL);
-            assertEquals(100, Iterables.size(scanner));
+            assertEquals(EXPECTED_INGEST_ENTRIES_COUNT, Iterables.size(scanner));
           } catch (TableNotFoundException e) {
             fail("Table not found");
           }
@@ -286,34 +271,25 @@ public class ScanServerMultipleScansIT extends SharedMiniClusterBase {
         future.get();
       }
     }
-
   }
 
   @Test
   public void testSingleBatchScanDifferentTablets() throws Exception {
     try (AccumuloClient client = Accumulo.newClient().from(getClientProps()).build()) {
-      String tableName = getUniqueNames(1)[0];
+      final String tableName = getUniqueNames(1)[0];
 
-      client.tableOperations().create(tableName);
       SortedSet<Text> splitPoints = new TreeSet<>();
       splitPoints.add(new Text("row_0000000002\\0"));
       splitPoints.add(new Text("row_0000000005\\0"));
       splitPoints.add(new Text("row_0000000008\\0"));
-      client.tableOperations().addSplits(tableName, splitPoints);
 
-      @SuppressWarnings("deprecation")
-      Collection<Text> splits = client.tableOperations().getSplits(tableName);
-      assertEquals(3, splits.size());
-
-      ReadWriteIT.ingest(client, 10, 10, 50, 0, tableName);
-
-      client.tableOperations().flush(tableName, null, null, true);
+      createTableAndIngest(client, tableName, new NewTableConfiguration().withSplits(splitPoints));
 
       try (BatchScanner scanner =
           client.createBatchScanner(tableName, Authorizations.EMPTY, NUM_SCANS)) {
         scanner.setRanges(Collections.singletonList(new Range()));
         scanner.setConsistencyLevel(ConsistencyLevel.EVENTUAL);
-        assertEquals(100, Iterables.size(scanner));
+        assertEquals(EXPECTED_INGEST_ENTRIES_COUNT, Iterables.size(scanner));
       }
     }
   }
@@ -321,23 +297,18 @@ public class ScanServerMultipleScansIT extends SharedMiniClusterBase {
   @Test
   public void testMultipleBatchScansDifferentTablets() throws Exception {
     try (AccumuloClient client = Accumulo.newClient().from(getClientProps()).build()) {
-      String tableName = getUniqueNames(1)[0];
+      final String tableName = getUniqueNames(1)[0];
 
-      client.tableOperations().create(tableName);
       SortedSet<Text> splitPoints = new TreeSet<>();
       splitPoints.add(new Text("row_0000000002\\0"));
       splitPoints.add(new Text("row_0000000005\\0"));
       splitPoints.add(new Text("row_0000000008\\0"));
-      client.tableOperations().addSplits(tableName, splitPoints);
 
-      @SuppressWarnings("deprecation")
-      Collection<Text> splits = client.tableOperations().getSplits(tableName);
-      assertEquals(3, splits.size());
-      System.out.println(splits);
+      createTableAndIngest(client, tableName, new NewTableConfiguration().withSplits(splitPoints));
 
-      ReadWriteIT.ingest(client, 10, 10, 50, 0, tableName);
-
-      client.tableOperations().flush(tableName, null, null, true);
+      Collection<Text> splitsFound = client.tableOperations().listSplits(tableName);
+      assertEquals(splitPoints, new TreeSet<>(splitsFound));
+      log.debug("Splits found: {}", splitsFound);
 
       final CountDownLatch latch = new CountDownLatch(1);
 
@@ -386,8 +357,22 @@ public class ScanServerMultipleScansIT extends SharedMiniClusterBase {
         future.get();
       }
 
-      assertEquals(100, counter.get());
+      assertEquals(EXPECTED_INGEST_ENTRIES_COUNT, counter.get());
     }
-
   }
+
+  private static void createTableAndIngest(AccumuloClient client, String tableName)
+      throws Exception {
+    createTableAndIngest(client, tableName, new NewTableConfiguration());
+  }
+
+  private static void createTableAndIngest(AccumuloClient client, String tableName,
+      NewTableConfiguration ntc) throws Exception {
+    client.tableOperations().create(tableName, ntc);
+
+    ReadWriteIT.ingest(client, INGEST_ROW_COUNT, INGEST_COL_COUNT, 50, 0, tableName);
+
+    client.tableOperations().flush(tableName, null, null, true);
+  }
+
 }
