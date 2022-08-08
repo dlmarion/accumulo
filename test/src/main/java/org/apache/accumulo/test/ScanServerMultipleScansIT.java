@@ -19,6 +19,8 @@
 package org.apache.accumulo.test;
 
 import static org.apache.accumulo.harness.AccumuloITBase.MINI_CLUSTER_ONLY;
+import static org.apache.accumulo.test.ScanServerIT.EXPECTED_INGEST_ENTRIES_COUNT;
+import static org.apache.accumulo.test.ScanServerIT.createTableAndIngest;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -50,7 +52,6 @@ import org.apache.accumulo.harness.MiniClusterConfigurationCallback;
 import org.apache.accumulo.harness.SharedMiniClusterBase;
 import org.apache.accumulo.minicluster.ServerType;
 import org.apache.accumulo.miniclusterImpl.MiniAccumuloConfigImpl;
-import org.apache.accumulo.test.functional.ReadWriteIT;
 import org.apache.hadoop.io.Text;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -79,8 +80,6 @@ public class ScanServerMultipleScansIT extends SharedMiniClusterBase {
   }
 
   private static final int NUM_SCANS = 4;
-  private static final int INGEST_ROW_COUNT = 10, INGEST_COL_COUNT = 10;
-  private static final int EXPECTED_INGEST_ENTRIES_COUNT = INGEST_ROW_COUNT * INGEST_COL_COUNT;
 
   @BeforeAll
   public static void start() throws Exception {
@@ -359,20 +358,6 @@ public class ScanServerMultipleScansIT extends SharedMiniClusterBase {
 
       assertEquals(EXPECTED_INGEST_ENTRIES_COUNT, counter.get());
     }
-  }
-
-  private static void createTableAndIngest(AccumuloClient client, String tableName)
-      throws Exception {
-    createTableAndIngest(client, tableName, new NewTableConfiguration());
-  }
-
-  private static void createTableAndIngest(AccumuloClient client, String tableName,
-      NewTableConfiguration ntc) throws Exception {
-    client.tableOperations().create(tableName, ntc);
-
-    ReadWriteIT.ingest(client, INGEST_ROW_COUNT, INGEST_COL_COUNT, 50, 0, tableName);
-
-    client.tableOperations().flush(tableName, null, null, true);
   }
 
 }
