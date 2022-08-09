@@ -22,7 +22,6 @@ import static org.apache.accumulo.harness.AccumuloITBase.MINI_CLUSTER_ONLY;
 import static org.apache.accumulo.test.ScanServerIT.EXPECTED_INGEST_ENTRIES_COUNT;
 import static org.apache.accumulo.test.ScanServerIT.createTableAndIngest;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.Collections;
 
@@ -31,7 +30,6 @@ import org.apache.accumulo.core.client.AccumuloClient;
 import org.apache.accumulo.core.client.BatchScanner;
 import org.apache.accumulo.core.client.Scanner;
 import org.apache.accumulo.core.client.ScannerBase.ConsistencyLevel;
-import org.apache.accumulo.core.client.TableOfflineException;
 import org.apache.accumulo.core.conf.Property;
 import org.apache.accumulo.core.data.Range;
 import org.apache.accumulo.core.security.Authorizations;
@@ -114,19 +112,6 @@ public class ScanServerIT_NoServers extends SharedMiniClusterBase {
         // since there are no scan servers, and we are reading from tservers, we should see update
         assertEquals(EXPECTED_INGEST_ENTRIES_COUNT * 2, Iterables.size(scanner));
       } // when the scanner is closed, all open sessions should be closed
-    }
-  }
-
-  @Test
-  public void testScanOfflineTable() throws Exception {
-    try (AccumuloClient client = Accumulo.newClient().from(getClientProps()).build()) {
-      String tableName = getUniqueNames(1)[0];
-
-      client.tableOperations().create(tableName);
-      client.tableOperations().offline(tableName, true);
-
-      assertThrows(TableOfflineException.class,
-          () -> client.createScanner(tableName, Authorizations.EMPTY));
     }
   }
 

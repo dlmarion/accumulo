@@ -249,8 +249,7 @@ public class ScanServerMetadataEntriesIT extends SharedMiniClusterBase {
         assertEquals(fileCount, ctx.getAmple().getScanServerFileReferences().count());
 
         List<Reference> refs = gc.getReferences().collect(Collectors.toList());
-        refs.forEach(ref -> log.info("REF: {}", ref.getMetadataEntry()));
-        assertTrue(refs.size() > fileCount + 3);
+        assertTrue(refs.size() > fileCount * 2);
         List<Reference> tableRefs =
             refs.stream().filter(r -> r.getTableId().equals(tid) && !r.isDirectory())
                 .peek(r -> assertTrue(metadataScanFileRefs.contains(r.getMetadataEntry())))
@@ -258,7 +257,7 @@ public class ScanServerMetadataEntriesIT extends SharedMiniClusterBase {
         log.info("Reference List:{}", tableRefs);
         // There should be 6 references here. 3 for the table file entries, and 3 for the scan
         // server references
-        assertEquals(fileCount + 3, tableRefs.size());
+        assertEquals(fileCount * 2, tableRefs.size());
 
         Set<String> deduplicatedReferences =
             tableRefs.stream().map(Reference::getMetadataEntry).collect(Collectors.toSet());

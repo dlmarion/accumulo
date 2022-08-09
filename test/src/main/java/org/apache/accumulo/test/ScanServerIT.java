@@ -35,7 +35,6 @@ import org.apache.accumulo.core.client.BatchScanner;
 import org.apache.accumulo.core.client.IteratorSetting;
 import org.apache.accumulo.core.client.Scanner;
 import org.apache.accumulo.core.client.ScannerBase.ConsistencyLevel;
-import org.apache.accumulo.core.client.TableOfflineException;
 import org.apache.accumulo.core.client.TimedOutException;
 import org.apache.accumulo.core.client.admin.NewTableConfiguration;
 import org.apache.accumulo.core.conf.ClientProperty;
@@ -139,19 +138,6 @@ public class ScanServerIT extends SharedMiniClusterBase {
         scanner.setConsistencyLevel(ConsistencyLevel.IMMEDIATE);
         assertEquals(EXPECTED_INGEST_ENTRIES_COUNT * 2, Iterables.size(scanner));
       } // when the scanner is closed, all open sessions should be closed
-    }
-  }
-
-  @Test
-  public void testScanOfflineTable() throws Exception {
-    try (AccumuloClient client = Accumulo.newClient().from(getClientProps()).build()) {
-      String tableName = getUniqueNames(1)[0];
-
-      client.tableOperations().create(tableName);
-      client.tableOperations().offline(tableName, true);
-
-      assertThrows(TableOfflineException.class,
-          () -> client.createScanner(tableName, Authorizations.EMPTY));
     }
   }
 
