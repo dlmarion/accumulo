@@ -100,6 +100,17 @@ public class AESCryptoService implements CryptoService {
     }
   };
 
+  private static final ThreadLocal<Cipher> KEY_UNWRAP_CIPHER = new ThreadLocal<Cipher>() {
+    @Override
+    protected Cipher initialValue() {
+      try {
+        return Cipher.getInstance(KEY_WRAP_TRANSFORM);
+      } catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
+        throw new CryptoException("Error creating Cipher for AESWrap", e);
+      }
+    }
+  };
+
   @Override
   public void init(Map<String,String> conf) throws CryptoException {
     ensureNotInit();
@@ -562,7 +573,7 @@ public class AESCryptoService implements CryptoService {
       justification = "integrity not needed for key wrap")
   public static synchronized Key unwrapKey(byte[] fek, Key kek) {
     try {
-      final Cipher c = KEY_WRAP_CIPHER.get();
+      final Cipher c = KEY_UNWRAP_CIPHER.get();
       c.init(Cipher.UNWRAP_MODE, kek);
       return c.unwrap(fek, "AES", Cipher.SECRET_KEY);
     } catch (InvalidKeyException | NoSuchAlgorithmException e) {
