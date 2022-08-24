@@ -89,9 +89,9 @@ public class AESCryptoService implements CryptoService {
 
   private static final FileEncrypter DISABLED = new NoFileEncrypter();
 
-  @SuppressFBWarnings(value = "CIPHER_INTEGRITY",
-      justification = "integrity not needed for key wrap")
   private static final ThreadLocal<Cipher> KEY_WRAP_CIPHER = new ThreadLocal<Cipher>() {
+    @SuppressFBWarnings(value = "CIPHER_INTEGRITY",
+        justification = "integrity not needed for key wrap")
     @Override
     protected Cipher initialValue() {
       try {
@@ -102,9 +102,9 @@ public class AESCryptoService implements CryptoService {
     }
   };
 
-  @SuppressFBWarnings(value = "CIPHER_INTEGRITY",
-      justification = "integrity not needed for key wrap")
   private static final ThreadLocal<Cipher> KEY_UNWRAP_CIPHER = new ThreadLocal<Cipher>() {
+    @SuppressFBWarnings(value = "CIPHER_INTEGRITY",
+        justification = "integrity not needed for key wrap")
     @Override
     protected Cipher initialValue() {
       try {
