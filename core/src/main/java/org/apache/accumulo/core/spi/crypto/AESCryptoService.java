@@ -89,6 +89,8 @@ public class AESCryptoService implements CryptoService {
 
   private static final FileEncrypter DISABLED = new NoFileEncrypter();
 
+  @SuppressFBWarnings(value = "CIPHER_INTEGRITY",
+      justification = "integrity not needed for key wrap")
   private static final ThreadLocal<Cipher> KEY_WRAP_CIPHER = new ThreadLocal<Cipher>() {
     @Override
     protected Cipher initialValue() {
@@ -100,6 +102,8 @@ public class AESCryptoService implements CryptoService {
     }
   };
 
+  @SuppressFBWarnings(value = "CIPHER_INTEGRITY",
+      justification = "integrity not needed for key wrap")
   private static final ThreadLocal<Cipher> KEY_UNWRAP_CIPHER = new ThreadLocal<Cipher>() {
     @Override
     protected Cipher initialValue() {
@@ -569,8 +573,6 @@ public class AESCryptoService implements CryptoService {
     return new SecretKeySpec(bytes, "AES");
   }
 
-  @SuppressFBWarnings(value = "CIPHER_INTEGRITY",
-      justification = "integrity not needed for key wrap")
   public static synchronized Key unwrapKey(byte[] fek, Key kek) {
     try {
       final Cipher c = KEY_UNWRAP_CIPHER.get();
@@ -581,8 +583,6 @@ public class AESCryptoService implements CryptoService {
     }
   }
 
-  @SuppressFBWarnings(value = "CIPHER_INTEGRITY",
-      justification = "integrity not needed for key wrap")
   public static synchronized byte[] wrapKey(Key fek, Key kek) {
     try {
       final Cipher c = KEY_WRAP_CIPHER.get();
