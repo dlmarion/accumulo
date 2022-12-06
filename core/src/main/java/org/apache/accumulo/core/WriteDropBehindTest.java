@@ -30,35 +30,45 @@ import org.apache.hadoop.hdfs.DistributedFileSystem.HdfsDataOutputStreamBuilder;
 public class WriteDropBehindTest {
   public static void main(String[] args) throws Exception {
 
-    if (args.length != 5) {
-      System.err.printf("Usage: %s <hdfs uri> <file> <buffer size> <y|n> <y|n>\n",
+    if (args.length != 6) {
+      System.err.printf(
+          "Usage: %s <hdfs uri> <file> <buffer size> <syncOnStream (y|n)> <setDropBehind (y|n)> <callHsync (y|n)>\n",
           WriteDropBehindTest.class.getSimpleName());
       System.exit(1);
     }
 
-    Configuration conf = new Configuration();
-    FileSystem fs = FileSystem.get(URI.create(args[0]), conf);
+    final String hdfsURI = args[0];
+    final String outputFilename = args[1];
+    final int bufferSize = Integer.parseInt(args[2]);
+    final boolean setSyncOnStream = args[3].equalsIgnoreCase("y");
+    final boolean setDropBehind = args[4].equalsIgnoreCase("y");
+    final boolean callHsync = args[5].equalsIgnoreCase("y");
 
-    FSDataOutputStreamBuilder<?,?> builder = fs.createFile(new Path(args[1]));
+    Configuration conf = new Configuration();
+    FileSystem fs = FileSystem.get(URI.create(hdfsURI), conf);
+
+    FSDataOutputStreamBuilder<?,?> builder = fs.createFile(new Path(outputFilename));
     if (builder instanceof HdfsDataOutputStreamBuilder) {
-      System.out.println("Setting sync on OutputStream");
-      ((HdfsDataOutputStreamBuilder) builder).syncBlock();
+      if (setSyncOnStream) {
+        System.out.println("Setting syncBlock on OutputStream");
+        ((HdfsDataOutputStreamBuilder) builder).syncBlock();
+      }
     }
     builder.blockSize(64 * 1048576); // 64 MB
     builder.overwrite(true);
     var os = builder.build();
 
-    if (args[3].equals("y")) {
+    if (setDropBehind) {
       System.out.println("calling setDropBehind(true)");
       os.setDropBehind(true);
     }
 
-    if (args[4].equals("y")) {
+    if (callHsync) {
       System.out.println("calling hsync()");
       os.hsync();
     }
 
-    byte[] data = new byte[Integer.parseInt(args[2])];
+    byte[] data = new byte[bufferSize];
 
     BufferedInputStream is = new BufferedInputStream(System.in);
 
