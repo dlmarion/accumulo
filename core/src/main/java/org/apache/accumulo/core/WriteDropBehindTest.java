@@ -63,11 +63,6 @@ public class WriteDropBehindTest {
       os.setDropBehind(true);
     }
 
-    if (callHsync) {
-      System.out.println("calling hsync()");
-      os.hsync();
-    }
-
     byte[] data = new byte[bufferSize];
 
     BufferedInputStream is = new BufferedInputStream(System.in);
@@ -77,6 +72,10 @@ public class WriteDropBehindTest {
     while ((read = is.read(data, 0, data.length)) != -1) {
       os.write(data, 0, read);
       total += read;
+    }
+    if (callHsync) {
+      System.out.println("calling hsync()");
+      os.hsync();
     }
     os.close();
 
