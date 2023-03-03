@@ -1555,4 +1555,18 @@ public class TabletClientHandler implements TabletServerClientService.Iface,
       return handleTimeout(sessionId);
     }
   }
+
+  @Override
+  public void assignTabletWhenOnDemand(TInfo tinfo, TCredentials credentials, TKeyExtent tkeyExtent)
+      throws ThriftSecurityException, TException {
+    final TableId tableId = TableId.of(new String(tkeyExtent.getTable(), UTF_8));
+    NamespaceId namespaceId = getNamespaceId(credentials, tableId);
+    if (!security.canWrite(credentials, tableId, namespaceId)) {
+      throw new ThriftSecurityException(credentials.getPrincipal(),
+          SecurityErrorCode.PERMISSION_DENIED);
+    }
+    final KeyExtent keyExtent = KeyExtent.fromThrift(tkeyExtent);
+    this.context.getAmple().mutateTablet(keyExtent).putAssignWhenOnDemand().mutate();
+  }
+
 }

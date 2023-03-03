@@ -288,6 +288,10 @@ public interface Ample {
 
     TabletMutator deleteExternalCompaction(ExternalCompactionId ecid);
 
+    TabletMutator putAssignWhenOnDemand();
+
+    TabletMutator deleteAssignWhenOnDemand();
+
     /**
      * This method persist (or queues for persisting) previous put and deletes against this object.
      * Unless this method is called, previous calls will never be persisted. The purpose of this

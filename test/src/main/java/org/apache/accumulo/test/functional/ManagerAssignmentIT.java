@@ -21,23 +21,36 @@ package org.apache.accumulo.test.functional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.time.Duration;
+import java.util.Iterator;
+import java.util.Map.Entry;
+import java.util.TreeSet;
+import java.util.stream.IntStream;
 
 import org.apache.accumulo.core.client.Accumulo;
 import org.apache.accumulo.core.client.AccumuloClient;
 import org.apache.accumulo.core.client.BatchWriter;
+import org.apache.accumulo.core.client.MutationsRejectedException;
+import org.apache.accumulo.core.client.Scanner;
 import org.apache.accumulo.core.clientImpl.ClientContext;
+import org.apache.accumulo.core.data.Key;
 import org.apache.accumulo.core.data.Mutation;
 import org.apache.accumulo.core.data.Range;
 import org.apache.accumulo.core.data.TableId;
+import org.apache.accumulo.core.data.Value;
 import org.apache.accumulo.core.metadata.MetadataTable;
 import org.apache.accumulo.core.metadata.TabletLocationState;
 import org.apache.accumulo.core.metadata.schema.MetadataSchema.TabletsSection;
 import org.apache.accumulo.core.util.UtilWaitThread;
 import org.apache.accumulo.harness.AccumuloClusterHarness;
 import org.apache.accumulo.server.manager.state.MetaDataTableScanner;
+import org.apache.hadoop.io.Text;
 import org.junit.jupiter.api.Test;
+
+import com.google.common.collect.Iterables;
 
 public class ManagerAssignmentIT extends AccumuloClusterHarness {
 
@@ -110,6 +123,39 @@ public class ManagerAssignmentIT extends AccumuloClusterHarness {
       assertNull(ondemand.current);
       assertEquals(flushed.current, ondemand.last);
 
+    }
+  }
+  
+  @Test
+  public void testScannerAssignOnDemandTablets() throws Exception {
+    final byte[] empty = new byte[0];
+    try (AccumuloClient c = Accumulo.newClient().from(getClientProps()).build()) {
+      String tableName = super.getUniqueNames(1)[0];
+      c.tableOperations().create(tableName);
+      String tableId = c.tableOperations().tableIdMap().get(tableName);
+      try (BatchWriter bw = c.createBatchWriter(tableName)) {
+        IntStream.range(97, 122).forEach((i) -> {
+          try {
+            Mutation m = new Mutation(String.valueOf((char) i));
+            m.put(empty, empty, empty);
+            bw.addMutation(m);
+          } catch (MutationsRejectedException e) {
+            fail("Error inserting data", e);
+          }
+        });
+      }
+      TreeSet<Text> splits = new TreeSet<>();
+      splits.add(new Text("f"));
+      splits.add(new Text("m"));
+      splits.add(new Text("t"));
+      c.tableOperations().addSplits(tableName, splits);
+      c.tableOperations().onDemand(tableName, true);
+      assertTrue(c.tableOperations().isOnDemand(tableName));
+      Range scanRange = new Range("a", "c");
+      Scanner s = c.createScanner(tableName);
+      s.setRange(scanRange);
+      assertEquals(3, Iterables.size(s));
+      
     }
   }
 

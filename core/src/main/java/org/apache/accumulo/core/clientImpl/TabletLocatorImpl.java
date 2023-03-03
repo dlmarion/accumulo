@@ -47,6 +47,8 @@ import org.apache.accumulo.core.data.PartialKey;
 import org.apache.accumulo.core.data.Range;
 import org.apache.accumulo.core.data.TableId;
 import org.apache.accumulo.core.dataImpl.KeyExtent;
+import org.apache.accumulo.core.rpc.clients.ThriftClientTypes;
+import org.apache.accumulo.core.trace.TraceUtil;
 import org.apache.accumulo.core.util.OpTimer;
 import org.apache.accumulo.core.util.Pair;
 import org.apache.accumulo.core.util.TextUtil;
@@ -524,6 +526,14 @@ public class TabletLocatorImpl extends TabletLocator {
     }
   }
 
+  private void bringOnDemandTabletsOnline(ClientContext context, List<KeyExtent> locationless)
+      throws AccumuloException, AccumuloSecurityException {
+    for (KeyExtent ke : locationless) {
+      ThriftClientTypes.TABLET_MGMT.executeVoid(context, client -> client
+          .assignTabletWhenOnDemand(TraceUtil.traceInfo(), context.rpcCreds(), ke.toThrift()));
+    }
+  }
+
   private void lookupTabletLocation(ClientContext context, Text row, boolean retry,
       LockCheckerSession lcSession)
       throws AccumuloException, AccumuloSecurityException, TableNotFoundException {
@@ -533,8 +543,13 @@ public class TabletLocatorImpl extends TabletLocator {
     TabletLocation ptl = parent.locateTablet(context, metadataRow, false, retry);
 
     if (ptl != null) {
+      final boolean isOnDemand =
+          context.tableOperations().isOnDemand(context.getTableName(tableId));
       TabletLocations locations =
           locationObtainer.lookupTablet(context, ptl, metadataRow, lastTabletRow, parent);
+      if (isOnDemand && locations != null) {
+        bringOnDemandTabletsOnline(context, locations.getLocationless());
+      }
       while (locations != null && locations.getLocations().isEmpty()
           && locations.getLocationless().isEmpty()) {
         // try the next tablet, the current tablet does not have any tablets that overlap the row
@@ -545,6 +560,9 @@ public class TabletLocatorImpl extends TabletLocator {
           if (ptl != null) {
             locations =
                 locationObtainer.lookupTablet(context, ptl, metadataRow, lastTabletRow, parent);
+            if (isOnDemand && locations != null) {
+              bringOnDemandTabletsOnline(context, locations.getLocationless());
+            }
           } else {
             break;
           }

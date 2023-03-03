@@ -598,16 +598,21 @@ public class Manager extends AbstractServer
     }
   }
 
-  TabletGoalState getTableGoalState(KeyExtent extent) {
-    TableState tableState = getContext().getTableManager().getTableState(extent.tableId());
+  TabletGoalState getTableGoalState(TabletLocationState tls) {
+    TableState tableState = getContext().getTableManager().getTableState(tls.extent.tableId());
     if (tableState == null) {
       return TabletGoalState.DELETED;
     }
     switch (tableState) {
       case DELETING:
         return TabletGoalState.DELETED;
-      case OFFLINE:
       case ONDEMAND:
+        if (tls.assignWhenOnDemand) {
+          return TabletGoalState.HOSTED;
+        } else {
+          return TabletGoalState.UNASSIGNED;
+        }
+      case OFFLINE:
       case NEW:
         return TabletGoalState.UNASSIGNED;
       default:
@@ -663,7 +668,7 @@ public class Manager extends AbstractServer
       }
 
       // taking table offline?
-      state = getTableGoalState(extent);
+      state = getTableGoalState(tls);
       if (state == TabletGoalState.HOSTED) {
         // Maybe this tablet needs to be migrated
         TServerInstance dest = migrations.get(extent);

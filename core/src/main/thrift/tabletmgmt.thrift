@@ -72,5 +72,13 @@ service TabletManagementClientService {
     3:string lock
     4:data.TKeyExtent extent
   )
+  
+  void assignTabletWhenOnDemand(
+    1:client.TInfo tinfo
+    2:security.TCredentials credentials
+    3:data.TKeyExtent extent
+  ) throws (
+    1:client.ThriftSecurityException sec
+  )
 
 }

@@ -204,10 +204,8 @@ public class MergeStateIT extends ConfigurableMacBase {
       // take it offline
       m = TabletColumnFamily.createPrevRowMutation(tablet);
       Collection<Collection<String>> walogs = Collections.emptyList();
-      metaDataStateStore.unassign(
-          Collections.singletonList(
-              new TabletLocationState(tablet, null, state.someTServer, null, null, walogs, false)),
-          null);
+      metaDataStateStore.unassign(Collections.singletonList(new TabletLocationState(tablet, null,
+          state.someTServer, null, null, walogs, false, false)), null);
 
       // now we can split
       stats = scan(state, metaDataStateStore);
