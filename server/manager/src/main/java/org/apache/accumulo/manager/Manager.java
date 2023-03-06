@@ -607,7 +607,7 @@ public class Manager extends AbstractServer
       case DELETING:
         return TabletGoalState.DELETED;
       case ONDEMAND:
-        if (tls.assignWhenOnDemand) {
+        if (tls.ondemand) {
           return TabletGoalState.HOSTED;
         } else {
           return TabletGoalState.UNASSIGNED;

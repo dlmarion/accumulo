@@ -73,7 +73,7 @@ service TabletManagementClientService {
     4:data.TKeyExtent extent
   )
   
-  void assignTabletWhenOnDemand(
+  void bringOnDemandTabletOnline(
     1:client.TInfo tinfo
     2:security.TCredentials credentials
     3:data.TKeyExtent extent

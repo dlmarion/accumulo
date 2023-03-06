@@ -311,7 +311,7 @@ public class TabletsMetadata implements Iterable<TabletMetadata>, AutoCloseable 
           case ECOMP:
             families.add(ExternalCompactionColumnFamily.NAME);
             break;
-          case ASSIGN_WHEN_ON_DEMAND:
+          case ON_DEMAND:
             families.add(OnDemandAssignmentStateColumnFamily.NAME);
             break;
           default:

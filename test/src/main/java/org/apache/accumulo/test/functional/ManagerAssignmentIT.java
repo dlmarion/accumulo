@@ -25,8 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.time.Duration;
-import java.util.Iterator;
-import java.util.Map.Entry;
+import java.util.List;
 import java.util.TreeSet;
 import java.util.stream.IntStream;
 
@@ -36,23 +35,31 @@ import org.apache.accumulo.core.client.BatchWriter;
 import org.apache.accumulo.core.client.MutationsRejectedException;
 import org.apache.accumulo.core.client.Scanner;
 import org.apache.accumulo.core.clientImpl.ClientContext;
-import org.apache.accumulo.core.data.Key;
 import org.apache.accumulo.core.data.Mutation;
 import org.apache.accumulo.core.data.Range;
 import org.apache.accumulo.core.data.TableId;
-import org.apache.accumulo.core.data.Value;
 import org.apache.accumulo.core.metadata.MetadataTable;
 import org.apache.accumulo.core.metadata.TabletLocationState;
 import org.apache.accumulo.core.metadata.schema.MetadataSchema.TabletsSection;
+import org.apache.accumulo.core.rpc.clients.ThriftClientTypes;
+import org.apache.accumulo.core.tabletserver.thrift.TabletStats;
+import org.apache.accumulo.core.trace.TraceUtil;
 import org.apache.accumulo.core.util.UtilWaitThread;
 import org.apache.accumulo.harness.AccumuloClusterHarness;
+import org.apache.accumulo.miniclusterImpl.MiniAccumuloConfigImpl;
 import org.apache.accumulo.server.manager.state.MetaDataTableScanner;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.Text;
 import org.junit.jupiter.api.Test;
 
 import com.google.common.collect.Iterables;
 
 public class ManagerAssignmentIT extends AccumuloClusterHarness {
+
+  @Override
+  public void configureMiniCluster(MiniAccumuloConfigImpl cfg, Configuration hadoopCoreSite) {
+    cfg.setNumTservers(1);
+  }
 
   @Override
   protected Duration defaultTimeout() {
@@ -102,6 +109,13 @@ public class ManagerAssignmentIT extends AccumuloClusterHarness {
       assertNotNull(online.current);
       assertEquals(online.current, online.last);
 
+      // take the tablet offline
+      c.tableOperations().offline(tableName, true);
+      offline = getTabletLocationState(c, tableId);
+      assertNull(offline.future);
+      assertNull(offline.current);
+      assertEquals(flushed.current, offline.last);
+
       // set the table to ondemand
       c.tableOperations().onDemand(tableName, true);
       TabletLocationState ondemand = getTabletLocationState(c, tableId);
@@ -116,16 +130,9 @@ public class ManagerAssignmentIT extends AccumuloClusterHarness {
       assertNotNull(online.current);
       assertEquals(online.current, online.last);
 
-      // set the table to ondemand
-      c.tableOperations().onDemand(tableName, true);
-      ondemand = getTabletLocationState(c, tableId);
-      assertNull(ondemand.future);
-      assertNull(ondemand.current);
-      assertEquals(flushed.current, ondemand.last);
-
     }
   }
-  
+
   @Test
   public void testScannerAssignOnDemandTablets() throws Exception {
     final byte[] empty = new byte[0];
@@ -149,13 +156,31 @@ public class ManagerAssignmentIT extends AccumuloClusterHarness {
       splits.add(new Text("m"));
       splits.add(new Text("t"));
       c.tableOperations().addSplits(tableName, splits);
+      // Need to offline the table first so that the tablets
+      // are unloaded.
+      c.tableOperations().offline(tableName, true);
       c.tableOperations().onDemand(tableName, true);
       assertTrue(c.tableOperations().isOnDemand(tableName));
+
+      List<TabletStats> stats =
+          ThriftClientTypes.TABLET_SERVER.execute((ClientContext) c, client -> client
+              .getTabletStats(TraceUtil.traceInfo(), ((ClientContext) c).rpcCreds(), tableId));
+      // There should be no tablets online
+      assertEquals(0, stats.size());
+
+      c.tableOperations().clearLocatorCache(tableName);
+
       Range scanRange = new Range("a", "c");
       Scanner s = c.createScanner(tableName);
       s.setRange(scanRange);
+      // Should return keys for a, b, c
       assertEquals(3, Iterables.size(s));
-      
+
+      stats = ThriftClientTypes.TABLET_SERVER.execute((ClientContext) c, client -> client
+          .getTabletStats(TraceUtil.traceInfo(), ((ClientContext) c).rpcCreds(), tableId));
+      // There should be one tablet online
+      assertEquals(1, stats.size());
+
     }
   }
 

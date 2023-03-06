@@ -39,7 +39,7 @@ public class TabletManagementClientService {
 
     public void chop(org.apache.accumulo.core.clientImpl.thrift.TInfo tinfo, org.apache.accumulo.core.securityImpl.thrift.TCredentials credentials, java.lang.String lock, org.apache.accumulo.core.dataImpl.thrift.TKeyExtent extent) throws org.apache.thrift.TException;
 
-    public void assignTabletWhenOnDemand(org.apache.accumulo.core.clientImpl.thrift.TInfo tinfo, org.apache.accumulo.core.securityImpl.thrift.TCredentials credentials, org.apache.accumulo.core.dataImpl.thrift.TKeyExtent extent) throws org.apache.accumulo.core.clientImpl.thrift.ThriftSecurityException, org.apache.thrift.TException;
+    public void bringOnDemandTabletOnline(org.apache.accumulo.core.clientImpl.thrift.TInfo tinfo, org.apache.accumulo.core.securityImpl.thrift.TCredentials credentials, org.apache.accumulo.core.dataImpl.thrift.TKeyExtent extent) throws org.apache.accumulo.core.clientImpl.thrift.ThriftSecurityException, org.apache.thrift.TException;
 
   }
 
@@ -55,7 +55,7 @@ public class TabletManagementClientService {
 
     public void chop(org.apache.accumulo.core.clientImpl.thrift.TInfo tinfo, org.apache.accumulo.core.securityImpl.thrift.TCredentials credentials, java.lang.String lock, org.apache.accumulo.core.dataImpl.thrift.TKeyExtent extent, org.apache.thrift.async.AsyncMethodCallback<Void> resultHandler) throws org.apache.thrift.TException;
 
-    public void assignTabletWhenOnDemand(org.apache.accumulo.core.clientImpl.thrift.TInfo tinfo, org.apache.accumulo.core.securityImpl.thrift.TCredentials credentials, org.apache.accumulo.core.dataImpl.thrift.TKeyExtent extent, org.apache.thrift.async.AsyncMethodCallback<Void> resultHandler) throws org.apache.thrift.TException;
+    public void bringOnDemandTabletOnline(org.apache.accumulo.core.clientImpl.thrift.TInfo tinfo, org.apache.accumulo.core.securityImpl.thrift.TCredentials credentials, org.apache.accumulo.core.dataImpl.thrift.TKeyExtent extent, org.apache.thrift.async.AsyncMethodCallback<Void> resultHandler) throws org.apache.thrift.TException;
 
   }
 
@@ -178,25 +178,25 @@ public class TabletManagementClientService {
     }
 
     @Override
-    public void assignTabletWhenOnDemand(org.apache.accumulo.core.clientImpl.thrift.TInfo tinfo, org.apache.accumulo.core.securityImpl.thrift.TCredentials credentials, org.apache.accumulo.core.dataImpl.thrift.TKeyExtent extent) throws org.apache.accumulo.core.clientImpl.thrift.ThriftSecurityException, org.apache.thrift.TException
+    public void bringOnDemandTabletOnline(org.apache.accumulo.core.clientImpl.thrift.TInfo tinfo, org.apache.accumulo.core.securityImpl.thrift.TCredentials credentials, org.apache.accumulo.core.dataImpl.thrift.TKeyExtent extent) throws org.apache.accumulo.core.clientImpl.thrift.ThriftSecurityException, org.apache.thrift.TException
     {
-      send_assignTabletWhenOnDemand(tinfo, credentials, extent);
-      recv_assignTabletWhenOnDemand();
+      send_bringOnDemandTabletOnline(tinfo, credentials, extent);
+      recv_bringOnDemandTabletOnline();
     }
 
-    public void send_assignTabletWhenOnDemand(org.apache.accumulo.core.clientImpl.thrift.TInfo tinfo, org.apache.accumulo.core.securityImpl.thrift.TCredentials credentials, org.apache.accumulo.core.dataImpl.thrift.TKeyExtent extent) throws org.apache.thrift.TException
+    public void send_bringOnDemandTabletOnline(org.apache.accumulo.core.clientImpl.thrift.TInfo tinfo, org.apache.accumulo.core.securityImpl.thrift.TCredentials credentials, org.apache.accumulo.core.dataImpl.thrift.TKeyExtent extent) throws org.apache.thrift.TException
     {
-      assignTabletWhenOnDemand_args args = new assignTabletWhenOnDemand_args();
+      bringOnDemandTabletOnline_args args = new bringOnDemandTabletOnline_args();
       args.setTinfo(tinfo);
       args.setCredentials(credentials);
       args.setExtent(extent);
-      sendBase("assignTabletWhenOnDemand", args);
+      sendBase("bringOnDemandTabletOnline", args);
     }
 
-    public void recv_assignTabletWhenOnDemand() throws org.apache.accumulo.core.clientImpl.thrift.ThriftSecurityException, org.apache.thrift.TException
+    public void recv_bringOnDemandTabletOnline() throws org.apache.accumulo.core.clientImpl.thrift.ThriftSecurityException, org.apache.thrift.TException
     {
-      assignTabletWhenOnDemand_result result = new assignTabletWhenOnDemand_result();
-      receiveBase(result, "assignTabletWhenOnDemand");
+      bringOnDemandTabletOnline_result result = new bringOnDemandTabletOnline_result();
+      receiveBase(result, "bringOnDemandTabletOnline");
       if (result.sec != null) {
         throw result.sec;
       }
@@ -450,18 +450,18 @@ public class TabletManagementClientService {
     }
 
     @Override
-    public void assignTabletWhenOnDemand(org.apache.accumulo.core.clientImpl.thrift.TInfo tinfo, org.apache.accumulo.core.securityImpl.thrift.TCredentials credentials, org.apache.accumulo.core.dataImpl.thrift.TKeyExtent extent, org.apache.thrift.async.AsyncMethodCallback<Void> resultHandler) throws org.apache.thrift.TException {
+    public void bringOnDemandTabletOnline(org.apache.accumulo.core.clientImpl.thrift.TInfo tinfo, org.apache.accumulo.core.securityImpl.thrift.TCredentials credentials, org.apache.accumulo.core.dataImpl.thrift.TKeyExtent extent, org.apache.thrift.async.AsyncMethodCallback<Void> resultHandler) throws org.apache.thrift.TException {
       checkReady();
-      assignTabletWhenOnDemand_call method_call = new assignTabletWhenOnDemand_call(tinfo, credentials, extent, resultHandler, this, ___protocolFactory, ___transport);
+      bringOnDemandTabletOnline_call method_call = new bringOnDemandTabletOnline_call(tinfo, credentials, extent, resultHandler, this, ___protocolFactory, ___transport);
       this.___currentMethod = method_call;
       ___manager.call(method_call);
     }
 
-    public static class assignTabletWhenOnDemand_call extends org.apache.thrift.async.TAsyncMethodCall<Void> {
+    public static class bringOnDemandTabletOnline_call extends org.apache.thrift.async.TAsyncMethodCall<Void> {
       private org.apache.accumulo.core.clientImpl.thrift.TInfo tinfo;
       private org.apache.accumulo.core.securityImpl.thrift.TCredentials credentials;
       private org.apache.accumulo.core.dataImpl.thrift.TKeyExtent extent;
-      public assignTabletWhenOnDemand_call(org.apache.accumulo.core.clientImpl.thrift.TInfo tinfo, org.apache.accumulo.core.securityImpl.thrift.TCredentials credentials, org.apache.accumulo.core.dataImpl.thrift.TKeyExtent extent, org.apache.thrift.async.AsyncMethodCallback<Void> resultHandler, org.apache.thrift.async.TAsyncClient client, org.apache.thrift.protocol.TProtocolFactory protocolFactory, org.apache.thrift.transport.TNonblockingTransport transport) throws org.apache.thrift.TException {
+      public bringOnDemandTabletOnline_call(org.apache.accumulo.core.clientImpl.thrift.TInfo tinfo, org.apache.accumulo.core.securityImpl.thrift.TCredentials credentials, org.apache.accumulo.core.dataImpl.thrift.TKeyExtent extent, org.apache.thrift.async.AsyncMethodCallback<Void> resultHandler, org.apache.thrift.async.TAsyncClient client, org.apache.thrift.protocol.TProtocolFactory protocolFactory, org.apache.thrift.transport.TNonblockingTransport transport) throws org.apache.thrift.TException {
         super(client, protocolFactory, transport, resultHandler, false);
         this.tinfo = tinfo;
         this.credentials = credentials;
@@ -470,8 +470,8 @@ public class TabletManagementClientService {
 
       @Override
       public void write_args(org.apache.thrift.protocol.TProtocol prot) throws org.apache.thrift.TException {
-        prot.writeMessageBegin(new org.apache.thrift.protocol.TMessage("assignTabletWhenOnDemand", org.apache.thrift.protocol.TMessageType.CALL, 0));
-        assignTabletWhenOnDemand_args args = new assignTabletWhenOnDemand_args();
+        prot.writeMessageBegin(new org.apache.thrift.protocol.TMessage("bringOnDemandTabletOnline", org.apache.thrift.protocol.TMessageType.CALL, 0));
+        bringOnDemandTabletOnline_args args = new bringOnDemandTabletOnline_args();
         args.setTinfo(tinfo);
         args.setCredentials(credentials);
         args.setExtent(extent);
@@ -486,7 +486,7 @@ public class TabletManagementClientService {
         }
         org.apache.thrift.transport.TMemoryInputTransport memoryTransport = new org.apache.thrift.transport.TMemoryInputTransport(getFrameBuffer().array());
         org.apache.thrift.protocol.TProtocol prot = client.getProtocolFactory().getProtocol(memoryTransport);
-        (new Client(prot)).recv_assignTabletWhenOnDemand();
+        (new Client(prot)).recv_bringOnDemandTabletOnline();
         return null;
       }
     }
@@ -509,7 +509,7 @@ public class TabletManagementClientService {
       processMap.put("splitTablet", new splitTablet());
       processMap.put("flushTablet", new flushTablet());
       processMap.put("chop", new chop());
-      processMap.put("assignTabletWhenOnDemand", new assignTabletWhenOnDemand());
+      processMap.put("bringOnDemandTabletOnline", new bringOnDemandTabletOnline());
       return processMap;
     }
 
@@ -655,14 +655,14 @@ public class TabletManagementClientService {
       }
     }
 
-    public static class assignTabletWhenOnDemand<I extends Iface> extends org.apache.thrift.ProcessFunction<I, assignTabletWhenOnDemand_args> {
-      public assignTabletWhenOnDemand() {
-        super("assignTabletWhenOnDemand");
+    public static class bringOnDemandTabletOnline<I extends Iface> extends org.apache.thrift.ProcessFunction<I, bringOnDemandTabletOnline_args> {
+      public bringOnDemandTabletOnline() {
+        super("bringOnDemandTabletOnline");
       }
 
       @Override
-      public assignTabletWhenOnDemand_args getEmptyArgsInstance() {
-        return new assignTabletWhenOnDemand_args();
+      public bringOnDemandTabletOnline_args getEmptyArgsInstance() {
+        return new bringOnDemandTabletOnline_args();
       }
 
       @Override
@@ -676,10 +676,10 @@ public class TabletManagementClientService {
       }
 
       @Override
-      public assignTabletWhenOnDemand_result getResult(I iface, assignTabletWhenOnDemand_args args) throws org.apache.thrift.TException {
-        assignTabletWhenOnDemand_result result = new assignTabletWhenOnDemand_result();
+      public bringOnDemandTabletOnline_result getResult(I iface, bringOnDemandTabletOnline_args args) throws org.apache.thrift.TException {
+        bringOnDemandTabletOnline_result result = new bringOnDemandTabletOnline_result();
         try {
-          iface.assignTabletWhenOnDemand(args.tinfo, args.credentials, args.extent);
+          iface.bringOnDemandTabletOnline(args.tinfo, args.credentials, args.extent);
         } catch (org.apache.accumulo.core.clientImpl.thrift.ThriftSecurityException sec) {
           result.sec = sec;
         }
@@ -705,7 +705,7 @@ public class TabletManagementClientService {
       processMap.put("splitTablet", new splitTablet());
       processMap.put("flushTablet", new flushTablet());
       processMap.put("chop", new chop());
-      processMap.put("assignTabletWhenOnDemand", new assignTabletWhenOnDemand());
+      processMap.put("bringOnDemandTabletOnline", new bringOnDemandTabletOnline());
       return processMap;
     }
 
@@ -943,14 +943,14 @@ public class TabletManagementClientService {
       }
     }
 
-    public static class assignTabletWhenOnDemand<I extends AsyncIface> extends org.apache.thrift.AsyncProcessFunction<I, assignTabletWhenOnDemand_args, Void> {
-      public assignTabletWhenOnDemand() {
-        super("assignTabletWhenOnDemand");
+    public static class bringOnDemandTabletOnline<I extends AsyncIface> extends org.apache.thrift.AsyncProcessFunction<I, bringOnDemandTabletOnline_args, Void> {
+      public bringOnDemandTabletOnline() {
+        super("bringOnDemandTabletOnline");
       }
 
       @Override
-      public assignTabletWhenOnDemand_args getEmptyArgsInstance() {
-        return new assignTabletWhenOnDemand_args();
+      public bringOnDemandTabletOnline_args getEmptyArgsInstance() {
+        return new bringOnDemandTabletOnline_args();
       }
 
       @Override
@@ -959,7 +959,7 @@ public class TabletManagementClientService {
         return new org.apache.thrift.async.AsyncMethodCallback<Void>() { 
           @Override
           public void onComplete(Void o) {
-            assignTabletWhenOnDemand_result result = new assignTabletWhenOnDemand_result();
+            bringOnDemandTabletOnline_result result = new bringOnDemandTabletOnline_result();
             try {
               fcall.sendResponse(fb, result, org.apache.thrift.protocol.TMessageType.REPLY,seqid);
             } catch (org.apache.thrift.transport.TTransportException e) {
@@ -974,7 +974,7 @@ public class TabletManagementClientService {
           public void onError(java.lang.Exception e) {
             byte msgType = org.apache.thrift.protocol.TMessageType.REPLY;
             org.apache.thrift.TSerializable msg;
-            assignTabletWhenOnDemand_result result = new assignTabletWhenOnDemand_result();
+            bringOnDemandTabletOnline_result result = new bringOnDemandTabletOnline_result();
             if (e instanceof org.apache.accumulo.core.clientImpl.thrift.ThriftSecurityException) {
               result.sec = (org.apache.accumulo.core.clientImpl.thrift.ThriftSecurityException) e;
               result.setSecIsSet(true);
@@ -1008,8 +1008,8 @@ public class TabletManagementClientService {
       }
 
       @Override
-      public void start(I iface, assignTabletWhenOnDemand_args args, org.apache.thrift.async.AsyncMethodCallback<Void> resultHandler) throws org.apache.thrift.TException {
-        iface.assignTabletWhenOnDemand(args.tinfo, args.credentials, args.extent,resultHandler);
+      public void start(I iface, bringOnDemandTabletOnline_args args, org.apache.thrift.async.AsyncMethodCallback<Void> resultHandler) throws org.apache.thrift.TException {
+        iface.bringOnDemandTabletOnline(args.tinfo, args.credentials, args.extent,resultHandler);
       }
     }
 
@@ -5282,15 +5282,15 @@ public class TabletManagementClientService {
   }
 
   @SuppressWarnings({"cast", "rawtypes", "serial", "unchecked", "unused"})
-  public static class assignTabletWhenOnDemand_args implements org.apache.thrift.TBase<assignTabletWhenOnDemand_args, assignTabletWhenOnDemand_args._Fields>, java.io.Serializable, Cloneable, Comparable<assignTabletWhenOnDemand_args>   {
-    private static final org.apache.thrift.protocol.TStruct STRUCT_DESC = new org.apache.thrift.protocol.TStruct("assignTabletWhenOnDemand_args");
+  public static class bringOnDemandTabletOnline_args implements org.apache.thrift.TBase<bringOnDemandTabletOnline_args, bringOnDemandTabletOnline_args._Fields>, java.io.Serializable, Cloneable, Comparable<bringOnDemandTabletOnline_args>   {
+    private static final org.apache.thrift.protocol.TStruct STRUCT_DESC = new org.apache.thrift.protocol.TStruct("bringOnDemandTabletOnline_args");
 
     private static final org.apache.thrift.protocol.TField TINFO_FIELD_DESC = new org.apache.thrift.protocol.TField("tinfo", org.apache.thrift.protocol.TType.STRUCT, (short)1);
     private static final org.apache.thrift.protocol.TField CREDENTIALS_FIELD_DESC = new org.apache.thrift.protocol.TField("credentials", org.apache.thrift.protocol.TType.STRUCT, (short)2);
     private static final org.apache.thrift.protocol.TField EXTENT_FIELD_DESC = new org.apache.thrift.protocol.TField("extent", org.apache.thrift.protocol.TType.STRUCT, (short)3);
 
-    private static final org.apache.thrift.scheme.SchemeFactory STANDARD_SCHEME_FACTORY = new assignTabletWhenOnDemand_argsStandardSchemeFactory();
-    private static final org.apache.thrift.scheme.SchemeFactory TUPLE_SCHEME_FACTORY = new assignTabletWhenOnDemand_argsTupleSchemeFactory();
+    private static final org.apache.thrift.scheme.SchemeFactory STANDARD_SCHEME_FACTORY = new bringOnDemandTabletOnline_argsStandardSchemeFactory();
+    private static final org.apache.thrift.scheme.SchemeFactory TUPLE_SCHEME_FACTORY = new bringOnDemandTabletOnline_argsTupleSchemeFactory();
 
     public @org.apache.thrift.annotation.Nullable org.apache.accumulo.core.clientImpl.thrift.TInfo tinfo; // required
     public @org.apache.thrift.annotation.Nullable org.apache.accumulo.core.securityImpl.thrift.TCredentials credentials; // required
@@ -5375,13 +5375,13 @@ public class TabletManagementClientService {
       tmpMap.put(_Fields.EXTENT, new org.apache.thrift.meta_data.FieldMetaData("extent", org.apache.thrift.TFieldRequirementType.DEFAULT, 
           new org.apache.thrift.meta_data.StructMetaData(org.apache.thrift.protocol.TType.STRUCT, org.apache.accumulo.core.dataImpl.thrift.TKeyExtent.class)));
       metaDataMap = java.util.Collections.unmodifiableMap(tmpMap);
-      org.apache.thrift.meta_data.FieldMetaData.addStructMetaDataMap(assignTabletWhenOnDemand_args.class, metaDataMap);
+      org.apache.thrift.meta_data.FieldMetaData.addStructMetaDataMap(bringOnDemandTabletOnline_args.class, metaDataMap);
     }
 
-    public assignTabletWhenOnDemand_args() {
+    public bringOnDemandTabletOnline_args() {
     }
 
-    public assignTabletWhenOnDemand_args(
+    public bringOnDemandTabletOnline_args(
       org.apache.accumulo.core.clientImpl.thrift.TInfo tinfo,
       org.apache.accumulo.core.securityImpl.thrift.TCredentials credentials,
       org.apache.accumulo.core.dataImpl.thrift.TKeyExtent extent)
@@ -5395,7 +5395,7 @@ public class TabletManagementClientService {
     /**
      * Performs a deep copy on <i>other</i>.
      */
-    public assignTabletWhenOnDemand_args(assignTabletWhenOnDemand_args other) {
+    public bringOnDemandTabletOnline_args(bringOnDemandTabletOnline_args other) {
       if (other.isSetTinfo()) {
         this.tinfo = new org.apache.accumulo.core.clientImpl.thrift.TInfo(other.tinfo);
       }
@@ -5408,8 +5408,8 @@ public class TabletManagementClientService {
     }
 
     @Override
-    public assignTabletWhenOnDemand_args deepCopy() {
-      return new assignTabletWhenOnDemand_args(this);
+    public bringOnDemandTabletOnline_args deepCopy() {
+      return new bringOnDemandTabletOnline_args(this);
     }
 
     @Override
@@ -5424,7 +5424,7 @@ public class TabletManagementClientService {
       return this.tinfo;
     }
 
-    public assignTabletWhenOnDemand_args setTinfo(@org.apache.thrift.annotation.Nullable org.apache.accumulo.core.clientImpl.thrift.TInfo tinfo) {
+    public bringOnDemandTabletOnline_args setTinfo(@org.apache.thrift.annotation.Nullable org.apache.accumulo.core.clientImpl.thrift.TInfo tinfo) {
       this.tinfo = tinfo;
       return this;
     }
@@ -5449,7 +5449,7 @@ public class TabletManagementClientService {
       return this.credentials;
     }
 
-    public assignTabletWhenOnDemand_args setCredentials(@org.apache.thrift.annotation.Nullable org.apache.accumulo.core.securityImpl.thrift.TCredentials credentials) {
+    public bringOnDemandTabletOnline_args setCredentials(@org.apache.thrift.annotation.Nullable org.apache.accumulo.core.securityImpl.thrift.TCredentials credentials) {
       this.credentials = credentials;
       return this;
     }
@@ -5474,7 +5474,7 @@ public class TabletManagementClientService {
       return this.extent;
     }
 
-    public assignTabletWhenOnDemand_args setExtent(@org.apache.thrift.annotation.Nullable org.apache.accumulo.core.dataImpl.thrift.TKeyExtent extent) {
+    public bringOnDemandTabletOnline_args setExtent(@org.apache.thrift.annotation.Nullable org.apache.accumulo.core.dataImpl.thrift.TKeyExtent extent) {
       this.extent = extent;
       return this;
     }
@@ -5561,12 +5561,12 @@ public class TabletManagementClientService {
 
     @Override
     public boolean equals(java.lang.Object that) {
-      if (that instanceof assignTabletWhenOnDemand_args)
-        return this.equals((assignTabletWhenOnDemand_args)that);
+      if (that instanceof bringOnDemandTabletOnline_args)
+        return this.equals((bringOnDemandTabletOnline_args)that);
       return false;
     }
 
-    public boolean equals(assignTabletWhenOnDemand_args that) {
+    public boolean equals(bringOnDemandTabletOnline_args that) {
       if (that == null)
         return false;
       if (this == that)
@@ -5622,7 +5622,7 @@ public class TabletManagementClientService {
     }
 
     @Override
-    public int compareTo(assignTabletWhenOnDemand_args other) {
+    public int compareTo(bringOnDemandTabletOnline_args other) {
       if (!getClass().equals(other.getClass())) {
         return getClass().getName().compareTo(other.getClass().getName());
       }
@@ -5680,7 +5680,7 @@ public class TabletManagementClientService {
 
     @Override
     public java.lang.String toString() {
-      java.lang.StringBuilder sb = new java.lang.StringBuilder("assignTabletWhenOnDemand_args(");
+      java.lang.StringBuilder sb = new java.lang.StringBuilder("bringOnDemandTabletOnline_args(");
       boolean first = true;
 
       sb.append("tinfo:");
@@ -5740,17 +5740,17 @@ public class TabletManagementClientService {
       }
     }
 
-    private static class assignTabletWhenOnDemand_argsStandardSchemeFactory implements org.apache.thrift.scheme.SchemeFactory {
+    private static class bringOnDemandTabletOnline_argsStandardSchemeFactory implements org.apache.thrift.scheme.SchemeFactory {
       @Override
-      public assignTabletWhenOnDemand_argsStandardScheme getScheme() {
-        return new assignTabletWhenOnDemand_argsStandardScheme();
+      public bringOnDemandTabletOnline_argsStandardScheme getScheme() {
+        return new bringOnDemandTabletOnline_argsStandardScheme();
       }
     }
 
-    private static class assignTabletWhenOnDemand_argsStandardScheme extends org.apache.thrift.scheme.StandardScheme<assignTabletWhenOnDemand_args> {
+    private static class bringOnDemandTabletOnline_argsStandardScheme extends org.apache.thrift.scheme.StandardScheme<bringOnDemandTabletOnline_args> {
 
       @Override
-      public void read(org.apache.thrift.protocol.TProtocol iprot, assignTabletWhenOnDemand_args struct) throws org.apache.thrift.TException {
+      public void read(org.apache.thrift.protocol.TProtocol iprot, bringOnDemandTabletOnline_args struct) throws org.apache.thrift.TException {
         org.apache.thrift.protocol.TField schemeField;
         iprot.readStructBegin();
         while (true)
@@ -5799,7 +5799,7 @@ public class TabletManagementClientService {
       }
 
       @Override
-      public void write(org.apache.thrift.protocol.TProtocol oprot, assignTabletWhenOnDemand_args struct) throws org.apache.thrift.TException {
+      public void write(org.apache.thrift.protocol.TProtocol oprot, bringOnDemandTabletOnline_args struct) throws org.apache.thrift.TException {
         struct.validate();
 
         oprot.writeStructBegin(STRUCT_DESC);
@@ -5824,17 +5824,17 @@ public class TabletManagementClientService {
 
     }
 
-    private static class assignTabletWhenOnDemand_argsTupleSchemeFactory implements org.apache.thrift.scheme.SchemeFactory {
+    private static class bringOnDemandTabletOnline_argsTupleSchemeFactory implements org.apache.thrift.scheme.SchemeFactory {
       @Override
-      public assignTabletWhenOnDemand_argsTupleScheme getScheme() {
-        return new assignTabletWhenOnDemand_argsTupleScheme();
+      public bringOnDemandTabletOnline_argsTupleScheme getScheme() {
+        return new bringOnDemandTabletOnline_argsTupleScheme();
       }
     }
 
-    private static class assignTabletWhenOnDemand_argsTupleScheme extends org.apache.thrift.scheme.TupleScheme<assignTabletWhenOnDemand_args> {
+    private static class bringOnDemandTabletOnline_argsTupleScheme extends org.apache.thrift.scheme.TupleScheme<bringOnDemandTabletOnline_args> {
 
       @Override
-      public void write(org.apache.thrift.protocol.TProtocol prot, assignTabletWhenOnDemand_args struct) throws org.apache.thrift.TException {
+      public void write(org.apache.thrift.protocol.TProtocol prot, bringOnDemandTabletOnline_args struct) throws org.apache.thrift.TException {
         org.apache.thrift.protocol.TTupleProtocol oprot = (org.apache.thrift.protocol.TTupleProtocol) prot;
         java.util.BitSet optionals = new java.util.BitSet();
         if (struct.isSetTinfo()) {
@@ -5859,7 +5859,7 @@ public class TabletManagementClientService {
       }
 
       @Override
-      public void read(org.apache.thrift.protocol.TProtocol prot, assignTabletWhenOnDemand_args struct) throws org.apache.thrift.TException {
+      public void read(org.apache.thrift.protocol.TProtocol prot, bringOnDemandTabletOnline_args struct) throws org.apache.thrift.TException {
         org.apache.thrift.protocol.TTupleProtocol iprot = (org.apache.thrift.protocol.TTupleProtocol) prot;
         java.util.BitSet incoming = iprot.readBitSet(3);
         if (incoming.get(0)) {
@@ -5886,13 +5886,13 @@ public class TabletManagementClientService {
   }
 
   @SuppressWarnings({"cast", "rawtypes", "serial", "unchecked", "unused"})
-  public static class assignTabletWhenOnDemand_result implements org.apache.thrift.TBase<assignTabletWhenOnDemand_result, assignTabletWhenOnDemand_result._Fields>, java.io.Serializable, Cloneable, Comparable<assignTabletWhenOnDemand_result>   {
-    private static final org.apache.thrift.protocol.TStruct STRUCT_DESC = new org.apache.thrift.protocol.TStruct("assignTabletWhenOnDemand_result");
+  public static class bringOnDemandTabletOnline_result implements org.apache.thrift.TBase<bringOnDemandTabletOnline_result, bringOnDemandTabletOnline_result._Fields>, java.io.Serializable, Cloneable, Comparable<bringOnDemandTabletOnline_result>   {
+    private static final org.apache.thrift.protocol.TStruct STRUCT_DESC = new org.apache.thrift.protocol.TStruct("bringOnDemandTabletOnline_result");
 
     private static final org.apache.thrift.protocol.TField SEC_FIELD_DESC = new org.apache.thrift.protocol.TField("sec", org.apache.thrift.protocol.TType.STRUCT, (short)1);
 
-    private static final org.apache.thrift.scheme.SchemeFactory STANDARD_SCHEME_FACTORY = new assignTabletWhenOnDemand_resultStandardSchemeFactory();
-    private static final org.apache.thrift.scheme.SchemeFactory TUPLE_SCHEME_FACTORY = new assignTabletWhenOnDemand_resultTupleSchemeFactory();
+    private static final org.apache.thrift.scheme.SchemeFactory STANDARD_SCHEME_FACTORY = new bringOnDemandTabletOnline_resultStandardSchemeFactory();
+    private static final org.apache.thrift.scheme.SchemeFactory TUPLE_SCHEME_FACTORY = new bringOnDemandTabletOnline_resultTupleSchemeFactory();
 
     public @org.apache.thrift.annotation.Nullable org.apache.accumulo.core.clientImpl.thrift.ThriftSecurityException sec; // required
 
@@ -5965,13 +5965,13 @@ public class TabletManagementClientService {
       tmpMap.put(_Fields.SEC, new org.apache.thrift.meta_data.FieldMetaData("sec", org.apache.thrift.TFieldRequirementType.DEFAULT, 
           new org.apache.thrift.meta_data.StructMetaData(org.apache.thrift.protocol.TType.STRUCT, org.apache.accumulo.core.clientImpl.thrift.ThriftSecurityException.class)));
       metaDataMap = java.util.Collections.unmodifiableMap(tmpMap);
-      org.apache.thrift.meta_data.FieldMetaData.addStructMetaDataMap(assignTabletWhenOnDemand_result.class, metaDataMap);
+      org.apache.thrift.meta_data.FieldMetaData.addStructMetaDataMap(bringOnDemandTabletOnline_result.class, metaDataMap);
     }
 
-    public assignTabletWhenOnDemand_result() {
+    public bringOnDemandTabletOnline_result() {
     }
 
-    public assignTabletWhenOnDemand_result(
+    public bringOnDemandTabletOnline_result(
       org.apache.accumulo.core.clientImpl.thrift.ThriftSecurityException sec)
     {
       this();
@@ -5981,15 +5981,15 @@ public class TabletManagementClientService {
     /**
      * Performs a deep copy on <i>other</i>.
      */
-    public assignTabletWhenOnDemand_result(assignTabletWhenOnDemand_result other) {
+    public bringOnDemandTabletOnline_result(bringOnDemandTabletOnline_result other) {
       if (other.isSetSec()) {
         this.sec = new org.apache.accumulo.core.clientImpl.thrift.ThriftSecurityException(other.sec);
       }
     }
 
     @Override
-    public assignTabletWhenOnDemand_result deepCopy() {
-      return new assignTabletWhenOnDemand_result(this);
+    public bringOnDemandTabletOnline_result deepCopy() {
+      return new bringOnDemandTabletOnline_result(this);
     }
 
     @Override
@@ -6002,7 +6002,7 @@ public class TabletManagementClientService {
       return this.sec;
     }
 
-    public assignTabletWhenOnDemand_result setSec(@org.apache.thrift.annotation.Nullable org.apache.accumulo.core.clientImpl.thrift.ThriftSecurityException sec) {
+    public bringOnDemandTabletOnline_result setSec(@org.apache.thrift.annotation.Nullable org.apache.accumulo.core.clientImpl.thrift.ThriftSecurityException sec) {
       this.sec = sec;
       return this;
     }
@@ -6063,12 +6063,12 @@ public class TabletManagementClientService {
 
     @Override
     public boolean equals(java.lang.Object that) {
-      if (that instanceof assignTabletWhenOnDemand_result)
-        return this.equals((assignTabletWhenOnDemand_result)that);
+      if (that instanceof bringOnDemandTabletOnline_result)
+        return this.equals((bringOnDemandTabletOnline_result)that);
       return false;
     }
 
-    public boolean equals(assignTabletWhenOnDemand_result that) {
+    public boolean equals(bringOnDemandTabletOnline_result that) {
       if (that == null)
         return false;
       if (this == that)
@@ -6098,7 +6098,7 @@ public class TabletManagementClientService {
     }
 
     @Override
-    public int compareTo(assignTabletWhenOnDemand_result other) {
+    public int compareTo(bringOnDemandTabletOnline_result other) {
       if (!getClass().equals(other.getClass())) {
         return getClass().getName().compareTo(other.getClass().getName());
       }
@@ -6135,7 +6135,7 @@ public class TabletManagementClientService {
 
     @Override
     public java.lang.String toString() {
-      java.lang.StringBuilder sb = new java.lang.StringBuilder("assignTabletWhenOnDemand_result(");
+      java.lang.StringBuilder sb = new java.lang.StringBuilder("bringOnDemandTabletOnline_result(");
       boolean first = true;
 
       sb.append("sec:");
@@ -6170,17 +6170,17 @@ public class TabletManagementClientService {
       }
     }
 
-    private static class assignTabletWhenOnDemand_resultStandardSchemeFactory implements org.apache.thrift.scheme.SchemeFactory {
+    private static class bringOnDemandTabletOnline_resultStandardSchemeFactory implements org.apache.thrift.scheme.SchemeFactory {
       @Override
-      public assignTabletWhenOnDemand_resultStandardScheme getScheme() {
-        return new assignTabletWhenOnDemand_resultStandardScheme();
+      public bringOnDemandTabletOnline_resultStandardScheme getScheme() {
+        return new bringOnDemandTabletOnline_resultStandardScheme();
       }
     }
 
-    private static class assignTabletWhenOnDemand_resultStandardScheme extends org.apache.thrift.scheme.StandardScheme<assignTabletWhenOnDemand_result> {
+    private static class bringOnDemandTabletOnline_resultStandardScheme extends org.apache.thrift.scheme.StandardScheme<bringOnDemandTabletOnline_result> {
 
       @Override
-      public void read(org.apache.thrift.protocol.TProtocol iprot, assignTabletWhenOnDemand_result struct) throws org.apache.thrift.TException {
+      public void read(org.apache.thrift.protocol.TProtocol iprot, bringOnDemandTabletOnline_result struct) throws org.apache.thrift.TException {
         org.apache.thrift.protocol.TField schemeField;
         iprot.readStructBegin();
         while (true)
@@ -6211,7 +6211,7 @@ public class TabletManagementClientService {
       }
 
       @Override
-      public void write(org.apache.thrift.protocol.TProtocol oprot, assignTabletWhenOnDemand_result struct) throws org.apache.thrift.TException {
+      public void write(org.apache.thrift.protocol.TProtocol oprot, bringOnDemandTabletOnline_result struct) throws org.apache.thrift.TException {
         struct.validate();
 
         oprot.writeStructBegin(STRUCT_DESC);
@@ -6226,17 +6226,17 @@ public class TabletManagementClientService {
 
     }
 
-    private static class assignTabletWhenOnDemand_resultTupleSchemeFactory implements org.apache.thrift.scheme.SchemeFactory {
+    private static class bringOnDemandTabletOnline_resultTupleSchemeFactory implements org.apache.thrift.scheme.SchemeFactory {
       @Override
-      public assignTabletWhenOnDemand_resultTupleScheme getScheme() {
-        return new assignTabletWhenOnDemand_resultTupleScheme();
+      public bringOnDemandTabletOnline_resultTupleScheme getScheme() {
+        return new bringOnDemandTabletOnline_resultTupleScheme();
       }
     }
 
-    private static class assignTabletWhenOnDemand_resultTupleScheme extends org.apache.thrift.scheme.TupleScheme<assignTabletWhenOnDemand_result> {
+    private static class bringOnDemandTabletOnline_resultTupleScheme extends org.apache.thrift.scheme.TupleScheme<bringOnDemandTabletOnline_result> {
 
       @Override
-      public void write(org.apache.thrift.protocol.TProtocol prot, assignTabletWhenOnDemand_result struct) throws org.apache.thrift.TException {
+      public void write(org.apache.thrift.protocol.TProtocol prot, bringOnDemandTabletOnline_result struct) throws org.apache.thrift.TException {
         org.apache.thrift.protocol.TTupleProtocol oprot = (org.apache.thrift.protocol.TTupleProtocol) prot;
         java.util.BitSet optionals = new java.util.BitSet();
         if (struct.isSetSec()) {
@@ -6249,7 +6249,7 @@ public class TabletManagementClientService {
       }
 
       @Override
-      public void read(org.apache.thrift.protocol.TProtocol prot, assignTabletWhenOnDemand_result struct) throws org.apache.thrift.TException {
+      public void read(org.apache.thrift.protocol.TProtocol prot, bringOnDemandTabletOnline_result struct) throws org.apache.thrift.TException {
         org.apache.thrift.protocol.TTupleProtocol iprot = (org.apache.thrift.protocol.TTupleProtocol) prot;
         java.util.BitSet incoming = iprot.readBitSet(1);
         if (incoming.get(0)) {

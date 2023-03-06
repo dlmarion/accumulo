@@ -304,7 +304,7 @@ public class NullTserver {
         String externalCompactionId, TKeyExtent extent) throws TException {}
 
     @Override
-    public void assignTabletWhenOnDemand(TInfo tinfo, TCredentials credentials, TKeyExtent extent)
+    public void bringOnDemandTabletOnline(TInfo tinfo, TCredentials credentials, TKeyExtent extent)
         throws ThriftSecurityException, TException {}
 
   }

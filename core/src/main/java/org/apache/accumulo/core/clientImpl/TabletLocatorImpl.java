@@ -47,6 +47,8 @@ import org.apache.accumulo.core.data.PartialKey;
 import org.apache.accumulo.core.data.Range;
 import org.apache.accumulo.core.data.TableId;
 import org.apache.accumulo.core.dataImpl.KeyExtent;
+import org.apache.accumulo.core.metadata.schema.TabletMetadata;
+import org.apache.accumulo.core.metadata.schema.TabletsMetadata;
 import org.apache.accumulo.core.rpc.clients.ThriftClientTypes;
 import org.apache.accumulo.core.trace.TraceUtil;
 import org.apache.accumulo.core.util.OpTimer;
@@ -225,6 +227,9 @@ public class TabletLocatorImpl extends TabletLocator {
           TabletLocation tl = _locateTablet(context, row, false, false, false, lcSession);
 
           if (tl == null || !addMutation(binnedMutations, mutation, tl, lcSession)) {
+            if (context.tableOperations().isOnDemand(context.getTableName(tableId))) {
+              bringOnDemandTabletsOnline(context, List.of(new Range(row)));
+            }
             failures.add(mutation);
             failed = true;
           }
@@ -316,6 +321,9 @@ public class TabletLocatorImpl extends TabletLocator {
       }
 
       if (tl == null) {
+        if (context.tableOperations().isOnDemand(context.getTableName(tableId))) {
+          bringOnDemandTabletsOnline(context, ranges);
+        }
         failures.add(range);
         if (!useCache) {
           lookupFailed = true;
@@ -501,10 +509,24 @@ public class TabletLocatorImpl extends TabletLocator {
       timer = new OpTimer().start();
     }
 
+    boolean alreadyMarkedOnDemand = false;
     while (true) {
 
       LockCheckerSession lcSession = new LockCheckerSession();
       TabletLocation tl = _locateTablet(context, row, skipRow, retry, true, lcSession);
+
+      if (tl == null) {
+        final boolean isOnDemand =
+            context.tableOperations().isOnDemand(context.getTableName(tableId));
+        if (isOnDemand) {
+          if (!alreadyMarkedOnDemand) {
+            bringOnDemandTabletsOnline(context, List.of(new Range(row)));
+            alreadyMarkedOnDemand = true;
+          }
+          // continue to wait for onDemand tablet to be hosted.
+          continue;
+        }
+      }
 
       if (retry && tl == null) {
         sleepUninterruptibly(100, MILLISECONDS);
@@ -526,11 +548,28 @@ public class TabletLocatorImpl extends TabletLocator {
     }
   }
 
-  private void bringOnDemandTabletsOnline(ClientContext context, List<KeyExtent> locationless)
-      throws AccumuloException, AccumuloSecurityException {
-    for (KeyExtent ke : locationless) {
-      ThriftClientTypes.TABLET_MGMT.executeVoid(context, client -> client
-          .assignTabletWhenOnDemand(TraceUtil.traceInfo(), context.rpcCreds(), ke.toThrift()));
+  private void bringOnDemandTabletsOnline(ClientContext context, List<Range> ranges)
+      throws AccumuloException, AccumuloSecurityException, TableNotFoundException {
+    log.debug("Bringing tablets online for ranges: {}", ranges);
+    for (Range range : ranges) {
+      Text startRow = range.getStartKey().getRow();
+      Text metadataStartRow = new Text(tableId.canonical());
+      metadataStartRow.append(new byte[] {';'}, 0, 1);
+      metadataStartRow.append(startRow.getBytes(), 0, startRow.getLength());
+
+      Text endRow = range.getEndKey().getRow();
+      Text metadataEndRow = new Text(tableId.canonical());
+      metadataEndRow.append(new byte[] {';'}, 0, 1);
+      metadataEndRow.append(endRow.getBytes(), 0, endRow.getLength());
+
+      TabletsMetadata m = context.getAmple().readTablets().forTable(tableId)
+          .overlapping(metadataStartRow, true, metadataEndRow).build();
+      for (TabletMetadata tm : m) {
+        log.debug("Marking tablet as onDemand for extent: {}", tm.getExtent());
+        ThriftClientTypes.TABLET_MGMT.executeVoid(context,
+            client -> client.bringOnDemandTabletOnline(TraceUtil.traceInfo(), context.rpcCreds(),
+                tm.getExtent().toThrift()));
+      }
     }
   }
 
@@ -543,13 +582,8 @@ public class TabletLocatorImpl extends TabletLocator {
     TabletLocation ptl = parent.locateTablet(context, metadataRow, false, retry);
 
     if (ptl != null) {
-      final boolean isOnDemand =
-          context.tableOperations().isOnDemand(context.getTableName(tableId));
       TabletLocations locations =
           locationObtainer.lookupTablet(context, ptl, metadataRow, lastTabletRow, parent);
-      if (isOnDemand && locations != null) {
-        bringOnDemandTabletsOnline(context, locations.getLocationless());
-      }
       while (locations != null && locations.getLocations().isEmpty()
           && locations.getLocationless().isEmpty()) {
         // try the next tablet, the current tablet does not have any tablets that overlap the row
@@ -560,9 +594,6 @@ public class TabletLocatorImpl extends TabletLocator {
           if (ptl != null) {
             locations =
                 locationObtainer.lookupTablet(context, ptl, metadataRow, lastTabletRow, parent);
-            if (isOnDemand && locations != null) {
-              bringOnDemandTabletsOnline(context, locations.getLocationless());
-            }
           } else {
             break;
           }

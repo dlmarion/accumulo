@@ -1557,18 +1557,6 @@ public class TableOperationsImpl extends TableOperationsHelper {
     }
   }
 
-  public void onDemand(KeyExtent extent)
-      throws AccumuloSecurityException, AccumuloException, TableNotFoundException {
-    final TableId tid = extent.tableId();
-    final String tableName = context.getTableName(tid);
-    EXISTING_TABLE_NAME.validate(tableName);
-
-    if (!isOnDemand(tableName)) {
-      throw new AccumuloException("Table " + tableName + " is not offline");
-    }
-
-  }
-
   @Override
   public void clearLocatorCache(String tableName) throws TableNotFoundException {
     EXISTING_TABLE_NAME.validate(tableName);

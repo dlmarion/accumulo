@@ -250,13 +250,13 @@ public abstract class TabletMutatorBase implements Ample.TabletMutator {
   }
 
   @Override
-  public TabletMutator putAssignWhenOnDemand() {
+  public TabletMutator putOnDemand() {
     mutation.put(OnDemandAssignmentStateColumnFamily.STR_NAME, "", "");
     return this;
   }
 
   @Override
-  public TabletMutator deleteAssignWhenOnDemand() {
+  public TabletMutator deleteOnDemand() {
     mutation.putDelete(OnDemandAssignmentStateColumnFamily.STR_NAME, "");
     return this;
   }

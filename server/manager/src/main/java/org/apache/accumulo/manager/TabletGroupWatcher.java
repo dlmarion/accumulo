@@ -98,6 +98,8 @@ import org.apache.accumulo.server.util.MetadataTableUtil;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Text;
 import org.apache.thrift.TException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Iterators;
@@ -105,6 +107,7 @@ import com.google.common.collect.Iterators;
 abstract class TabletGroupWatcher extends AccumuloDaemonThread {
   // Constants used to make sure assignment logging isn't excessive in quantity or size
 
+  private static final Logger LOG = LoggerFactory.getLogger(TabletGroupWatcher.class);
   private final Manager manager;
   private final TabletStateStore store;
   private final TabletGroupWatcher dependentWatcher;
@@ -240,6 +243,7 @@ abstract class TabletGroupWatcher extends AccumuloDaemonThread {
             return mStats != null ? mStats : new MergeStats(new MergeInfo());
           });
           TabletGoalState goal = manager.getGoalState(tls, mergeStats.getMergeInfo());
+          LOG.debug("({}) tablet goal state = {} for tablet: {}", store.name(), goal, tls);
           TServerInstance location = tls.getLocation();
           TabletState state = tls.getState(currentTServers.keySet());
 

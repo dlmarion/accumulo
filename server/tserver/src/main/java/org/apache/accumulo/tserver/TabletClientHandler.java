@@ -75,6 +75,7 @@ import org.apache.accumulo.core.fate.zookeeper.ZooUtil;
 import org.apache.accumulo.core.iteratorsImpl.system.IterationInterruptedException;
 import org.apache.accumulo.core.lock.ServiceLock;
 import org.apache.accumulo.core.logging.TabletLogger;
+import org.apache.accumulo.core.manager.thrift.FateOperation;
 import org.apache.accumulo.core.master.thrift.BulkImportState;
 import org.apache.accumulo.core.master.thrift.TabletServerStatus;
 import org.apache.accumulo.core.metadata.MetadataTable;
@@ -1557,16 +1558,17 @@ public class TabletClientHandler implements TabletServerClientService.Iface,
   }
 
   @Override
-  public void assignTabletWhenOnDemand(TInfo tinfo, TCredentials credentials, TKeyExtent tkeyExtent)
-      throws ThriftSecurityException, TException {
+  public void bringOnDemandTabletOnline(TInfo tinfo, TCredentials credentials,
+      TKeyExtent tkeyExtent) throws ThriftSecurityException, TException {
     final TableId tableId = TableId.of(new String(tkeyExtent.getTable(), UTF_8));
     NamespaceId namespaceId = getNamespaceId(credentials, tableId);
-    if (!security.canWrite(credentials, tableId, namespaceId)) {
+    if (!security.canChangeTableState(credentials, tableId, FateOperation.TABLE_ONDEMAND,
+        namespaceId)) {
       throw new ThriftSecurityException(credentials.getPrincipal(),
           SecurityErrorCode.PERMISSION_DENIED);
     }
     final KeyExtent keyExtent = KeyExtent.fromThrift(tkeyExtent);
-    this.context.getAmple().mutateTablet(keyExtent).putAssignWhenOnDemand().mutate();
+    this.context.getAmple().mutateTablet(keyExtent).putOnDemand().mutate();
   }
 
 }

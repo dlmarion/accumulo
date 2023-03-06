@@ -172,6 +172,7 @@ public class TabletStateChangeIterator extends SkippingIterator {
       TabletLocationState tls;
       try {
         tls = MetaDataTableScanner.createTabletLocationState(k, v);
+        log.debug("TabletLocationState: {}", tls);
         if (tls == null) {
           return;
         }
@@ -210,7 +211,7 @@ public class TabletStateChangeIterator extends SkippingIterator {
           return;
         case SUSPENDED:
         case UNASSIGNED:
-          if (shouldBeOnline) {
+          if (shouldBeOnline || tls.ondemand) {
             return;
           }
           break;

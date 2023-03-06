@@ -108,7 +108,7 @@ public class TabletMetadata {
   private Double splitRatio = null;
   private Map<ExternalCompactionId,ExternalCompactionMetadata> extCompactions;
   private boolean chopped = false;
-  private boolean assignWhenOnDemand = false;
+  private boolean onDemand = false;
 
   public enum LocationType {
     CURRENT, FUTURE, LAST
@@ -132,7 +132,7 @@ public class TabletMetadata {
     SUSPEND,
     CHOPPED,
     ECOMP,
-    ASSIGN_WHEN_ON_DEMAND
+    ON_DEMAND
   }
 
   public static class Location extends TServerInstance {
@@ -275,9 +275,9 @@ public class TabletMetadata {
     return chopped;
   }
 
-  public boolean getAssignWhenOnDemand() {
-    ensureFetched(ColumnType.ASSIGN_WHEN_ON_DEMAND);
-    return assignWhenOnDemand;
+  public boolean getOnDemand() {
+    ensureFetched(ColumnType.ON_DEMAND);
+    return onDemand;
   }
 
   public SortedMap<Key,Value> getKeyValues() {
@@ -289,7 +289,7 @@ public class TabletMetadata {
     ensureFetched(ColumnType.LOCATION);
     ensureFetched(ColumnType.LAST);
     ensureFetched(ColumnType.SUSPEND);
-    ensureFetched(ColumnType.ASSIGN_WHEN_ON_DEMAND);
+    ensureFetched(ColumnType.ON_DEMAND);
     try {
       TServerInstance current = null;
       TServerInstance future = null;
@@ -299,8 +299,8 @@ public class TabletMetadata {
         future = location;
       }
       // only care about the state so don't need walogs and chopped params
-      var tls = new TabletLocationState(extent, future, current, last, suspend, null, false,
-          assignWhenOnDemand);
+      var tls =
+          new TabletLocationState(extent, future, current, last, suspend, null, false, onDemand);
       return tls.getState(liveTServers);
     } catch (TabletLocationState.BadLocationStateException blse) {
       throw new IllegalArgumentException("Error creating TabletLocationState", blse);
@@ -420,7 +420,7 @@ public class TabletMetadata {
           te.chopped = true;
           break;
         case OnDemandAssignmentStateColumnFamily.STR_NAME:
-          te.assignWhenOnDemand = true;
+          te.onDemand = true;
           break;
         default:
           throw new IllegalStateException("Unexpected family " + fam);
