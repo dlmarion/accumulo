@@ -515,16 +515,12 @@ public class TabletLocatorImpl extends TabletLocator {
       LockCheckerSession lcSession = new LockCheckerSession();
       TabletLocation tl = _locateTablet(context, row, skipRow, retry, true, lcSession);
 
-      if (tl == null) {
+      if (tl == null && !alreadyMarkedOnDemand) {
         final boolean isOnDemand =
             context.tableOperations().isOnDemand(context.getTableName(tableId));
         if (isOnDemand) {
-          if (!alreadyMarkedOnDemand) {
-            bringOnDemandTabletsOnline(context, List.of(new Range(row)));
-            alreadyMarkedOnDemand = true;
-          }
-          // continue to wait for onDemand tablet to be hosted.
-          continue;
+          bringOnDemandTabletsOnline(context, List.of(new Range(row)));
+          alreadyMarkedOnDemand = true;
         }
       }
 
