@@ -35,6 +35,7 @@ import java.util.Map.Entry;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -48,6 +49,7 @@ import org.apache.accumulo.core.data.Range;
 import org.apache.accumulo.core.data.TableId;
 import org.apache.accumulo.core.dataImpl.KeyExtent;
 import org.apache.accumulo.core.metadata.schema.TabletMetadata;
+import org.apache.accumulo.core.metadata.schema.TabletMetadata.Location;
 import org.apache.accumulo.core.metadata.schema.TabletsMetadata;
 import org.apache.accumulo.core.rpc.clients.ThriftClientTypes;
 import org.apache.accumulo.core.trace.TraceUtil;
@@ -94,6 +96,7 @@ public class TabletLocatorImpl extends TabletLocator {
   private final ReentrantReadWriteLock rwLock = new ReentrantReadWriteLock();
   private final Lock rLock = rwLock.readLock();
   private final Lock wLock = rwLock.writeLock();
+  private final AtomicLong onDemandTabletsOnlinedCount = new AtomicLong(0);
 
   public interface TabletLocationObtainer {
     /**
@@ -228,7 +231,7 @@ public class TabletLocatorImpl extends TabletLocator {
 
           if (tl == null || !addMutation(binnedMutations, mutation, tl, lcSession)) {
             if (context.tableOperations().isOnDemand(context.getTableName(tableId))) {
-              bringOnDemandTabletsOnline(context, List.of(new Range(row)));
+              bringOnDemandTabletsOnline(context, new Range(row));
             }
             failures.add(mutation);
             failed = true;
@@ -322,7 +325,7 @@ public class TabletLocatorImpl extends TabletLocator {
 
       if (tl == null) {
         if (context.tableOperations().isOnDemand(context.getTableName(tableId))) {
-          bringOnDemandTabletsOnline(context, ranges);
+          bringOnDemandTabletsOnline(context, range);
         }
         failures.add(range);
         if (!useCache) {
@@ -492,6 +495,7 @@ public class TabletLocatorImpl extends TabletLocator {
     } finally {
       wLock.unlock();
     }
+    this.onDemandTabletsOnlinedCount.set(0);
     if (log.isTraceEnabled()) {
       log.trace("invalidated all {} cache entries for table={}", invalidatedCount, tableId);
     }
@@ -519,7 +523,7 @@ public class TabletLocatorImpl extends TabletLocator {
         final boolean isOnDemand =
             context.tableOperations().isOnDemand(context.getTableName(tableId));
         if (isOnDemand) {
-          bringOnDemandTabletsOnline(context, List.of(new Range(row)));
+          bringOnDemandTabletsOnline(context, new Range(row));
           alreadyMarkedOnDemand = true;
         }
       }
@@ -544,27 +548,49 @@ public class TabletLocatorImpl extends TabletLocator {
     }
   }
 
-  private void bringOnDemandTabletsOnline(ClientContext context, List<Range> ranges)
+  @Override
+  public long onDemandTabletsOnlined() {
+    return onDemandTabletsOnlinedCount.get();
+  }
+
+  private void bringOnDemandTabletsOnline(ClientContext context, Range range)
       throws AccumuloException, AccumuloSecurityException, TableNotFoundException {
-    log.debug("Bringing tablets online for ranges: {}", ranges);
-    for (Range range : ranges) {
-      Text startRow = range.getStartKey().getRow();
-      Text metadataStartRow = new Text(tableId.canonical());
-      metadataStartRow.append(new byte[] {';'}, 0, 1);
-      metadataStartRow.append(startRow.getBytes(), 0, startRow.getLength());
 
-      Text endRow = range.getEndKey().getRow();
-      Text metadataEndRow = new Text(tableId.canonical());
-      metadataEndRow.append(new byte[] {';'}, 0, 1);
-      metadataEndRow.append(endRow.getBytes(), 0, endRow.getLength());
+    final Text scanRangeStart = range.getStartKey().getRow();
+    final Text scanRangeEnd = range.getEndKey().getRow();
+    // Turn the scan range into a KeyExtent and bring online all ondemand tablets
+    // that are overlapped by the scan range
+    final KeyExtent scanRangeKE = new KeyExtent(tableId, scanRangeEnd, scanRangeStart);
 
-      TabletsMetadata m = context.getAmple().readTablets().forTable(tableId)
-          .overlapping(metadataStartRow, true, metadataEndRow).build();
-      for (TabletMetadata tm : m) {
-        log.debug("Marking tablet as onDemand for extent: {}", tm.getExtent());
-        ThriftClientTypes.TABLET_MGMT.executeVoid(context,
-            client -> client.bringOnDemandTabletOnline(TraceUtil.traceInfo(), context.rpcCreds(),
-                tm.getExtent().toThrift()));
+    TabletsMetadata m = context.getAmple().readTablets().forTable(tableId)
+        .overlapping(scanRangeStart, true, null).build();
+    for (TabletMetadata tm : m) {
+      final KeyExtent tabletExtent = tm.getExtent();
+      log.trace("Evaluating tablet {} against range {}", tabletExtent, scanRangeKE);
+      if (tm.getEndRow() != null && tm.getEndRow().compareTo(scanRangeStart) < 0) {
+        // the end row of this tablet is before the start row, skip it
+        log.trace("tablet {} is before scan start range: {}", tabletExtent, scanRangeStart);
+        continue;
+      }
+      if (tm.getPrevEndRow() != null && tm.getPrevEndRow().compareTo(scanRangeEnd) > 0) {
+        // the start row of this tablet is after the scan range end row, skip it
+        log.trace("tablet {} is after scan end range: {}", tabletExtent, scanRangeEnd);
+        continue;
+      }
+      if (scanRangeKE.overlaps(tabletExtent)) {
+        if (!tm.getOnDemand()) {
+          Location loc = tm.getLocation();
+          if (loc != null) {
+            log.debug("tablet {} has location of: {}:{}", loc.getType(), loc.getHostPort());
+          }
+          log.debug("Marking tablet as onDemand for extent: {}", tabletExtent);
+          ThriftClientTypes.TABLET_MGMT.executeVoid(context,
+              client -> client.bringOnDemandTabletOnline(TraceUtil.traceInfo(), context.rpcCreds(),
+                  tabletExtent.toThrift()));
+          onDemandTabletsOnlinedCount.incrementAndGet();
+        } else {
+          log.trace("Tablet {} already marked as onDemand, but not hosted yet", tabletExtent);
+        }
       }
     }
   }
