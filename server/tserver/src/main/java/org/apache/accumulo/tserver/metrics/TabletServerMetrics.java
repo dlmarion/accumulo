@@ -60,6 +60,10 @@ public class TabletServerMetrics implements MetricsProducer {
         .builder(METRICS_TSERVER_MINC_QUEUED, util,
             TabletServerMetricsUtil::getMinorCompactionsQueued)
         .description("Number of queued minor compactions").register(registry);
+    Gauge
+        .builder(METRICS_TSERVER_TABLETS_ONLINE_ONDEMAND, util,
+            TabletServerMetricsUtil::getOnDemandOnlineCount)
+        .description("Number of online ondemand tablets").register(registry);
     Gauge.builder(METRICS_TSERVER_TABLETS_ONLINE, util, TabletServerMetricsUtil::getOnlineCount)
         .description("Number of online tablets").register(registry);
     Gauge.builder(METRICS_TSERVER_TABLETS_OPENING, util, TabletServerMetricsUtil::getOpeningCount)

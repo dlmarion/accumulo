@@ -235,6 +235,7 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
   public static final AtomicLong seekCount = new AtomicLong(0);
 
   private final AtomicLong totalMinorCompactions = new AtomicLong(0);
+  private final AtomicInteger onDemandOnlineCount = new AtomicInteger(0);
 
   private final ZooAuthenticationKeyWatcher authKeyWatcher;
   private final WalStateManager walMarker;
@@ -1283,6 +1284,20 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
   @Override
   public BlockCacheConfiguration getBlockCacheConfiguration(AccumuloConfiguration acuConf) {
     return BlockCacheConfiguration.forTabletServer(acuConf);
+  }
+
+  public void incrementOnDemandOnlineCount(int numAdditions) {
+    onDemandOnlineCount.addAndGet(numAdditions);
+  }
+
+  public void decrementOnDemandOnlineCount(int numDeletions) {
+    onDemandOnlineCount.updateAndGet(currVal -> {
+      return Math.max(0, currVal - (-1 * numDeletions));
+    });
+  }
+
+  public int getOnDemandOnlineCount() {
+    return onDemandOnlineCount.get();
   }
 
 }

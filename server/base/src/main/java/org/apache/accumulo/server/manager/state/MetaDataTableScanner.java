@@ -154,7 +154,7 @@ public class MetaDataTableScanner implements ClosableIterator<TabletLocationStat
     long lastTimestamp = 0;
     List<Collection<String>> walogs = new ArrayList<>();
     boolean chopped = false;
-    boolean assignWhenOnDemand = false;
+    boolean onDemand = false;
 
     for (Entry<Key,Value> entry : decodedRow.entrySet()) {
 
@@ -191,7 +191,7 @@ public class MetaDataTableScanner implements ClosableIterator<TabletLocationStat
       } else if (SuspendLocationColumn.SUSPEND_COLUMN.equals(cf, cq)) {
         suspend = SuspendingTServer.fromValue(entry.getValue());
       } else if (cf.compareTo(OnDemandAssignmentStateColumnFamily.NAME) == 0) {
-        assignWhenOnDemand = true;
+        onDemand = true;
       }
     }
     if (extent == null) {
@@ -200,7 +200,7 @@ public class MetaDataTableScanner implements ClosableIterator<TabletLocationStat
       throw new BadLocationStateException(msg, k.getRow());
     }
     return new TabletLocationState(extent, future, current, last, suspend, walogs, chopped,
-        assignWhenOnDemand);
+        onDemand);
   }
 
 }

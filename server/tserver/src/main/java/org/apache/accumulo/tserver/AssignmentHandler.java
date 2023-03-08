@@ -191,6 +191,9 @@ class AssignmentHandler implements Runnable {
           server.recentlyUnloadedCache.remove(tablet.getExtent());
         }
       }
+      if (tabletMetadata.getOnDemand()) {
+        server.incrementOnDemandOnlineCount(1);
+      }
       tablet = null; // release this reference
       successful = true;
     } catch (Exception e) {
