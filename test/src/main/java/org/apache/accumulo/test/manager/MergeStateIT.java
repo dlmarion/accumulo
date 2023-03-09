@@ -99,6 +99,11 @@ public class MergeStateIT extends ConfigurableMacBase {
     public Set<TServerInstance> shutdownServers() {
       return Collections.emptySet();
     }
+
+    @Override
+    public Set<TableId> getOnDemandTables() {
+      return Collections.emptySet();
+    }
   }
 
   private static void update(AccumuloClient c, Mutation m)

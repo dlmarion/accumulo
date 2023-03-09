@@ -71,6 +71,11 @@ public class BalancerEnvironmentImpl extends ServiceEnvironmentImpl implements B
   }
 
   @Override
+  public boolean isTableOnDemand(TableId tableId) {
+    return TableState.ONDEMAND.equals(getContext().getTableState(tableId));
+  }
+
+  @Override
   public Map<TabletId,TabletServerId> listTabletLocations(TableId tableId) {
     Map<TabletId,TabletServerId> tablets = new LinkedHashMap<>();
     for (var tm : TabletsMetadata.builder(getContext()).forTable(tableId).fetch(LOCATION, PREV_ROW)

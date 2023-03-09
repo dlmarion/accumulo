@@ -135,4 +135,9 @@ public class TableLoadBalancer implements TabletBalancer {
     }
     return minBalanceTime;
   }
+
+  @Override
+  public void getOnlineOnDemandTabletUnloads(UnloadParameters params) {
+    // This balancer does not unload ondemand tablets
+  }
 }

@@ -53,6 +53,16 @@ public interface BalancerEnvironment extends ServiceEnvironment {
   boolean isTableOnline(TableId tableId);
 
   /**
+   * Accumulo plugins working with a table may need to know if the table is ondemand or not before
+   * operating on it.
+   *
+   * @param tableId The id of the table to check.
+   * @return {@code true} if the table is ondemand and {@code false} if not
+   * @since 3.1.0
+   */
+  boolean isTableOnDemand(TableId tableId);
+
+  /**
    * Fetch the locations for each of {@code tableId}'s tablets from the metadata table. If there is
    * no location available for a given tablet, then the returned mapping will have a {@code null}
    * value stored for the tablet id.

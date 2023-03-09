@@ -174,6 +174,11 @@ public class ChaoticLoadBalancer implements TabletBalancer {
     return 100;
   }
 
+  @Override
+  public void getOnlineOnDemandTabletUnloads(UnloadParameters params) {
+    // This balancer does not unload ondemand tablets
+  }
+
   protected List<TabletStatistics> getOnlineTabletsForTable(TabletServerId tabletServerId,
       TableId tableId) throws AccumuloException, AccumuloSecurityException {
     return environment.listOnlineTabletsForTable(tabletServerId, tableId);

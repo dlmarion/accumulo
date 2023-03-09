@@ -107,6 +107,7 @@ public class TabletStateChangeIteratorIT extends AccumuloClusterHarness {
       createTable(client, t2, false);
       createTable(client, t3, true);
       createTable(client, t4, false);
+      client.tableOperations().onDemand(t4, true); // t4 is an ondemand table
 
       // examine a clone of the metadata table, so we can manipulate it
       copyTable(client, MetadataTable.NAME, metaCopy1);
@@ -156,11 +157,17 @@ public class TabletStateChangeIteratorIT extends AccumuloClusterHarness {
       assertEquals(1, findTabletsNeedingAttention(client, metaCopy3, state),
           "Should have 1 tablet that needs a metadata repair");
 
-      // test the ondemand tablet case
+      // test the ondemand online tablet case
       state = new State(client);
       onDemandFirstTablet(client, metaCopy4, t4);
       assertEquals(1, findTabletsNeedingAttention(client, metaCopy4, state),
-          "Should have 1 tablet that is ondemand");
+          "Should have 1 tablet that is ondemand and needs to be hosted");
+
+      // test the ondemand offline tablet case
+      state = new State(client);
+      removeOnDemandMarkers(client, state, metaCopy4, t4);
+      assertEquals(1, findTabletsNeedingAttention(client, metaCopy4, state),
+          "Should have 1 tablet that is ondemand and needs to be unloaded");
 
       // clean up
       dropTables(client, t1, t2, t3, t4, metaCopy1, metaCopy2, metaCopy3, metaCopy4);
@@ -212,6 +219,27 @@ public class TabletStateChangeIteratorIT extends AccumuloClusterHarness {
     }
   }
 
+  private void removeOnDemandMarkers(AccumuloClient client, State state, String metadataTable,
+      String tableName) throws TableNotFoundException, MutationsRejectedException {
+    TableId tableIdToModify = TableId.of(client.tableOperations().tableIdMap().get(tableName));
+
+    // Need to insert a current location and then delete the "ondemand" marker so that
+    // the looks like it's hosted and supposed to be unloaded
+    try (Scanner scanner = client.createScanner(metadataTable, Authorizations.EMPTY)) {
+      scanner.setRange(new KeyExtent(tableIdToModify, null, null).toMetaRange());
+      Entry<Key,Value> entry = scanner.iterator().next();
+      Mutation m = new Mutation(entry.getKey().getRow());
+      m.put(CurrentLocationColumnFamily.NAME, new Text("1234567"),
+          entry.getKey().getTimestamp() + 1,
+          new Value(state.onlineTabletServers().iterator().next().getHostPort()));
+      m.putDelete(OnDemandAssignmentStateColumnFamily.NAME, new Text(""),
+          entry.getKey().getTimestamp() + 1);
+      try (BatchWriter bw = client.createBatchWriter(metadataTable)) {
+        bw.addMutation(m);
+      }
+    }
+  }
+
   private void removeLocation(AccumuloClient client, String table, String tableNameToModify)
       throws TableNotFoundException, MutationsRejectedException {
     TableId tableIdToModify =
@@ -235,6 +263,7 @@ public class TabletStateChangeIteratorIT extends AccumuloClusterHarness {
       for (Entry<Key,Value> e : scanner) {
         if (e != null) {
           results++;
+          log.debug("Found tablets that changed state: {}", e.getKey());
           resultList.add(e.getKey());
         }
       }
@@ -325,6 +354,7 @@ public class TabletStateChangeIteratorIT extends AccumuloClusterHarness {
 
     private Set<TServerInstance> tservers;
     private Set<TableId> onlineTables;
+    private Set<TableId> onDemandTables;
 
     @Override
     public Set<TServerInstance> onlineTabletServers() {
@@ -349,6 +379,14 @@ public class TabletStateChangeIteratorIT extends AccumuloClusterHarness {
       this.onlineTables =
           Sets.filter(onlineTables, tableId -> context.getTableState(tableId) == TableState.ONLINE);
       return this.onlineTables;
+    }
+
+    @Override
+    public Set<TableId> getOnDemandTables() {
+      Set<TableId> tables = context.getTableIdToNameMap().keySet();
+      this.onDemandTables =
+          Sets.filter(tables, tableId -> context.getTableState(tableId) == TableState.ONDEMAND);
+      return this.onDemandTables;
     }
 
     @Override
