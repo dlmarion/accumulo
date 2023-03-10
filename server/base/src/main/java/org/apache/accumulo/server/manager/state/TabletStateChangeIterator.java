@@ -194,11 +194,10 @@ public class TabletStateChangeIterator extends SkippingIterator {
         return;
       }
 
-      final boolean isOnDemandTable = onDemandTables.contains(tls.extent.tableId());
-
       // is the table supposed to be online or offline?
-      boolean shouldBeOnline = onlineTables.contains(tls.extent.tableId());
-      boolean onDemandTabletShouldBeHosted = tls.ondemand;
+      final boolean shouldBeOnline = onlineTables.contains(tls.extent.tableId());
+      final boolean isOnDemandTable = onDemandTables.contains(tls.extent.tableId());
+      final boolean onDemandTabletShouldBeHosted = tls.ondemand;
 
       if (debug) {
         log.debug("{} is {} and should be {} line, onDemandTable {} and onDemandTablet {}",

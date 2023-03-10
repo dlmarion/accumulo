@@ -965,17 +965,6 @@ abstract class TabletGroupWatcher extends AccumuloDaemonThread {
       }
       manager.assignedTablet(a.tablet);
     }
-
-    final Map<KeyExtent,TServerInstance> onlineOnDemandTabletsToUnload = new HashMap<>();
-    manager.getOnDemandTabletUnloads(onlineOnDemandTabletsToUnload);
-
-    if (!onlineOnDemandTabletsToUnload.isEmpty()) {
-      Manager.log.info(
-          String.format("Unloading %d onDemand tablets", onlineOnDemandTabletsToUnload.size()));
-    }
-    for (Entry<KeyExtent,TServerInstance> e : onlineOnDemandTabletsToUnload.entrySet()) {
-      manager.getContext().getAmple().mutateTablet(e.getKey()).deleteOnDemand().mutate();
-    }
   }
 
   private static void markDeadServerLogsAsClosed(WalStateManager mgr,

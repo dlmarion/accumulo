@@ -2059,4 +2059,8 @@ public class Tablet extends TabletBase {
     return compactable;
   }
 
+  public boolean isOnDemand() {
+    return this.onDemand;
+  }
+
 }

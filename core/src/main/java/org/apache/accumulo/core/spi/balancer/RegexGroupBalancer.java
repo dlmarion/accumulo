@@ -95,10 +95,4 @@ public class RegexGroupBalancer extends GroupBalancer {
       return defaultGroup;
     };
   }
-
-  @Override
-  public void getOnlineOnDemandTabletUnloads(UnloadParameters params) {
-    // This balancer does not unload ondemand tablets
-  }
-
 }

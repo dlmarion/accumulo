@@ -116,11 +116,6 @@ public abstract class GroupBalancer implements TabletBalancer {
   }
 
   @Override
-  public void getOnlineOnDemandTabletUnloads(UnloadParameters params) {
-    // This balancer does not unload ondemand tablets
-  }
-
-  @Override
   public void getAssignments(AssignmentParameters params) {
 
     if (params.currentStatus().isEmpty()) {

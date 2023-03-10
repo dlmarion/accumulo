@@ -392,9 +392,4 @@ public class SimpleLoadBalancer implements TabletBalancer {
     return 5_000;
   }
 
-  @Override
-  public void getOnlineOnDemandTabletUnloads(UnloadParameters params) {
-    // This balancer does not unload ondemand tablets
-  }
-
 }

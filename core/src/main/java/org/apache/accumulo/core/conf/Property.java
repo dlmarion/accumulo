@@ -1096,6 +1096,13 @@ public enum Property {
           + "also consider configuring the `" + NoDeleteConstraint.class.getName() + "` "
           + "constraint.",
       "2.0.0"),
+  TABLE_ONDEMAND_UNLOADER("table.ondemand.tablet.unloader",
+      "org.apache.accumulo.core.spi.ondemand.DefaultOnDemandTabletUnloader", PropertyType.CLASSNAME,
+      "The class that will be used to determine which onDemand Tablets to unload.", "3.1.0"),
+  TABLE_ONDEMAND_UNLOADER_INTERVAL("table.ondemand.tablet.unloader.interval", "10m",
+      PropertyType.TIMEDURATION,
+      "The interval at which the TabletServer will check if onDemand tablets can be unloaded",
+      "3.1.0"),
 
   // Compactor properties
   @Experimental

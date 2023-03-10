@@ -119,30 +119,4 @@ public interface TabletBalancer {
    * @return the time, in milliseconds, to wait before re-balancing.
    */
   long balance(BalanceParameters params);
-
-  /**
-   * An interface for grouping parameters required for the balancer to unload online onDemand
-   * tablets.
-   *
-   * @since 3.1.0
-   */
-  interface UnloadParameters {
-
-    /**
-     * @return the current status for all online onDemand tablets (read-only)
-     */
-    SortedMap<TabletId,TabletServerId> currentOnlineOnDemandTablets();
-
-    /**
-     * unload {@code tabletId} from {@code tabletServerId}.
-     */
-    void unloadTablet(TabletId tabletId, TabletServerId tabletServerId);
-
-  }
-
-  /**
-   * Ask the balancer if any online onDemand Tablets should be unloaded.
-   *
-   */
-  void getOnlineOnDemandTabletUnloads(UnloadParameters params);
 }

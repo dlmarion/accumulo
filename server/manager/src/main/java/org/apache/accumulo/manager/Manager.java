@@ -62,7 +62,6 @@ import org.apache.accumulo.core.conf.Property;
 import org.apache.accumulo.core.data.InstanceId;
 import org.apache.accumulo.core.data.Key;
 import org.apache.accumulo.core.data.TableId;
-import org.apache.accumulo.core.data.TabletId;
 import org.apache.accumulo.core.data.Value;
 import org.apache.accumulo.core.dataImpl.KeyExtent;
 import org.apache.accumulo.core.fate.AgeOffStore;
@@ -80,7 +79,6 @@ import org.apache.accumulo.core.manager.balancer.AssignmentParamsImpl;
 import org.apache.accumulo.core.manager.balancer.BalanceParamsImpl;
 import org.apache.accumulo.core.manager.balancer.TServerStatusImpl;
 import org.apache.accumulo.core.manager.balancer.TabletServerIdImpl;
-import org.apache.accumulo.core.manager.balancer.UnloadParametersImpl;
 import org.apache.accumulo.core.manager.state.tables.TableState;
 import org.apache.accumulo.core.manager.thrift.ManagerClientService;
 import org.apache.accumulo.core.manager.thrift.ManagerGoalState;
@@ -1589,18 +1587,12 @@ public class Manager extends AbstractServer
     return result;
   }
 
+  @Override
   public Set<TableId> getOnDemandTables() {
-    Set<TableId> result = new HashSet<>();
-    ServerContext context = getContext();
-    TableManager manager = context.getTableManager();
-
-    for (TableId tableId : context.getTableIdToNameMap().keySet()) {
-      TableState state = manager.getTableState(tableId);
-      if ((state != null) && (state == TableState.ONDEMAND)) {
-        result.add(tableId);
-      }
-    }
-    return result;
+    return getContext().getTableIdToNameMap().keySet().stream().filter(tid -> {
+      TableState state = getContext().getTableManager().getTableState(tid);
+      return ((state != null) && (state == TableState.ONDEMAND));
+    }).collect(Collectors.toSet());
   }
 
   @Override
@@ -1759,13 +1751,4 @@ public class Manager extends AbstractServer
     tabletBalancer.getAssignments(params);
   }
 
-  void getOnDemandTabletUnloads(Map<KeyExtent,TServerInstance> unloads) {
-    final TreeMap<TabletId,TabletServerId> assignedOnDemandTablets = new TreeMap<>();
-    balancerEnvironment.getTableIdMap().values().stream()
-        .filter((tableId) -> balancerEnvironment.isTableOnDemand(tableId)).iterator()
-        .forEachRemaining(
-            (tid) -> assignedOnDemandTablets.putAll(balancerEnvironment.listTabletLocations(tid)));
-    UnloadParametersImpl params = new UnloadParametersImpl(assignedOnDemandTablets, unloads);
-    tabletBalancer.getOnlineOnDemandTabletUnloads(params);
-  }
 }
