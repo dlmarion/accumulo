@@ -340,4 +340,5 @@ public class ServerAmpleImpl extends AmpleImpl implements Ample {
       throw new RuntimeException(e);
     }
   }
+
 }
