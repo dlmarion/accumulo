@@ -175,7 +175,6 @@ public class TabletStateChangeIterator extends SkippingIterator {
       TabletLocationState tls;
       try {
         tls = MetaDataTableScanner.createTabletLocationState(k, v);
-        log.debug("TabletLocationState: {}", tls);
         if (tls == null) {
           return;
         }

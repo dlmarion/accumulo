@@ -1308,7 +1308,7 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
 
   public void decrementOnDemandOnlineCount(int numDeletions) {
     onDemandOnlineCount.updateAndGet(currVal -> {
-      return Math.max(0, currVal - (-1 * numDeletions));
+      return Math.max(0, currVal - numDeletions);
     });
   }
 
@@ -1317,9 +1317,10 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
   }
 
   public void updateOnDemandAccessTime(KeyExtent extent) {
+    final long currentTime = TimeUnit.NANOSECONDS.toMillis(System.nanoTime());
     onDemandTabletAccessTimes.computeIfAbsent(extent, (k) -> {
-      return new AtomicLong(0);
-    }).set(TimeUnit.NANOSECONDS.toMillis(System.nanoTime()));
+      return new AtomicLong(currentTime);
+    }).set(currentTime);
   }
 
   public void removeOnDemandAccessTime(KeyExtent extent) {
@@ -1327,14 +1328,15 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
   }
 
   public void evaluateOnDemandTabletsForUnload() {
-    // onDemandTabletAccessTimes is a HashMap. Sort the extents so that we can process them
-    // by table.
+    // onDemandTabletAccessTimes is a HashMap. Sort the extents
+    // so that we can process them by table.
     final SortedMap<KeyExtent,AtomicLong> sortedOnDemandExtents =
         new TreeMap<KeyExtent,AtomicLong>();
     sortedOnDemandExtents.putAll(onDemandTabletAccessTimes);
     Set<TableId> tableIds = sortedOnDemandExtents.keySet().stream().map((k) -> {
       return k.tableId();
     }).distinct().collect(Collectors.toSet());
+    log.debug("Tables that have online onDemand tablets: {}", tableIds);
     final Map<TableId,OnDemandTabletUnloader> unloaders = new HashMap<>();
     tableIds.forEach(tid -> {
       TableConfiguration tconf = getContext().getTableConfiguration(tid);
@@ -1358,11 +1360,13 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
         return e.getKey().tableId().equals(tid);
       }).collect(Collectors.toMap(e -> e.getKey(), e -> e.getValue()));
       Set<KeyExtent> onDemandTabletsToUnload = new HashSet<>();
+      log.debug("Evaluating onDemand tablets for unload for table {}, extents {}", tid,
+          subset.keySet());
       UnloaderParams params = new UnloaderParamsImpl(getContext().getTableConfiguration(tid),
           subset, onDemandTabletsToUnload);
       unloaders.get(tid).evaluate(params);
       onDemandTabletsToUnload.forEach(ke -> {
-        log.debug("Unloading onDemand tablet: {}", ke);
+        log.debug("Unloading onDemand tablet:{} for table: {}", ke, tid);
         getContext().getAmple().mutateTablet(ke).deleteOnDemand().mutate();
       });
     });

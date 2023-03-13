@@ -368,7 +368,7 @@ public class ManagerAssignmentIT extends SharedMiniClusterBase {
     }
   }
 
-  private void loadDataForScan(AccumuloClient c, String tableName)
+  public static void loadDataForScan(AccumuloClient c, String tableName)
       throws MutationsRejectedException, TableNotFoundException {
     final byte[] empty = new byte[0];
     try (BatchWriter bw = c.createBatchWriter(tableName)) {
@@ -384,7 +384,7 @@ public class ManagerAssignmentIT extends SharedMiniClusterBase {
     }
   }
 
-  private List<TabletStats> getTabletStats(AccumuloClient c, String tableId)
+  public static List<TabletStats> getTabletStats(AccumuloClient c, String tableId)
       throws AccumuloException, AccumuloSecurityException {
     return ThriftClientTypes.TABLET_SERVER.execute((ClientContext) c, client -> client
         .getTabletStats(TraceUtil.traceInfo(), ((ClientContext) c).rpcCreds(), tableId));

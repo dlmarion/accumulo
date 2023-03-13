@@ -191,9 +191,6 @@ class AssignmentHandler implements Runnable {
           server.recentlyUnloadedCache.remove(tablet.getExtent());
         }
       }
-      if (tabletMetadata.getOnDemand()) {
-        server.incrementOnDemandOnlineCount(1);
-      }
       tablet = null; // release this reference
       successful = true;
     } catch (Exception e) {
@@ -212,6 +209,10 @@ class AssignmentHandler implements Runnable {
 
     if (successful) {
       server.enqueueManagerMessage(new TabletStatusMessage(TabletLoadState.LOADED, extent));
+      if (tabletMetadata.getOnDemand()) {
+        log.trace("Incrementing onDemand online count for: {}", tabletMetadata.getExtent());
+        server.incrementOnDemandOnlineCount(1);
+      }
     } else {
       synchronized (server.unopenedTablets) {
         synchronized (server.openingTablets) {
