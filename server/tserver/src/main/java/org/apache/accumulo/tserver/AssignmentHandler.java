@@ -211,7 +211,7 @@ class AssignmentHandler implements Runnable {
       server.enqueueManagerMessage(new TabletStatusMessage(TabletLoadState.LOADED, extent));
       if (tabletMetadata.getOnDemand()) {
         log.trace("Incrementing onDemand online count for: {}", tabletMetadata.getExtent());
-        server.updateOnDemandAccessTime(extent);
+        server.insertOnDemandAccessTime(extent);
         server.incrementOnDemandOnlineCount(1);
       }
     } else {

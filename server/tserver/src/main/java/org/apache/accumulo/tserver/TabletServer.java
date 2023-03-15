@@ -215,7 +215,8 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
   private final AtomicLong syncCounter = new AtomicLong(0);
 
   final OnlineTablets onlineTablets = new OnlineTablets();
-  private final Map<KeyExtent,AtomicLong> onDemandTabletAccessTimes = new HashMap<>();
+  private final Map<KeyExtent,AtomicLong> onDemandTabletAccessTimes =
+      Collections.synchronizedMap(new HashMap<>());
   final SortedSet<KeyExtent> unopenedTablets = Collections.synchronizedSortedSet(new TreeSet<>());
   final SortedSet<KeyExtent> openingTablets = Collections.synchronizedSortedSet(new TreeSet<>());
   final Map<KeyExtent,Long> recentlyUnloadedCache = Collections.synchronizedMap(new LRUMap<>(1000));
@@ -1148,7 +1149,7 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
   @Override
   public Tablet getOnlineTablet(KeyExtent extent) {
     Tablet t = onlineTablets.snapshot().get(extent);
-    if (t.isOnDemand()) {
+    if (t != null && t.isOnDemand()) {
       updateOnDemandAccessTime(extent);
     }
     return t;
@@ -1316,13 +1317,21 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
     return onDemandOnlineCount.get();
   }
 
-  public void updateOnDemandAccessTime(KeyExtent extent) {
-    final long currentTime = TimeUnit.NANOSECONDS.toMillis(System.nanoTime());
-    onDemandTabletAccessTimes.computeIfAbsent(extent, (k) -> {
-      return new AtomicLong(currentTime);
-    }).set(currentTime);
+  // called from AssignmentHandler
+  public void insertOnDemandAccessTime(KeyExtent extent) {
+    onDemandTabletAccessTimes.putIfAbsent(extent, new AtomicLong(System.currentTimeMillis()));
   }
 
+  // called from getOnlineExtent
+  private void updateOnDemandAccessTime(KeyExtent extent) {
+    final long currentTime = System.currentTimeMillis();
+    AtomicLong l = onDemandTabletAccessTimes.get(extent);
+    if (l != null) {
+      l.set(currentTime);
+    }
+  }
+
+  // called from UnloadTabletHandler
   public void removeOnDemandAccessTime(KeyExtent extent) {
     onDemandTabletAccessTimes.remove(extent);
   }
@@ -1330,6 +1339,9 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
   private boolean isTabletInUse(KeyExtent extent) {
     // Don't call getOnlineTablet as that will update the last access time
     final Tablet t = onlineTablets.snapshot().get(extent);
+    if (t == null) {
+      return false;
+    }
     t.updateRates(System.currentTimeMillis());
     if (t.ingestRate() != 0.0 && t.queryRate() != 0.0 && t.scanRate() != 0.0) {
       // tablet is ingesting or scanning
@@ -1339,6 +1351,33 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
   }
 
   public void evaluateOnDemandTabletsForUnload() {
+
+    final SortedMap<KeyExtent,Tablet> online = getOnlineTablets();
+
+    // Find and remove access time entries for KeyExtents
+    // that are no longer in the onlineTablets collection
+    Set<KeyExtent> missing = onDemandTabletAccessTimes.keySet().stream()
+        .filter(k -> !online.containsKey(k)).collect(Collectors.toSet());
+    if (!missing.isEmpty()) {
+      log.debug("Removing onDemandAccessTimes for tablets as tablets no longer online: {}",
+          missing);
+      missing.forEach(onDemandTabletAccessTimes::remove);
+      if (onDemandTabletAccessTimes.isEmpty()) {
+        return;
+      }
+    }
+
+    // It's possible, from a tablet split or merge for example,
+    // that there is an onDemand tablet that is hosted for which
+    // we have no access time. Add any missing online onDemand
+    // tablets
+    online.forEach((k, v) -> {
+      if (v.isOnDemand() && !onDemandTabletAccessTimes.containsKey(k)) {
+        insertOnDemandAccessTime(k);
+      }
+    });
+
+    log.debug("Evaluating online onDemand tablets: {}", onDemandTabletAccessTimes);
 
     if (onDemandTabletAccessTimes.isEmpty()) {
       return;
@@ -1375,10 +1414,13 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
         onDemandTabletsInUse.add(extent);
       }
     }
-    onDemandTabletsInUse.forEach(sortedOnDemandExtents::remove);
-
-    if (sortedOnDemandExtents.isEmpty()) {
-      return;
+    if (!onDemandTabletsInUse.isEmpty()) {
+      log.debug("Removing onDemandAccessTimes for tablets as tablets are in use: {}",
+          onDemandTabletsInUse);
+      onDemandTabletsInUse.forEach(sortedOnDemandExtents::remove);
+      if (sortedOnDemandExtents.isEmpty()) {
+        return;
+      }
     }
 
     Set<TableId> tableIds = sortedOnDemandExtents.keySet().stream().map((k) -> {

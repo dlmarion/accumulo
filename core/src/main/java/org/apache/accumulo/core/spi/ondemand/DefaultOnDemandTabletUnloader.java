@@ -19,7 +19,6 @@
 package org.apache.accumulo.core.spi.ondemand;
 
 import static java.util.concurrent.TimeUnit.MINUTES;
-import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 import java.util.stream.Collectors;
 
@@ -37,7 +36,7 @@ public class DefaultOnDemandTabletUnloader implements OnDemandTabletUnloader {
   public void evaluate(UnloaderParams params) {
     final long threshold = Long
         .parseLong(params.getTableConfiguration().getOrDefault(INACTIVITY_THRESHOLD, TEN_MINUTES));
-    final long currentTime = NANOSECONDS.toMillis(System.nanoTime());
+    final long currentTime = System.currentTimeMillis();
     if (LOG.isTraceEnabled()) {
       LOG.trace("Current time: {}", currentTime);
       LOG.trace("Inactivity Threshold: {}", threshold);
