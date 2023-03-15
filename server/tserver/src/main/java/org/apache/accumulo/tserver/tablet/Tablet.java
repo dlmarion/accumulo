@@ -1553,8 +1553,7 @@ public class Tablet extends TabletBase {
     return this.lookupCount.get();
   }
 
-  // synchronized?
-  public void updateRates(long now) {
+  public synchronized void updateRates(long now) {
     queryRate.update(now, this.queryResultCount.get());
     queryByteRate.update(now, this.queryResultBytes.get());
     ingestRate.update(now, ingestCount);

@@ -1327,12 +1327,60 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
     onDemandTabletAccessTimes.remove(extent);
   }
 
+  private boolean isTabletInUse(KeyExtent extent) {
+    // Don't call getOnlineTablet as that will update the last access time
+    final Tablet t = onlineTablets.snapshot().get(extent);
+    t.updateRates(System.currentTimeMillis());
+    if (t.ingestRate() != 0.0 && t.queryRate() != 0.0 && t.scanRate() != 0.0) {
+      // tablet is ingesting or scanning
+      return true;
+    }
+    return false;
+  }
+
   public void evaluateOnDemandTabletsForUnload() {
+
+    if (onDemandTabletAccessTimes.isEmpty()) {
+      return;
+    }
+
+    // If the TabletServer is running low on memory, don't call the SPI
+    // plugin to evaluate which onDemand tablets to unload, just get the
+    // onDemand tablet with the oldest access time and unload it.
+    if (getContext().getLowMemoryDetector().isRunningLowOnMemory()) {
+      final SortedMap<Long,KeyExtent> timeSortedOnDemandExtents = new TreeMap<>();
+      onDemandTabletAccessTimes.forEach((k, v) -> timeSortedOnDemandExtents.put(v.get(), k));
+      Long oldestAccessTime = timeSortedOnDemandExtents.firstKey();
+      KeyExtent oldestKeyExtent = timeSortedOnDemandExtents.get(oldestAccessTime);
+      log.warn("Unloading onDemand tablet: {} for table: {} due to low memory", oldestKeyExtent,
+          oldestKeyExtent.tableId());
+      getContext().getAmple().mutateTablet(oldestKeyExtent).deleteOnDemand().mutate();
+      return;
+    }
+
     // onDemandTabletAccessTimes is a HashMap. Sort the extents
     // so that we can process them by table.
     final SortedMap<KeyExtent,AtomicLong> sortedOnDemandExtents =
         new TreeMap<KeyExtent,AtomicLong>();
     sortedOnDemandExtents.putAll(onDemandTabletAccessTimes);
+
+    // The access times are updated when getOnlineTablet is called by other methods,
+    // but may not necessarily capture whether or not the Tablet is currently being used.
+    // For example, getOnlineTablet is called from startScan but not from continueScan.
+    // Instead of instrumenting all of the locations where the tablet is touched we
+    // can use the Tablet metrics.
+    final Set<KeyExtent> onDemandTabletsInUse = new HashSet<>();
+    for (KeyExtent extent : sortedOnDemandExtents.keySet()) {
+      if (isTabletInUse(extent)) {
+        onDemandTabletsInUse.add(extent);
+      }
+    }
+    onDemandTabletsInUse.forEach(sortedOnDemandExtents::remove);
+
+    if (sortedOnDemandExtents.isEmpty()) {
+      return;
+    }
+
     Set<TableId> tableIds = sortedOnDemandExtents.keySet().stream().map((k) -> {
       return k.tableId();
     }).distinct().collect(Collectors.toSet());
@@ -1366,7 +1414,7 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
           subset, onDemandTabletsToUnload);
       unloaders.get(tid).evaluate(params);
       onDemandTabletsToUnload.forEach(ke -> {
-        log.debug("Unloading onDemand tablet:{} for table: {}", ke, tid);
+        log.debug("Unloading onDemand tablet: {} for table: {}", ke, tid);
         getContext().getAmple().mutateTablet(ke).deleteOnDemand().mutate();
       });
     });
