@@ -243,6 +243,7 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
 
   private final AtomicLong totalMinorCompactions = new AtomicLong(0);
   private final AtomicInteger onDemandOnlineCount = new AtomicInteger(0);
+  private final AtomicInteger onDemandUnloadedLowMemory = new AtomicInteger(0);
 
   private final ZooAuthenticationKeyWatcher authKeyWatcher;
   private final WalStateManager walMarker;
@@ -1317,6 +1318,10 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
     return onDemandOnlineCount.get();
   }
 
+  public int getOnDemandOnlineUnloadedForLowMemory() {
+    return onDemandUnloadedLowMemory.get();
+  }
+
   // called from AssignmentHandler
   public void insertOnDemandAccessTime(KeyExtent extent) {
     onDemandTabletAccessTimes.putIfAbsent(extent, new AtomicLong(System.currentTimeMillis()));
@@ -1394,6 +1399,7 @@ public class TabletServer extends AbstractServer implements TabletHostingServer 
       log.warn("Unloading onDemand tablet: {} for table: {} due to low memory", oldestKeyExtent,
           oldestKeyExtent.tableId());
       getContext().getAmple().mutateTablet(oldestKeyExtent).deleteOnDemand().mutate();
+      onDemandUnloadedLowMemory.addAndGet(1);
       return;
     }
 

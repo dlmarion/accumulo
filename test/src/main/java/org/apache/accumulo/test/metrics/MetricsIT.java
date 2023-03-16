@@ -95,7 +95,7 @@ public class MetricsIT extends ConfigurableMacBase implements MetricsProducer {
     Set<String> flakyMetrics = Set.of(METRICS_GC_WAL_ERRORS, METRICS_FATE_TYPE_IN_PROGRESS,
         METRICS_PROPSTORE_EVICTION_COUNT, METRICS_PROPSTORE_REFRESH_COUNT,
         METRICS_PROPSTORE_REFRESH_LOAD_COUNT, METRICS_PROPSTORE_ZK_ERROR_COUNT,
-        METRICS_TSERVER_TABLETS_ONLINE_ONDEMAND);
+        METRICS_TSERVER_TABLETS_ONLINE_ONDEMAND, METRICS_TSERVER_TABLETS_ONDEMAND_UNLOADED_FOR_MEM);
 
     Map<String,String> expectedMetricNames = this.getMetricFields();
     flakyMetrics.forEach(expectedMetricNames::remove); // might not see these

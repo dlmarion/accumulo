@@ -294,6 +294,13 @@ import io.micrometer.core.instrument.MeterRegistry;
  * <td>Represents the number of ondemand tablets that are online</td>
  * </tr>
  * <tr>
+ * <td></td>
+ * <td></td>
+ * <td>{@link #METRICS_TSERVER_TABLETS_ONDEMAND_UNLOADED_FOR_MEM}</td>
+ * <td>Gauge</td>
+ * <td>Represents the number of ondemand tablets that were unloaded due to low memory condition</td>
+ * </tr>
+ * <tr>
  * <td>N/A</td>
  * <td>N/A</td>
  * <td>{@link #METRICS_TSERVER_TABLETS_LONG_ASSIGNMENTS}</td>
@@ -661,6 +668,8 @@ public interface MetricsProducer {
       METRICS_TSERVER_PREFIX + "tablets.assignments.warning";
   String METRICS_TSERVER_TABLETS_ONLINE_ONDEMAND =
       METRICS_TSERVER_PREFIX + "tablets.ondemand.online";
+  String METRICS_TSERVER_TABLETS_ONDEMAND_UNLOADED_FOR_MEM =
+      METRICS_TSERVER_PREFIX + "tablets.ondemand.unloaded.lowmem";
   String METRICS_TSERVER_TABLETS_ONLINE = METRICS_TSERVER_PREFIX + "tablets.online";
   String METRICS_TSERVER_TABLETS_OPENING = METRICS_TSERVER_PREFIX + "tablets.opening";
   String METRICS_TSERVER_TABLETS_UNOPENED = METRICS_TSERVER_PREFIX + "tablets.unopened";
