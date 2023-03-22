@@ -48,6 +48,7 @@ import org.apache.accumulo.core.data.PartialKey;
 import org.apache.accumulo.core.data.Range;
 import org.apache.accumulo.core.data.TableId;
 import org.apache.accumulo.core.dataImpl.KeyExtent;
+import org.apache.accumulo.core.dataImpl.thrift.TKeyExtent;
 import org.apache.accumulo.core.metadata.schema.TabletMetadata;
 import org.apache.accumulo.core.metadata.schema.TabletMetadata.Location;
 import org.apache.accumulo.core.metadata.schema.TabletsMetadata;
@@ -562,6 +563,8 @@ public class TabletLocatorImpl extends TabletLocator {
     // that are overlapped by the scan range
     final KeyExtent scanRangeKE = new KeyExtent(tableId, scanRangeEnd, scanRangeStart);
 
+    List<TKeyExtent> extentsToBringOnline = new ArrayList<>();
+
     TabletsMetadata m = context.getAmple().readTablets().forTable(tableId)
         .overlapping(scanRangeStart, true, null).build();
     for (TabletMetadata tm : m) {
@@ -583,16 +586,20 @@ public class TabletLocatorImpl extends TabletLocator {
           if (loc != null) {
             log.debug("tablet {} has location of: {}:{}", loc.getType(), loc.getHostPort());
           }
-          log.debug("Marking tablet as onDemand for extent: {}", tabletExtent);
-          ThriftClientTypes.TABLET_MGMT.executeVoid(context,
-              client -> client.bringOnDemandTabletOnline(TraceUtil.traceInfo(), context.rpcCreds(),
-                  tabletExtent.toThrift()));
-          onDemandTabletsOnlinedCount.incrementAndGet();
+          extentsToBringOnline.add(tabletExtent.toThrift());
         } else {
           log.trace("Tablet {} already marked as onDemand, but not hosted yet", tabletExtent);
         }
       }
     }
+    if (extentsToBringOnline.isEmpty()) {
+      return;
+    }
+    log.debug("Marking tablets as onDemand: {}", extentsToBringOnline);
+    ThriftClientTypes.TABLET_MGMT.executeVoid(context,
+        client -> client.bringOnDemandTabletsOnline(TraceUtil.traceInfo(), context.rpcCreds(),
+            tableId.canonical(), extentsToBringOnline));
+    onDemandTabletsOnlinedCount.addAndGet(extentsToBringOnline.size());
   }
 
   private void lookupTabletLocation(ClientContext context, Text row, boolean retry,

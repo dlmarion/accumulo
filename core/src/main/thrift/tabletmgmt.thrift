@@ -73,10 +73,11 @@ service TabletManagementClientService {
     4:data.TKeyExtent extent
   )
   
-  void bringOnDemandTabletOnline(
+  void bringOnDemandTabletsOnline(
     1:client.TInfo tinfo
     2:security.TCredentials credentials
-    3:data.TKeyExtent extent
+    3:string tableId
+    4:list<data.TKeyExtent> extents
   ) throws (
     1:client.ThriftSecurityException sec
   )
