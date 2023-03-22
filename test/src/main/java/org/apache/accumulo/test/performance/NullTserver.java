@@ -303,8 +303,8 @@ public class NullTserver {
         String externalCompactionId, TKeyExtent extent) throws TException {}
 
     @Override
-    public void bringOnDemandTabletOnline(TInfo tinfo, TCredentials credentials, TKeyExtent extent)
-        throws ThriftSecurityException, TException {}
+    public void bringOnDemandTabletsOnline(TInfo tinfo, TCredentials credentials, String tableId,
+        List<TKeyExtent> extent) throws ThriftSecurityException, TException {}
 
   }
 

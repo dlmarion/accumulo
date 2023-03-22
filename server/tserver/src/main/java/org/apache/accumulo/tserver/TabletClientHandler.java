@@ -75,12 +75,12 @@ import org.apache.accumulo.core.fate.zookeeper.ZooUtil;
 import org.apache.accumulo.core.iteratorsImpl.system.IterationInterruptedException;
 import org.apache.accumulo.core.lock.ServiceLock;
 import org.apache.accumulo.core.logging.TabletLogger;
-import org.apache.accumulo.core.manager.thrift.FateOperation;
 import org.apache.accumulo.core.master.thrift.BulkImportState;
 import org.apache.accumulo.core.master.thrift.TabletServerStatus;
 import org.apache.accumulo.core.metadata.MetadataTable;
 import org.apache.accumulo.core.metadata.RootTable;
 import org.apache.accumulo.core.metadata.TabletFile;
+import org.apache.accumulo.core.metadata.schema.Ample.TabletsMutator;
 import org.apache.accumulo.core.metadata.schema.ExternalCompactionId;
 import org.apache.accumulo.core.security.Authorizations;
 import org.apache.accumulo.core.securityImpl.thrift.TCredentials;
@@ -1558,17 +1558,19 @@ public class TabletClientHandler implements TabletServerClientService.Iface,
   }
 
   @Override
-  public void bringOnDemandTabletOnline(TInfo tinfo, TCredentials credentials,
-      TKeyExtent tkeyExtent) throws ThriftSecurityException, TException {
-    final TableId tableId = TableId.of(new String(tkeyExtent.getTable(), UTF_8));
-    NamespaceId namespaceId = getNamespaceId(credentials, tableId);
-    if (!security.canChangeTableState(credentials, tableId, FateOperation.TABLE_ONDEMAND,
-        namespaceId)) {
+  public void bringOnDemandTabletsOnline(TInfo tinfo, TCredentials credentials, String tableId,
+      List<TKeyExtent> extents) throws ThriftSecurityException, TException {
+    final TableId tid = TableId.of(tableId);
+    NamespaceId namespaceId = getNamespaceId(credentials, tid);
+    if (!security.canScan(credentials, tid, namespaceId)) {
       throw new ThriftSecurityException(credentials.getPrincipal(),
           SecurityErrorCode.PERMISSION_DENIED);
     }
-    final KeyExtent keyExtent = KeyExtent.fromThrift(tkeyExtent);
-    this.context.getAmple().mutateTablet(keyExtent).putOnDemand().mutate();
+    try (TabletsMutator mutator = this.context.getAmple().mutateTablets()) {
+      extents.forEach(e -> {
+        mutator.mutateTablet(KeyExtent.fromThrift(e)).putOnDemand().mutate();
+      });
+    }
   }
 
 }
