@@ -462,23 +462,7 @@ public class GCRun implements GarbageCollectionEnvironment {
    */
   boolean moveToTrash(Path path) throws IOException {
     final VolumeManager fs = context.getVolumeManager();
-    if (!isUsingTrash()) {
-      return false;
-    }
-    try {
-      return fs.moveToTrash(path);
-    } catch (FileNotFoundException ex) {
-      return false;
-    }
-  }
-
-  /**
-   * Checks if the volume manager should move files to the trash rather than delete them.
-   *
-   * @return true if trash is used
-   */
-  boolean isUsingTrash() {
-    return !config.getBoolean(Property.GC_TRASH_IGNORE);
+    return fs.moveToTrash(path);
   }
 
   /**

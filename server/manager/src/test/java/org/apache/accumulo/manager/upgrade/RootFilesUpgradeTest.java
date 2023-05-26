@@ -84,7 +84,7 @@ public class RootFilesUpgradeTest extends WithTestNames {
       // up later
       for (Path path : oldDatafiles) {
         Path deleteFile = new Path(location + "/delete+" + compactName + "+" + path.getName());
-        if (acuTableConf.getBoolean(Property.GC_TRASH_IGNORE) || !fs.moveToTrash(deleteFile)) {
+        if (!fs.moveToTrash(deleteFile)) {
           fs.deleteRecursively(deleteFile);
         }
       }

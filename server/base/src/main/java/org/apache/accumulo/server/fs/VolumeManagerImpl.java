@@ -57,7 +57,6 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
-import org.apache.hadoop.fs.Trash;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.protocol.ErasureCodingPolicy;
@@ -353,9 +352,19 @@ public class VolumeManagerImpl implements VolumeManager {
 
   @Override
   public boolean moveToTrash(Path path) throws IOException {
-    FileSystem fs = getFileSystemByPath(path);
-    Trash trash = new Trash(fs, fs.getConf());
-    return trash.moveToTrash(path);
+    for (Volume vol : getVolumes()) {
+      if (vol.containsPath(path)) {
+        if (vol != null && vol.isTrashEnabled()) {
+          try {
+            return vol.moveToTrash(path);
+          } catch (IOException ex) {
+            return false;
+          }
+        }
+        break;
+      }
+    }
+    return false;
   }
 
   @Override

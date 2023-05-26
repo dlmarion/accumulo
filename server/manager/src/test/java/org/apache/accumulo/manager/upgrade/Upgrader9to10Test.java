@@ -32,13 +32,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
-import java.util.stream.Collectors;
 
 import org.apache.accumulo.core.client.AccumuloClient;
 import org.apache.accumulo.core.client.BatchWriter;
@@ -357,8 +355,10 @@ public class Upgrader9to10Test {
     FileSystem fs = new Path("file:///").getFileSystem(hadoopConf);
 
     List<String> volumes = Arrays.asList("/vol1/", "/vol2/");
-    Collection<Volume> vols =
-        volumes.stream().map(s -> new VolumeImpl(fs, s)).collect(Collectors.toList());
+    List<Volume> vols = new ArrayList<>();
+    for (String volume : volumes) {
+      vols.add(new VolumeImpl(fs, volume));
+    }
     Set<String> fullyQualifiedVols = Set.of("file://vol1/", "file://vol2/");
     Set<String> recoveryDirs =
         Set.of("file://vol1/accumulo/recovery", "file://vol2/accumulo/recovery");

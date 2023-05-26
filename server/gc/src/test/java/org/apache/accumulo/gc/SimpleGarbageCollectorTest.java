@@ -24,13 +24,11 @@ import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.getCurrentArguments;
 import static org.easymock.EasyMock.partialMockBuilder;
 import static org.easymock.EasyMock.replay;
-import static org.easymock.EasyMock.verify;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.FileNotFoundException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -50,7 +48,6 @@ import org.apache.accumulo.server.ServerContext;
 import org.apache.accumulo.server.fs.VolumeManager;
 import org.apache.accumulo.server.gc.AllVolumesDirectory;
 import org.apache.accumulo.server.security.SystemCredentials;
-import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -97,7 +94,6 @@ public class SimpleGarbageCollectorTest {
     conf.put(Property.GC_CYCLE_START.getKey(), "1");
     conf.put(Property.GC_CYCLE_DELAY.getKey(), "20");
     conf.put(Property.GC_DELETE_THREADS.getKey(), "2");
-    conf.put(Property.GC_TRASH_IGNORE.getKey(), "false");
 
     return new ConfigurationCopy(conf);
   }
@@ -106,35 +102,9 @@ public class SimpleGarbageCollectorTest {
   public void testInit() {
     assertSame(volMgr, gc.getContext().getVolumeManager());
     assertEquals(credentials, gc.getContext().getCredentials());
-    assertTrue(gc.isUsingTrash());
     assertEquals(1000L, gc.getStartDelay());
     assertEquals(2, gc.getNumDeleteThreads());
     assertFalse(gc.inSafeMode()); // false by default
-  }
-
-  @Test
-  public void testMoveToTrash_UsingTrash() throws Exception {
-    Path path = createMock(Path.class);
-    expect(volMgr.moveToTrash(path)).andReturn(true);
-    replay(volMgr);
-    assertTrue(gc.moveToTrash(path));
-    verify(volMgr);
-  }
-
-  @Test
-  public void testMoveToTrash_UsingTrash_VolMgrFailure() throws Exception {
-    Path path = createMock(Path.class);
-    expect(volMgr.moveToTrash(path)).andThrow(new FileNotFoundException());
-    replay(volMgr);
-    assertFalse(gc.moveToTrash(path));
-    verify(volMgr);
-  }
-
-  @Test
-  public void testMoveToTrash_NotUsingTrash() throws Exception {
-    systemConfig.set(Property.GC_TRASH_IGNORE.getKey(), "true");
-    Path path = createMock(Path.class);
-    assertFalse(gc.moveToTrash(path));
   }
 
   @Test

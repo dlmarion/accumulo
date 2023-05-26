@@ -26,6 +26,7 @@ import java.util.Objects;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.Trash;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,17 +41,20 @@ public class VolumeImpl implements Volume {
   private final FileSystem fs;
   private final String basePath;
   private final Configuration hadoopConf;
+  private Trash trash;
 
   public VolumeImpl(Path path, Configuration hadoopConf) throws IOException {
     this.fs = requireNonNull(path).getFileSystem(requireNonNull(hadoopConf));
     this.basePath = stripTrailingSlashes(path.toUri().getPath());
     this.hadoopConf = hadoopConf;
+    this.trash = new Trash(fs, fs.getConf());
   }
 
-  public VolumeImpl(FileSystem fs, String basePath) {
+  public VolumeImpl(FileSystem fs, String basePath) throws IOException {
     this.fs = requireNonNull(fs);
     this.basePath = stripTrailingSlashes(requireNonNull(basePath));
     this.hadoopConf = fs.getConf();
+    this.trash = new Trash(fs, fs.getConf());
   }
 
   // remove any trailing whitespace or slashes
@@ -145,6 +149,16 @@ public class VolumeImpl implements Volume {
     }
     throw new IllegalArgumentException(
         String.format("Cannot prefix %s (%s) with volume %s", pathString, reason, this));
+  }
+
+  @Override
+  public boolean isTrashEnabled() {
+    return trash.isEnabled();
+  }
+
+  @Override
+  public boolean moveToTrash(Path path) throws IOException {
+    return trash.moveToTrash(path);
   }
 
 }

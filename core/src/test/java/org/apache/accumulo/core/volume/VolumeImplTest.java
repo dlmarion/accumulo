@@ -34,55 +34,88 @@ import java.util.Set;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.TrashPolicy;
+import org.apache.hadoop.fs.TrashPolicyDefault;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 
 public class VolumeImplTest {
 
   @Test
-  public void testFileSystemInequivalence() {
+  public void testFileSystemInequivalence() throws IOException {
     Configuration hadoopConf = createMock(Configuration.class);
     FileSystem fs = createMock(FileSystem.class), other = createMock(FileSystem.class);
 
     String basePath = "/accumulo";
 
+    TrashPolicyDefault trash = new TrashPolicyDefault();
+    Class<? extends TrashPolicy> trashClass = trash.getClass();
+    @SuppressWarnings("unchecked")
+    Class<TrashPolicy> tc = (Class<TrashPolicy>) trashClass;
+    expect(hadoopConf.getClass("fs.trash.classname", trash.getClass(), TrashPolicy.class))
+        .andReturn(tc);
+    expect(hadoopConf.getClassByNameOrNull("org.apache.hadoop.mapred.JobConf")).andReturn(null);
+    expect(hadoopConf.getFloat("fs.trash.interval", 0.0f)).andReturn(0f);
+    expect(hadoopConf.getFloat("fs.trash.checkpoint.interval", 0.0f)).andReturn(0f);
     expect(fs.getConf()).andReturn(hadoopConf).anyTimes();
     expect(fs.getUri()).andReturn(URI.create("hdfs://localhost:8020")).anyTimes();
     expect(other.getUri()).andReturn(URI.create("hdfs://otherhost:8020")).anyTimes();
 
-    replay(fs, other);
+    replay(hadoopConf, fs, other);
 
     VolumeImpl volume = new VolumeImpl(fs, basePath);
 
     assertFalse(volume.equivalentFileSystems(other));
 
-    verify(fs, other);
+    verify(hadoopConf, fs, other);
   }
 
   @Test
-  public void testFileSystemEquivalence() {
+  public void testFileSystemEquivalence() throws IOException {
     Configuration hadoopConf = createMock(Configuration.class);
     FileSystem fs = createMock(FileSystem.class), other = createMock(FileSystem.class);
     String basePath = "/accumulo";
 
+    TrashPolicyDefault trash = new TrashPolicyDefault();
+    Class<? extends TrashPolicy> trashClass = trash.getClass();
+    @SuppressWarnings("unchecked")
+    Class<TrashPolicy> tc = (Class<TrashPolicy>) trashClass;
+    expect(hadoopConf.getClass("fs.trash.classname", trash.getClass(), TrashPolicy.class))
+        .andReturn(tc);
+    expect(hadoopConf.getClassByNameOrNull("org.apache.hadoop.mapred.JobConf")).andReturn(null);
+    expect(hadoopConf.getFloat("fs.trash.interval", 0.0f)).andReturn(0f);
+    expect(hadoopConf.getFloat("fs.trash.checkpoint.interval", 0.0f)).andReturn(0f);
     expect(fs.getConf()).andReturn(hadoopConf).anyTimes();
     expect(fs.getUri()).andReturn(URI.create("hdfs://myhost:8020/")).anyTimes();
     expect(other.getUri()).andReturn(URI.create("hdfs://myhost:8020")).anyTimes();
 
-    replay(fs, other);
+    replay(hadoopConf, fs, other);
 
     VolumeImpl volume = new VolumeImpl(fs, basePath);
 
     assertTrue(volume.equivalentFileSystems(other));
 
-    verify(fs, other);
+    verify(hadoopConf, fs, other);
   }
 
   @Test
-  public void testBasePathInequivalence() {
+  public void testBasePathInequivalence() throws IOException {
+    Configuration hadoopConf = createMock(Configuration.class);
     FileSystem fs = createMock(FileSystem.class);
+    TrashPolicyDefault trash = new TrashPolicyDefault();
+    Class<? extends TrashPolicy> trashClass = trash.getClass();
+    @SuppressWarnings("unchecked")
+    Class<TrashPolicy> tc = (Class<TrashPolicy>) trashClass;
+    expect(hadoopConf.getClass("fs.trash.classname", trash.getClass(), TrashPolicy.class))
+        .andReturn(tc);
+    expect(hadoopConf.getClassByNameOrNull("org.apache.hadoop.mapred.JobConf")).andReturn(null);
+    expect(hadoopConf.getFloat("fs.trash.interval", 0.0f)).andReturn(0f);
+    expect(hadoopConf.getFloat("fs.trash.checkpoint.interval", 0.0f)).andReturn(0f);
+    expect(fs.getConf()).andReturn(hadoopConf).anyTimes();
 
+    replay(hadoopConf, fs);
     VolumeImpl volume = new VolumeImpl(fs, "/accumulo");
+    verify(hadoopConf, fs);
 
     assertFalse(volume.isAncestorPathOf(new Path("/something/accumulo")));
     assertFalse(volume.isAncestorPathOf(new Path("/accumulo2")));
@@ -90,11 +123,24 @@ public class VolumeImplTest {
   }
 
   @Test
-  public void testBasePathEquivalence() {
+  public void testBasePathEquivalence() throws IOException {
+    Configuration hadoopConf = createMock(Configuration.class);
     FileSystem fs = createMock(FileSystem.class);
+    TrashPolicyDefault trash = new TrashPolicyDefault();
+    Class<? extends TrashPolicy> trashClass = trash.getClass();
+    @SuppressWarnings("unchecked")
+    Class<TrashPolicy> tc = (Class<TrashPolicy>) trashClass;
+    expect(hadoopConf.getClass("fs.trash.classname", trash.getClass(), TrashPolicy.class))
+        .andReturn(tc);
+    expect(hadoopConf.getClassByNameOrNull("org.apache.hadoop.mapred.JobConf")).andReturn(null);
+    expect(hadoopConf.getFloat("fs.trash.interval", 0.0f)).andReturn(0f);
+    expect(hadoopConf.getFloat("fs.trash.checkpoint.interval", 0.0f)).andReturn(0f);
+    expect(fs.getConf()).andReturn(hadoopConf).anyTimes();
 
+    replay(hadoopConf, fs);
     final String basePath = "/accumulo";
     VolumeImpl volume = new VolumeImpl(fs, basePath);
+    verify(hadoopConf, fs);
 
     // Bare path should match
     assertTrue(volume.isAncestorPathOf(new Path(basePath)));

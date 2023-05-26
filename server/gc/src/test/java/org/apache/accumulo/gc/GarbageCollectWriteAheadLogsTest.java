@@ -109,7 +109,7 @@ public class GarbageCollectWriteAheadLogsTest {
     marker.removeWalMarker(server1, id);
     EasyMock.expectLastCall().once();
     EasyMock.replay(context, fs, marker, tserverSet);
-    GarbageCollectWriteAheadLogs gc = new GarbageCollectWriteAheadLogs(context, fs, false,
+    GarbageCollectWriteAheadLogs gc = new GarbageCollectWriteAheadLogs(context, fs,
         tserverSet, marker, tabletOnServer1List) {
       @Override
       @Deprecated
@@ -142,7 +142,7 @@ public class GarbageCollectWriteAheadLogsTest {
     EasyMock.expect(marker.getAllMarkers()).andReturn(markers).once();
     EasyMock.expect(marker.state(server1, id)).andReturn(new Pair<>(WalState.CLOSED, path));
     EasyMock.replay(context, marker, tserverSet, fs);
-    GarbageCollectWriteAheadLogs gc = new GarbageCollectWriteAheadLogs(context, fs, false,
+    GarbageCollectWriteAheadLogs gc = new GarbageCollectWriteAheadLogs(context, fs,
         tserverSet, marker, tabletOnServer1List) {
       @Override
       @Deprecated
@@ -196,7 +196,7 @@ public class GarbageCollectWriteAheadLogsTest {
     marker.forget(server2);
     EasyMock.expectLastCall().once();
     EasyMock.replay(context, fs, marker, tserverSet, rscanner, mscanner);
-    GarbageCollectWriteAheadLogs gc = new GarbageCollectWriteAheadLogs(context, fs, false,
+    GarbageCollectWriteAheadLogs gc = new GarbageCollectWriteAheadLogs(context, fs,
         tserverSet, marker, tabletOnServer1List) {
       @Override
       protected Map<UUID,Path> getSortedWALogs() {
@@ -239,7 +239,7 @@ public class GarbageCollectWriteAheadLogsTest {
     EasyMock.expectLastCall().once();
     EasyMock.expect(mscanner.iterator()).andReturn(emptyKV);
     EasyMock.replay(context, fs, marker, tserverSet, rscanner, mscanner);
-    GarbageCollectWriteAheadLogs gc = new GarbageCollectWriteAheadLogs(context, fs, false,
+    GarbageCollectWriteAheadLogs gc = new GarbageCollectWriteAheadLogs(context, fs,
         tserverSet, marker, tabletOnServer2List) {
       @Override
       protected Map<UUID,Path> getSortedWALogs() {
@@ -287,7 +287,7 @@ public class GarbageCollectWriteAheadLogsTest {
     EasyMock.expectLastCall().once();
     EasyMock.expect(mscanner.iterator()).andReturn(replicationWork.entrySet().iterator());
     EasyMock.replay(context, fs, marker, tserverSet, rscanner, mscanner);
-    GarbageCollectWriteAheadLogs gc = new GarbageCollectWriteAheadLogs(context, fs, false,
+    GarbageCollectWriteAheadLogs gc = new GarbageCollectWriteAheadLogs(context, fs,
         tserverSet, marker, tabletOnServer1List) {
       @Override
       protected Map<UUID,Path> getSortedWALogs() {

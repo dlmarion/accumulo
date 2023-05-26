@@ -873,8 +873,15 @@ public enum Property {
       "The listening port for the garbage collector's monitor service", "1.3.5"),
   GC_DELETE_THREADS("gc.threads.delete", "16", PropertyType.COUNT,
       "The number of threads used to delete RFiles and write-ahead logs", "1.3.5"),
+  @Deprecated(since = "2.1.1", forRemoval = true)
   GC_TRASH_IGNORE("gc.trash.ignore", "false", PropertyType.BOOLEAN,
-      "Do not use the Trash, even if it is configured.", "1.5.0"),
+      "Do not use the Trash, even if it is configured. Note: This property is no longer used."
+          + " Determining whether files are moved to the Trash is delegated to underlying Hadoop"
+          + " FileSystem implementation which uses the Hadoop properties fs.trash.interval and"
+          + " fs.trash.classname. See https://hadoop.apache.org/docs/r3.3.5/hadoop-project-dist/hadoop-common/core-default.xml"
+          + " and https://github.com/apache/hadoop/blob/rel/release-3.3.5/hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/fs/TrashPolicy.java"
+          + " for more information",
+      "1.5.0"),
   @Deprecated(since = "2.1.0", forRemoval = true)
   GC_TRACE_PERCENT("gc.trace.percent", "0.01", PropertyType.FRACTION,
       "Percent of gc cycles to trace", "1.7.0"),
