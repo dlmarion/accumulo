@@ -34,14 +34,27 @@ import java.util.Set;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.TrashPolicy;
+import org.apache.hadoop.fs.TrashPolicyDefault;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 
 public class VolumeImplTest {
 
+  private static Configuration hadoopConf;
+
+  @BeforeAll
+  public static void setup() {
+    TrashPolicy trash = new TrashPolicyDefault();
+    hadoopConf = new Configuration(false);
+    hadoopConf.set("fs.trash.classname", trash.getClass().getName());
+    hadoopConf.set("fs.trash.interval", "0");
+    hadoopConf.set("fs.trash.checkpoint.interval", "0");
+  }
+
   @Test
-  public void testFileSystemInequivalence() {
-    Configuration hadoopConf = createMock(Configuration.class);
+  public void testFileSystemInequivalence() throws IOException {
     FileSystem fs = createMock(FileSystem.class), other = createMock(FileSystem.class);
 
     String basePath = "/accumulo";
@@ -60,8 +73,7 @@ public class VolumeImplTest {
   }
 
   @Test
-  public void testFileSystemEquivalence() {
-    Configuration hadoopConf = createMock(Configuration.class);
+  public void testFileSystemEquivalence() throws IOException {
     FileSystem fs = createMock(FileSystem.class), other = createMock(FileSystem.class);
     String basePath = "/accumulo";
 
@@ -79,10 +91,13 @@ public class VolumeImplTest {
   }
 
   @Test
-  public void testBasePathInequivalence() {
+  public void testBasePathInequivalence() throws IOException {
     FileSystem fs = createMock(FileSystem.class);
+    expect(fs.getConf()).andReturn(hadoopConf).anyTimes();
 
+    replay(fs);
     VolumeImpl volume = new VolumeImpl(fs, "/accumulo");
+    verify(fs);
 
     assertFalse(volume.isAncestorPathOf(new Path("/something/accumulo")));
     assertFalse(volume.isAncestorPathOf(new Path("/accumulo2")));
@@ -90,11 +105,14 @@ public class VolumeImplTest {
   }
 
   @Test
-  public void testBasePathEquivalence() {
+  public void testBasePathEquivalence() throws IOException {
     FileSystem fs = createMock(FileSystem.class);
+    expect(fs.getConf()).andReturn(hadoopConf).anyTimes();
 
     final String basePath = "/accumulo";
+    replay(fs);
     VolumeImpl volume = new VolumeImpl(fs, basePath);
+    verify(fs);
 
     // Bare path should match
     assertTrue(volume.isAncestorPathOf(new Path(basePath)));

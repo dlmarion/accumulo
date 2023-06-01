@@ -423,38 +423,14 @@ public class GCRun implements GarbageCollectionEnvironment {
   }
 
   /**
-   * Moves a file to trash. If this garbage collector is not using trash, this method returns false
-   * and leaves the file alone. If the file is missing, this method returns false as opposed to
-   * throwing an exception.
+   * Moves a file to trash if supported by the underlying Volume.
    *
    * @return true if the file was moved to trash
    * @throws IOException if the volume manager encountered a problem
    */
   boolean moveToTrash(Path path) throws IOException {
-    final VolumeManager fs = context.getVolumeManager();
-    if (!isUsingTrash()) {
-      log.trace("Accumulo Trash is disabled. Skipped for {}", path);
-      return false;
-    }
-    try {
-      boolean success = fs.moveToTrash(path);
-      log.trace("Accumulo Trash enabled, moving to trash succeeded?: {}", success);
-      return success;
-    } catch (FileNotFoundException ex) {
-      log.error("Error moving {} to trash", path, ex);
-      return false;
-    }
-  }
-
-  /**
-   * Checks if the volume manager should move files to the trash rather than delete them.
-   *
-   * @return true if trash is used
-   */
-  boolean isUsingTrash() {
-    @SuppressWarnings("removal")
-    Property p = Property.GC_TRASH_IGNORE;
-    return !config.getBoolean(p);
+    final VolumeManager vm = context.getVolumeManager();
+    return vm.moveToTrash(path);
   }
 
   /**

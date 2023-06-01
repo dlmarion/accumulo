@@ -49,7 +49,6 @@ import org.apache.accumulo.core.volume.Volume;
 import org.apache.accumulo.core.volume.VolumeConfiguration;
 import org.apache.accumulo.core.volume.VolumeImpl;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.CommonConfigurationKeysPublic;
 import org.apache.hadoop.fs.CreateFlag;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -58,7 +57,6 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
-import org.apache.hadoop.fs.Trash;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.protocol.ErasureCodingPolicy;
@@ -354,12 +352,19 @@ public class VolumeManagerImpl implements VolumeManager {
 
   @Override
   public boolean moveToTrash(Path path) throws IOException {
-    FileSystem fs = getFileSystemByPath(path);
-    String key = CommonConfigurationKeysPublic.FS_TRASH_INTERVAL_KEY;
-    log.trace("{}: {}", key, fs.getConf().get(key));
-    Trash trash = new Trash(fs, fs.getConf());
-    log.trace("Hadoop Trash is enabled for {}: {}", path, trash.isEnabled());
-    return trash.moveToTrash(path);
+    for (Volume vol : getVolumes()) {
+      if (vol.containsPath(path)) {
+        if (vol.isTrashEnabled()) {
+          try {
+            return vol.moveToTrash(path);
+          } catch (IOException ex) {
+            return false;
+          }
+        }
+        break;
+      }
+    }
+    return false;
   }
 
   @Override

@@ -18,6 +18,8 @@
  */
 package org.apache.accumulo.core.volume;
 
+import java.io.IOException;
+
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
@@ -58,4 +60,18 @@ public interface Volume {
    * patterns, such as <code>../</code>.
    */
   boolean containsPath(Path path);
+
+  /**
+   * @return true if Trash is enabled on this volume, else false
+   * @since 3.0.0
+   */
+  boolean isTrashEnabled();
+
+  /**
+   * @param path file or directory to move to trash
+   * @return success (true) or failure (false)
+   * @since 3.0.0
+   */
+  boolean moveToTrash(Path path) throws IOException;
+
 }
