@@ -115,7 +115,6 @@ public class LowMemoryDetector {
 
       if (freeMemory < (long) lowMemoryThreshold) {
         lowMemCount++;
-        log.info("Observed running low on memory");
         if (lowMemCount > 3 && !runningLowOnMemory) {
           runningLowOnMemory = true;
           log.warn("Running low on memory condition set");
