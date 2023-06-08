@@ -28,15 +28,24 @@ import org.apache.accumulo.core.data.Value;
 import org.apache.accumulo.core.iterators.IteratorEnvironment;
 import org.apache.accumulo.core.iterators.SortedKeyValueIterator;
 import org.apache.accumulo.core.iterators.WrappingIterator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 public class MemoryFreeingIterator extends WrappingIterator {
 
+  private static final Logger LOG = LoggerFactory.getLogger(MemoryFreeingIterator.class);
+
   @Override
+  @SuppressFBWarnings(value = "DM_GC", justification = "gc is okay for test")
   public void init(SortedKeyValueIterator<Key,Value> source, Map<String,String> options,
       IteratorEnvironment env) throws IOException {
     super.init(source, options, env);
+    LOG.info("Freeing consumed memory");
     MemoryConsumingIterator.freeBuffers();
     while (this.isRunningLowOnMemory()) {
+      System.gc();
       // wait for LowMemoryDetector to recognize the memory is free.
       try {
         Thread.sleep(SECONDS.toMillis(1));
@@ -45,6 +54,7 @@ public class MemoryFreeingIterator extends WrappingIterator {
         throw new IOException("wait for low memory detector interrupted", ex);
       }
     }
+    LOG.info("Consumed memory freed");
   }
 
 }

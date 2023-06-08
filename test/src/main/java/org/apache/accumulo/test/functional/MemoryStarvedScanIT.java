@@ -49,11 +49,14 @@ import org.apache.accumulo.miniclusterImpl.MiniAccumuloConfigImpl;
 import org.apache.accumulo.test.metrics.TestStatsDRegistryFactory;
 import org.apache.accumulo.test.metrics.TestStatsDSink;
 import org.apache.accumulo.test.metrics.TestStatsDSink.Metric;
+import org.apache.accumulo.test.util.Wait;
 import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class MemoryStarvedScanIT extends SharedMiniClusterBase {
 
@@ -83,6 +86,7 @@ public class MemoryStarvedScanIT extends SharedMiniClusterBase {
 
   public static final double FREE_MEMORY_THRESHOLD = 0.20D;
 
+  private static final Logger LOG = LoggerFactory.getLogger(MemoryStarvedScanIT.class);
   private static final DoubleAdder SCAN_START_DELAYED = new DoubleAdder();
   private static final DoubleAdder SCAN_RETURNED_EARLY = new DoubleAdder();
   private static final AtomicInteger LOW_MEM_DETECTED = new AtomicInteger(0);
@@ -236,6 +240,7 @@ public class MemoryStarvedScanIT extends SharedMiniClusterBase {
         memoryConsumingScanner.setReadaheadThreshold(Long.MAX_VALUE);
 
         t.start();
+        LOG.info("Waiting for memory to be consumed");
 
         // Wait until the dataConsumingScanner has started fetching data
         int currentCount = fetched.get();
@@ -252,30 +257,32 @@ public class MemoryStarvedScanIT extends SharedMiniClusterBase {
         // Confirm that some data was fetched by the memoryConsumingScanner
         currentCount = fetched.get();
         assertTrue(currentCount > 0 && currentCount < 100);
+        LOG.info("Memory consumed");
 
         // Grab the current metric counts, wait
-        double returned = SCAN_RETURNED_EARLY.doubleValue();
-        double paused = SCAN_START_DELAYED.doubleValue();
+        final double returned = SCAN_RETURNED_EARLY.doubleValue();
+        final double paused = SCAN_START_DELAYED.doubleValue();
         Thread.sleep(1500);
         // One of two conditions could exist here:
         // The number of fetched rows equals the current count before the wait above
         // and the SCAN_START_DELAYED has been incremented OR the number of fetched
         // rows is one more than the current count and the SCAN_RETURNED_EARLY has
         // been incremented.
-        assertTrue((currentCount == fetched.get() && SCAN_START_DELAYED.doubleValue() > paused)
-            || (currentCount + 1 == fetched.get() && SCAN_RETURNED_EARLY.doubleValue() > returned));
+        final int currentCountCopy = currentCount;
+        Wait.waitFor(() -> (currentCountCopy == fetched.get() && SCAN_START_DELAYED.doubleValue() > paused)
+            || (currentCountCopy + 1 == fetched.get() && SCAN_RETURNED_EARLY.doubleValue() > returned));
         currentCount = fetched.get();
 
         // Perform the check again
-        paused = SCAN_START_DELAYED.doubleValue();
-        returned = SCAN_RETURNED_EARLY.doubleValue();
         Thread.sleep(1500);
         assertEquals(currentCount, fetched.get());
 
         assertEquals(1, LOW_MEM_DETECTED.get());
 
         // Free the memory which will allow the pausing scanner to continue
+        LOG.info("Freeing memory");
         freeServerMemory(client, table);
+        LOG.info("Memory freed");
 
         t.join();
         assertEquals(30, fetched.get());
