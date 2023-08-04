@@ -25,7 +25,6 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Stream;
 
 import org.apache.accumulo.core.client.Accumulo;
 import org.apache.accumulo.core.client.AccumuloClient;
@@ -38,7 +37,6 @@ import org.apache.accumulo.core.data.Mutation;
 import org.apache.accumulo.core.data.TableId;
 import org.apache.accumulo.core.data.Value;
 import org.apache.accumulo.core.iterators.IteratorUtil.IteratorScope;
-import org.apache.accumulo.core.metadata.schema.TabletMetadata;
 import org.apache.accumulo.core.metadata.schema.TabletMetadata.ColumnType;
 import org.apache.accumulo.core.util.UtilWaitThread;
 import org.apache.accumulo.harness.MiniClusterConfigurationCallback;
@@ -125,7 +123,7 @@ public class HalfClosedTabletIT extends SharedMiniClusterBase {
       // unloaded
       tops.offline(tableName);
 
-      Wait.waitFor(() -> countHostedTablets(client, tableId).count() == 0L, 340_000);
+      Wait.waitFor(() -> emptyHostedTablets(client, tableId), 340_000);
     }
   }
 
@@ -166,9 +164,11 @@ public class HalfClosedTabletIT extends SharedMiniClusterBase {
       try {
         // We are expecting this to fail, the table should not be taken offline
         // because the bad iterator will prevent the minc from completing.
-        Wait.waitFor(() -> countHostedTablets(c, tid).count() == 0L, 120_000);
+        Wait.waitFor(() -> emptyHostedTablets(c, tid), 120_000);
         fail("Zero hosted tablets for table.");
-      } catch (IllegalStateException e) {}
+      } catch (IllegalStateException e) {
+        // ignore - expected to fail.
+      }
 
       // minc should fail, so there should be no files
       FunctionalTestUtils.checkRFiles(c, tableName, 1, 1, 0, 0);
@@ -183,7 +183,7 @@ public class HalfClosedTabletIT extends SharedMiniClusterBase {
 
       // Taking the table offline should succeed normally
       tops.offline(tableName);
-      Wait.waitFor(() -> countHostedTablets(c, tid).count() == 0L, 340_000);
+      Wait.waitFor(() -> emptyHostedTablets(c, tid), 340_000);
     }
   }
 
@@ -211,8 +211,10 @@ public class HalfClosedTabletIT extends SharedMiniClusterBase {
     }
   }
 
-  public static Stream<TabletMetadata> countHostedTablets(AccumuloClient c, TableId tid) {
-    return ((ClientContext) c).getAmple().readTablets().forTable(tid).fetch(ColumnType.LOCATION)
-        .build().stream();
+  public static boolean emptyHostedTablets(AccumuloClient c, TableId tid) {
+    try (var metadata = ((ClientContext) c).getAmple().readTablets().forTable(tid)
+        .fetch(ColumnType.LOCATION).build()) {
+      return metadata.stream().findAny().isEmpty();
+    }
   }
 }

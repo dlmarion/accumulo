@@ -105,8 +105,7 @@ public class HalfClosedTablet2IT extends SharedMiniClusterBase {
       // unloaded
       tops.offline(tableName);
 
-      Wait.waitFor(() -> HalfClosedTabletIT.countHostedTablets(client, tableId).count() == 0L,
-          340_000);
+      Wait.waitFor(() -> HalfClosedTabletIT.emptyHostedTablets(client, tableId), 340_000);
 
     }
 
