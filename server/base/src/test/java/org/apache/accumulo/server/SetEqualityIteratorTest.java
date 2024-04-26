@@ -135,7 +135,7 @@ public class SetEqualityIteratorTest {
     // The iterator should produce a value that is equal to the expected value on the condition
     var condition = SetEqualityIterator.createCondition(Collections.emptySet(),
         storedTabletFile -> ((StoredTabletFile) storedTabletFile).getMetadata().getBytes(UTF_8),
-        family, false);
+        family);
     assertArrayEquals(condition.getValue().toArray(),
         setEqualityIteratorNoFiles.getTopValue().get());
   }
@@ -154,11 +154,9 @@ public class SetEqualityIteratorTest {
     // Asserting the result
     assertEquals(new Key(tabletRow, family), setEqualityIteratorOneFile.getTopKey());
     // The iterator should produce a value that is equal to the expected value on the condition
-    var condition =
-        SetEqualityIterator.createCondition(tmOneFile.getFilesMap().entrySet(), entry -> {
-          return (entry.getKey().getMetadata() + SetEqualityIterator.VALUE_SEPARATOR
-              + entry.getValue().encodeAsString()).getBytes(UTF_8);
-        }, family, true);
+    var condition = SetEqualityIterator.createCondition(tmOneFile.getFilesMap().entrySet(),
+        entry -> entry.getKey().getMetadata().getBytes(UTF_8), entry -> entry.getValue().encode(),
+        family);
     assertArrayEquals(condition.getValue().toArray(),
         setEqualityIteratorOneFile.getTopValue().get());
   }
@@ -177,11 +175,9 @@ public class SetEqualityIteratorTest {
     // Asserting the result
     assertEquals(new Key(tabletRow, family), setEqualityIterator.getTopKey());
     // The iterator should produce a value that is equal to the expected value on the condition
-    var condition =
-        SetEqualityIterator.createCondition(tmMultipleFiles.getFilesMap().entrySet(), entry -> {
-          return (entry.getKey().getMetadata() + SetEqualityIterator.VALUE_SEPARATOR
-              + entry.getValue().encodeAsString()).getBytes(UTF_8);
-        }, family, true);
+    var condition = SetEqualityIterator.createCondition(tmMultipleFiles.getFilesMap().entrySet(),
+        entry -> entry.getKey().getMetadata().getBytes(UTF_8), entry -> entry.getValue().encode(),
+        family);
     assertArrayEquals(condition.getValue().toArray(), setEqualityIterator.getTopValue().get());
 
   }
