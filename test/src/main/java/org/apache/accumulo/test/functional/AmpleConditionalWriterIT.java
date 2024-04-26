@@ -319,9 +319,8 @@ public class AmpleConditionalWriterIT extends AccumuloClusterHarness {
           .putFile(stf4, new DataFileValue(0, 0)).deleteFile(stf1).deleteFile(stf2).deleteFile(stf3)
           .submit(tm -> false);
       results = ctmi.process();
-      // First attempt should fail because the dfvs were replaced in the test so the values of the
-      // files
-      // will not match
+      // First attempt should fail because the dfvs were replaced in the test
+      // so the values of the files will not match
       assertEquals(Status.REJECTED, results.get(e1).getStatus());
 
       // Try again with the correct comapcted datafiles
