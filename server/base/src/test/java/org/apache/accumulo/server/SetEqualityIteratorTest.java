@@ -39,6 +39,7 @@ import org.apache.accumulo.core.metadata.StoredTabletFile;
 import org.apache.accumulo.core.metadata.schema.DataFileValue;
 import org.apache.accumulo.core.metadata.schema.MetadataSchema;
 import org.apache.accumulo.core.metadata.schema.TabletMetadata;
+import org.apache.accumulo.core.util.Pair;
 import org.apache.accumulo.server.metadata.iterators.SetEqualityIterator;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Text;
@@ -154,8 +155,9 @@ public class SetEqualityIteratorTest {
     // Asserting the result
     assertEquals(new Key(tabletRow, family), setEqualityIteratorOneFile.getTopKey());
     // The iterator should produce a value that is equal to the expected value on the condition
-    var condition = SetEqualityIterator.createCondition(tmOneFile.getFilesMap().entrySet(),
-        entry -> entry.getKey().getMetadata().getBytes(UTF_8), entry -> entry.getValue().encode(),
+    var condition = SetEqualityIterator.createConditionWithVal(tmOneFile.getFilesMap().entrySet(),
+        entry -> new Pair<>(entry.getKey().getMetadata().getBytes(UTF_8),
+            entry.getValue().encode()),
         family);
     assertArrayEquals(condition.getValue().toArray(),
         setEqualityIteratorOneFile.getTopValue().get());
@@ -175,9 +177,11 @@ public class SetEqualityIteratorTest {
     // Asserting the result
     assertEquals(new Key(tabletRow, family), setEqualityIterator.getTopKey());
     // The iterator should produce a value that is equal to the expected value on the condition
-    var condition = SetEqualityIterator.createCondition(tmMultipleFiles.getFilesMap().entrySet(),
-        entry -> entry.getKey().getMetadata().getBytes(UTF_8), entry -> entry.getValue().encode(),
-        family);
+    var condition =
+        SetEqualityIterator.createConditionWithVal(tmMultipleFiles.getFilesMap().entrySet(),
+            entry -> new Pair<>(entry.getKey().getMetadata().getBytes(UTF_8),
+                entry.getValue().encode()),
+            family);
     assertArrayEquals(condition.getValue().toArray(), setEqualityIterator.getTopValue().get());
 
   }

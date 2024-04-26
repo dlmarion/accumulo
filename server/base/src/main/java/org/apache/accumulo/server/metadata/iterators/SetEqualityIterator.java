@@ -40,6 +40,7 @@ import org.apache.accumulo.core.data.Range;
 import org.apache.accumulo.core.data.Value;
 import org.apache.accumulo.core.iterators.IteratorEnvironment;
 import org.apache.accumulo.core.iterators.SortedKeyValueIterator;
+import org.apache.accumulo.core.util.Pair;
 import org.apache.accumulo.server.metadata.ConditionalTabletMutatorImpl;
 import org.apache.hadoop.io.Text;
 
@@ -192,11 +193,6 @@ public class SetEqualityIterator implements SortedKeyValueIterator<Key,Value> {
     }
   }
 
-  private static <T> byte[] encode(Set<T> set, Function<T,byte[]> keyEncoder,
-      Function<T,byte[]> valEncoder) {
-    return encode(set, obj -> encodeKeyValue(keyEncoder.apply(obj), valEncoder.apply(obj)));
-  }
-
   private static byte[] encodeKeyValue(byte[] key, byte[] val) {
     var bytesToWrite = new byte[key.length + VALUE_SEPARATOR_BYTES_LENGTH + val.length];
     System.arraycopy(key, 0, bytesToWrite, 0, key.length);
@@ -217,14 +213,16 @@ public class SetEqualityIterator implements SortedKeyValueIterator<Key,Value> {
     return new Condition(family, EMPTY).setValue(encode((Set<T>) set, encoder)).setIterators(is);
   }
 
-  public static <T> Condition createCondition(Collection<T> set, Function<T,byte[]> keyEncoder,
-      Function<T,byte[]> valEncoder, Text family) {
+  public static <T> Condition createConditionWithVal(Collection<T> set,
+      Function<T,Pair<byte[],byte[]>> encoder, Text family) {
     Preconditions.checkArgument(set instanceof Set);
     IteratorSetting is = new IteratorSetting(ConditionalTabletMutatorImpl.INITIAL_ITERATOR_PRIO,
         SetEqualityIterator.class);
     is.addOption(SetEqualityIterator.CONCAT_VALUE, Boolean.toString(true));
-    return new Condition(family, EMPTY).setValue(encode((Set<T>) set, keyEncoder, valEncoder))
-        .setIterators(is);
+    return new Condition(family, EMPTY).setValue(encode((Set<T>) set, s -> {
+      Pair<byte[],byte[]> kv = encoder.apply(s);
+      return encodeKeyValue(kv.getFirst(), kv.getSecond());
+    })).setIterators(is);
   }
 
 }

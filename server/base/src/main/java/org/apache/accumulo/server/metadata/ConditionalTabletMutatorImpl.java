@@ -54,6 +54,7 @@ import org.apache.accumulo.core.metadata.schema.TabletMetadata.ColumnType;
 import org.apache.accumulo.core.metadata.schema.TabletMetadata.Location;
 import org.apache.accumulo.core.metadata.schema.TabletMutatorBase;
 import org.apache.accumulo.core.metadata.schema.TabletOperationId;
+import org.apache.accumulo.core.util.Pair;
 import org.apache.accumulo.server.ServerContext;
 import org.apache.accumulo.server.metadata.iterators.LocationExistsIterator;
 import org.apache.accumulo.server.metadata.iterators.PresentIterator;
@@ -173,9 +174,11 @@ public class ConditionalTabletMutatorImpl extends TabletMutatorBase<Ample.Condit
       }
         break;
       case FILES: {
-        Condition c = SetEqualityIterator.createCondition(tabletMetadata.getFilesMap().entrySet(),
-            entry -> entry.getKey().getMetadata().getBytes(UTF_8),
-            entry -> entry.getValue().encode(), DataFileColumnFamily.NAME);
+        Condition c =
+            SetEqualityIterator.createConditionWithVal(tabletMetadata.getFilesMap().entrySet(),
+                entry -> new Pair<>(entry.getKey().getMetadata().getBytes(UTF_8),
+                    entry.getValue().encode()),
+                DataFileColumnFamily.NAME);
         mutation.addCondition(c);
       }
         break;
