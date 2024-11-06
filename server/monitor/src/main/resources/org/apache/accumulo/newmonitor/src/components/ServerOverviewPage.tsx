@@ -16,7 +16,6 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-// src/components/ServersPage.tsx
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { fetchAllMetrics } from '../api';

@@ -16,7 +16,6 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-// src/components/ServerPage.tsx
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { fetchAllMetrics, fetchManagerMetrics, fetchGCMetrics } from '../api';
@@ -30,9 +29,9 @@ function ServerPage() {
   useEffect(() => {
     async function getServerData() {
       let data: ServerData | null = null;
-      if (serverId === 'manager') {
+      if (serverId === 'MANAGER') {
         data = await fetchManagerMetrics();
-      } else if (serverId === 'garbage-collector') {
+      } else if (serverId === 'GARBAGE_COLLECTOR') {
         data = await fetchGCMetrics();
       } else {
         const allData = await fetchAllMetrics();
