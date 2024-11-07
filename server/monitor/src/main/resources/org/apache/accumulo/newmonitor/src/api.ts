@@ -26,6 +26,8 @@ import {
   HealthStatus,
   Warning,
   ResourceGroupDetails,
+  TablesMetrics,
+  DeploymentsMetrics,
 } from './types';
 
 async function fetchWithHandling<T>(
@@ -119,6 +121,16 @@ export async function fetchProblems(): Promise<ProblemMetrics> {
 export async function fetchCompactions(max?: number): Promise<CompactionsMetrics> {
   const path = max ? `/metrics/compactions/${max}` : '/metrics/compactions';
   return await fetchWithHandling<CompactionsMetrics>(path);
+}
+
+export async function fetchTablesMetrics(name?: string): Promise<TablesMetrics> {
+  const path = name ? `/metrics/tables/${name}` : '/metrics/tables';
+  return await fetchWithHandling<TablesMetrics>(path);
+}
+
+export async function fetchDeploymentMetrics(): Promise<DeploymentsMetrics> {
+  const path = '/metrics/deployment';
+  return await fetchWithHandling<DeploymentsMetrics>(path);
 }
 
 // TEST DATA FOR HOMEPAGE:

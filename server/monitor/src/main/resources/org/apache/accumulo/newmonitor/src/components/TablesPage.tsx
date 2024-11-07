@@ -16,19 +16,59 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-function Tables() {
-    return (
-        <>
-            <h1>Tables</h1>
-            <h2>List of tables</h2>
-            <ul>
-                <li>DummyTable1</li>
-                <li>DummyTable2</li>
-                <li>DummyTable3</li>
-            </ul>
-        </>
-    );
+import { useState, useEffect } from 'react';
+import { fetchTablesMetrics } from '../api';
+import { TablesMetrics } from '../types';
+import { Table } from 'react-bootstrap';
 
+function TablesPage() {
+  const [tableData, setTableData] = useState<TablesMetrics>({});
+
+  useEffect(() => {
+    async function getData() {
+      try {
+        const data: TablesMetrics = await fetchTablesMetrics();
+        setTableData(data);
+      } catch (error) {
+        console.error('Error fetching table metrics:', error);
+      }
+    }
+    void getData();
+  }, []);
+
+  return (
+    <>
+      <h1>Tables</h1>
+      {Object.keys(tableData).length === 0 ? (
+        <p>No table data available.</p>
+      ) : (
+        <Table striped bordered hover size="lg" className="mx-auto">
+          <thead>
+            <tr>
+              <th>Table Name</th>
+              <th>Total Entries</th>
+              <th>Total Size On Disk</th>
+              <th>Total Files</th>
+              <th>Total WALs</th>
+              <th>Total Tablets</th>
+            </tr>
+          </thead>
+          <tbody>
+            {Object.entries(tableData).map(([tableName, metrics]) => (
+              <tr key={tableName}>
+                <td>{tableName}</td>
+                <td>{metrics.totalEntries}</td>
+                <td>{metrics.totalSizeOnDisk}</td>
+                <td>{metrics.totalFiles}</td>
+                <td>{metrics.totalWals}</td>
+                <td>{metrics.totalTablets}</td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      )}
+    </>
+  );
 }
 
-export default Tables;
+export default TablesPage;

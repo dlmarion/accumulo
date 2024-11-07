@@ -98,3 +98,29 @@ export interface ResourceGroupDetails {
   type: string;
   componentCount: number;
 }
+
+interface TableMetrics {
+  totalEntries: number;
+  totalSizeOnDisk: number;
+  totalFiles: number;
+  totalWals: number;
+  totalTablets: number;
+  availableAlways: number;
+  availableOnDemand: number;
+  availableNever: number;
+  totalAssignedTablets: number;
+  totalAssignedToDeadServerTablets: number;
+  totalHostedTablets: number;
+  totalSuspendedTablets: number;
+  totalUnassignedTablets: number;
+}
+
+export type TablesMetrics = Record<string, TableMetrics>;
+
+type DeploymentMetrics = Record<string, {
+  up: number;
+  down: number;
+  downHosts: string[];
+}>
+
+export type DeploymentsMetrics = Record<string, DeploymentMetrics>;
