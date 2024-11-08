@@ -17,38 +17,69 @@
  * under the License.
  */
 import { useState, useEffect } from 'react';
+import { Card, Row, Col, Container } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
-import { fetchGroups } from '../api';
+import { fetchDeploymentMetrics } from '../api';
+import { DeploymentsMetrics, ServerType, ServerTypeDisplayName } from '../types';
 
-/**
- * Component that displays the Resource Group overview page.
- */
 function ResourceGroupsOverviewPage() {
-  const [groups, setGroups] = useState<string[]>([]);
+  const [deploymentMetrics, setDeploymentMetrics] = useState<DeploymentsMetrics>({});
 
   useEffect(() => {
-    async function getGroups() {
+    async function getDeploymentMetrics() {
       try {
-        const data = await fetchGroups();
-        setGroups(data);
+        const data = await fetchDeploymentMetrics();
+        setDeploymentMetrics(data);
       } catch (error) {
-        console.error('Error fetching groups:', error);
+        console.error('Error fetching deployment metrics:', error);
       }
     }
-    void getGroups();
+    void getDeploymentMetrics();
   }, []);
 
   return (
-    <div>
-      <h1>Resource Groups</h1>
-      <ul>
-        {groups.map((group) => (
-          <li key={group}>
-            <Link to={`/resource-groups/${group}`}>{group}</Link>
-          </li>
+    <Container>
+      <h1 className="text-center my-4">Resource Groups Deployment Metrics</h1>
+      <Row xs={1} md={2} lg={3} className="g-4">
+        {Object.entries(deploymentMetrics).map(([resourceGroup, serverTypes]) => (
+          <Col key={resourceGroup}>
+            <Card className="h-100">
+              <Card.Body>
+                <Card.Title>
+                  <Link to={`/resource-groups/${resourceGroup}`}>{resourceGroup}</Link>
+                </Card.Title>
+                <div style={{ maxHeight: '300px', overflowX: 'hidden' }}>
+                  <Row xs={1} sm={2} className="g-3">
+                    {Object.entries(serverTypes).map(([serverType, metrics]) => (
+                      <Col key={`${resourceGroup}-${serverType}`}>
+                        <Card>
+                          <Card.Body>
+                            <Card.Title className="mb-2">
+                              {ServerTypeDisplayName.get(serverType as ServerType)}
+                            </Card.Title>
+                            <ul className="list-unstyled mb-0">
+                              <li>
+                                Configured: {metrics.configured}
+                              </li>
+                              <li>
+                                Responded: {metrics.responded}
+                              </li>
+                              <li>
+                                Unresponsive: {metrics.notResponded}
+                              </li>
+                            </ul>
+                          </Card.Body>
+                        </Card>
+                      </Col>
+                    ))}
+                  </Row>
+                </div>
+              </Card.Body>
+            </Card>
+          </Col>
         ))}
-      </ul>
-    </div>
+      </Row>
+    </Container>
   );
 }
 

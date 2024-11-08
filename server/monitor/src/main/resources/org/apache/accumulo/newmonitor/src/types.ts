@@ -117,10 +117,11 @@ interface TableMetrics {
 
 export type TablesMetrics = Record<string, TableMetrics>;
 
-type DeploymentMetrics = Record<string, {
-  up: number;
-  down: number;
-  downHosts: string[];
-}>
+interface ServerMetrics {
+  configured: number;
+  responded: number;
+  notResponded: number;
+  notRespondedHosts: string[];
+}
 
-export type DeploymentsMetrics = Record<string, DeploymentMetrics>;
+export type DeploymentsMetrics = Record<string, Record<ServerType, ServerMetrics>>;

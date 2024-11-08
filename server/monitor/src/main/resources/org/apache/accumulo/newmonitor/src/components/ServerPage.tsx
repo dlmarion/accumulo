@@ -43,7 +43,7 @@ function ServerPage() {
   }, [serverId]);
 
   if (!serverData) {
-    return <div>Loading...</div>;
+    return <div>No data found...</div>;
   }
 
   return (
