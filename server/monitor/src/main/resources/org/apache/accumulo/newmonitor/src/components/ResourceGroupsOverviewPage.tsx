@@ -40,44 +40,65 @@ function ResourceGroupsOverviewPage() {
   return (
     <Container>
       <h1 className="text-center my-4">Resource Groups Deployment Metrics</h1>
-      <Row xs={1} md={2} lg={3} className="g-4">
-        {Object.entries(deploymentMetrics).map(([resourceGroup, serverTypes]) => (
-          <Col key={resourceGroup}>
-            <Card className="h-100">
-              <Card.Body>
-                <Card.Title>
-                  <Link to={`/resource-groups/${resourceGroup}`}>{resourceGroup}</Link>
-                </Card.Title>
-                <div style={{ maxHeight: '300px', overflowX: 'hidden' }}>
-                  <Row xs={1} sm={2} className="g-3">
-                    {Object.entries(serverTypes).map(([serverType, metrics]) => (
-                      <Col key={`${resourceGroup}-${serverType}`}>
-                        <Card>
-                          <Card.Body>
-                            <Card.Title className="mb-2">
-                              {ServerTypeDisplayName.get(serverType as ServerType)}
-                            </Card.Title>
-                            <ul className="list-unstyled mb-0">
-                              <li>
-                                Configured: {metrics.configured}
-                              </li>
-                              <li>
-                                Responded: {metrics.responded}
-                              </li>
-                              <li>
-                                Unresponsive: {metrics.notResponded}
-                              </li>
-                            </ul>
-                          </Card.Body>
-                        </Card>
-                      </Col>
-                    ))}
-                  </Row>
-                </div>
-              </Card.Body>
-            </Card>
-          </Col>
-        ))}
+      <Row xs={1} md={2} className="g-4">
+        {Object.entries(deploymentMetrics).map(([resourceGroup, serverTypes]) => {
+          const hasUnresponsiveHosts = Object.values(serverTypes).some(
+            (metrics) => metrics.notRespondedHosts.length > 0
+          );
+
+          return (
+            <Col key={resourceGroup}>
+              <Card className={`h-100 border-3 ${hasUnresponsiveHosts ? 'border-danger-subtle' : 'border-success-subtle'}`}>
+                <Card.Body>
+                  <Card.Title>
+                    <Link to={`/resource-groups/${resourceGroup}`}>{resourceGroup}</Link>
+                  </Card.Title>
+                  <div style={{ maxHeight: '300px', overflowX: 'hidden' }}>
+                    <Row xs={1} sm={2} className="g-3">
+                      {Object.entries(serverTypes).map(([serverType, metrics]) => {
+                        const hasUnresponsiveHosts = metrics.notRespondedHosts.length > 0;
+
+                        return (
+                          <Col key={`${resourceGroup}-${serverType}`}>
+                            <Card className={`border-3 ${hasUnresponsiveHosts ? 'bg-danger-subtle' : 'border-success-subtle'}`}>
+                              <Card.Body>
+                                <Card.Title className="mb-2">
+                                  {ServerTypeDisplayName.get(serverType as ServerType)}
+                                </Card.Title>
+                                <ul className="list-unstyled mb-0">
+                                  <li>
+                                    Configured: {metrics.configured}
+                                  </li>
+                                  <li>
+                                    Responded: {metrics.responded}
+                                  </li>
+                                  {hasUnresponsiveHosts ? (
+                                    <>
+                                      <strong>Unresponsive Hosts:</strong>
+                                      <ul className="list-unstyled">
+                                        {metrics.notRespondedHosts.map((host) => (
+                                          <li key={host}>
+                                            <Link to={`/server/${host}`}>{host}</Link>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </>
+                                  ) : (
+                                    <li>Unresponsive: 0</li>
+                                  )}
+                                </ul>
+                              </Card.Body>
+                            </Card>
+                          </Col>
+                        );
+                      })}
+                    </Row>
+                  </div>
+                </Card.Body>
+              </Card>
+            </Col>
+          );
+        })}
       </Row>
     </Container>
   );
