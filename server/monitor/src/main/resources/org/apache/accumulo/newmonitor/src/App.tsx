@@ -68,7 +68,7 @@ function App() {
                 <NavDropdown.Item as={Link} to={`/server/GARBAGE_COLLECTOR`}>
                   Garbage Collector
                 </NavDropdown.Item>
-                <NavDropdown.Item as={Link} to={`/servers/MANAGER`}>
+                <NavDropdown.Item as={Link} to={`/server/MANAGER`}>
                   Manager
                 </NavDropdown.Item>
                 <NavDropdown.Item as={Link} to={`/servers/${ServerType.COMPACTOR}`}>
