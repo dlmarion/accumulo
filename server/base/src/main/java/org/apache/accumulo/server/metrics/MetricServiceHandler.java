@@ -18,9 +18,6 @@
  */
 package org.apache.accumulo.server.metrics;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import org.apache.accumulo.core.clientImpl.thrift.SecurityErrorCode;
 import org.apache.accumulo.core.clientImpl.thrift.TInfo;
 import org.apache.accumulo.core.clientImpl.thrift.ThriftSecurityException;
@@ -36,7 +33,6 @@ import org.slf4j.LoggerFactory;
 import com.google.common.net.HostAndPort;
 import com.google.flatbuffers.FlatBufferBuilder;
 
-import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Metrics;
 
 public class MetricServiceHandler implements MetricService.Iface {
@@ -82,14 +78,8 @@ public class MetricServiceHandler implements MetricService.Iface {
     response.setResourceGroup(resourceGroup);
     response.setTimestamp(System.currentTimeMillis());
 
-    if (!ctx.getMetricsInfo().isMetricsEnabled()) {
-      return response;
-    }
-
-    List<MeterRegistry> registries = new ArrayList<>(Metrics.globalRegistry.getRegistries());
-    registries.add(Metrics.globalRegistry);
-    registries.forEach(r -> {
-      r.getMeters().forEach(m -> {
+    if (ctx.getMetricsInfo().isMetricsEnabled()) {
+      Metrics.globalRegistry.getMeters().forEach(m -> {
         if (m.getId().getName().startsWith("accumulo.")) {
           m.match(response::writeMeter, response::writeMeter, response::writeTimer,
               response::writeDistributionSummary, response::writeLongTaskTimer,
@@ -97,8 +87,7 @@ public class MetricServiceHandler implements MetricService.Iface {
               response::writeMeter);
         }
       });
-    });
-
+    }
     builder.clear();
     return response;
   }
