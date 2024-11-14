@@ -85,20 +85,6 @@ export interface ProblemMetrics {
   port: number;
 }
 
-export type HealthStatus = 'healthy' | 'degraded' | 'unhealthy';
-
-export interface Warning {
-  resourceGroup: string;
-  message: string;
-}
-
-export interface ResourceGroupDetails {
-  name: string;
-  healthStatus: HealthStatus;
-  type: string;
-  componentCount: number;
-}
-
 interface TableMetrics {
   totalEntries: number;
   totalSizeOnDisk: number;
