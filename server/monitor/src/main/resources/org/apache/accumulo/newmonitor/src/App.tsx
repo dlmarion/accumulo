@@ -58,6 +58,9 @@ function App() {
           <Navbar.Toggle aria-controls="basic-navbar-nav" />
           <Navbar.Collapse id="basic-navbar-nav">
             <Nav className="ms-auto">
+              <Nav.Link as={Link} to="/resource-groups">
+                Resource Groups
+              </Nav.Link>
               <NavDropdown title="Servers" id="servers-dropdown">
                 <NavDropdown.Item as={Link} to={`/servers/${ServerType.TABLET_SERVER}`}>
                   Tablet Servers
@@ -77,9 +80,6 @@ function App() {
               </NavDropdown>
               <Nav.Link as={Link} to="/tables">
                 Tables
-              </Nav.Link>
-              <Nav.Link as={Link} to="/resource-groups">
-                Resource Groups
               </Nav.Link>
             </Nav>
           </Navbar.Collapse>
