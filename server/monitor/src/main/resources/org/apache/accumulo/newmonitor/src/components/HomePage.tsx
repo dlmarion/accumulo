@@ -31,8 +31,8 @@ import {
   Col,
   Card,
   ListGroup,
-  Table,
 } from 'react-bootstrap';
+import TablesOverviewTable from './TablesOverviewTable';
 
 function HomePage() {
   const [instanceMetrics, setInstanceMetrics] = useState<InstanceMetrics | null>(null);
@@ -88,30 +88,7 @@ function HomePage() {
               {Object.keys(tableData).length === 0 ? (
                 <p>No table data available.</p>
               ) : (
-                <Table striped bordered hover size="lg" className="mx-auto">
-                  <thead>
-                    <tr>
-                      <th>Table Name</th>
-                      <th>Total Entries</th>
-                      <th>Total Size On Disk</th>
-                      <th>Total Files</th>
-                      <th>Total WALs</th>
-                      <th>Total Tablets</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Object.entries(tableData).map(([tableName, metrics]) => (
-                      <tr key={tableName}>
-                        <td>{tableName}</td>
-                        <td>{metrics.totalEntries}</td>
-                        <td>{metrics.totalSizeOnDisk}</td>
-                        <td>{metrics.totalFiles}</td>
-                        <td>{metrics.totalWals}</td>
-                        <td>{metrics.totalTablets}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </Table>
+                <TablesOverviewTable tableData={tableData} />
               )}
             </Card.Body>
           </Card>

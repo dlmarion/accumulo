@@ -85,7 +85,7 @@ export interface ProblemMetrics {
   port: number;
 }
 
-interface TableMetrics {
+export interface TableMetrics {
   totalEntries: number;
   totalSizeOnDisk: number;
   totalFiles: number;
@@ -99,6 +99,18 @@ interface TableMetrics {
   totalHostedTablets: number;
   totalSuspendedTablets: number;
   totalUnassignedTablets: number;
+}
+
+export interface TabletMetrics {
+  tabletId: string;
+  numFiles: number;
+  numWalLogs: number;
+  estimatedEntries: number;
+  tabletState: string;
+  tabletDir: string;
+  tabletAvailability: string;
+  estimatedSize: number;
+  location: string;
 }
 
 export type TablesMetrics = Record<string, TableMetrics>;

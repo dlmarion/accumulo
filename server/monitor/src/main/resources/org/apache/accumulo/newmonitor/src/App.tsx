@@ -29,6 +29,7 @@ import { useEffect, useState } from 'react';
 import { fetchInstanceMetrics } from './api';
 import ResourceGroupsOverviewPage from './components/ResourceGroupsOverviewPage';
 import TablesPage from './components/TablesPage';
+import TablePage from './components/TablePage';
 
 function App() {
   const [instanceName, setInstanceName] = useState<string>('');
@@ -93,6 +94,7 @@ function App() {
         <Route path="/server/:serverId" element={<ServerPage />} />
         <Route path="/tables" element={<TablesPage />} />
         <Route path="/resource-groups" element={<ResourceGroupsOverviewPage />} />
+        <Route path="/table/:tableName" element={<TablePage />} />
       </Routes>
     </>
   );
