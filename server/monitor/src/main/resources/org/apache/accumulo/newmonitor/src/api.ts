@@ -26,6 +26,7 @@ import {
   TablesMetrics,
   DeploymentsMetrics,
   TabletMetrics,
+  TableMetrics,
 } from './types';
 
 async function fetchWithHandling<T>(
@@ -126,9 +127,15 @@ export async function fetchTablesMetrics(): Promise<TablesMetrics> {
   return await fetchWithHandling<TablesMetrics>(path);
 }
 
-export async function fetchTableDetails(tableName: string): Promise<TabletMetrics[]> {
+export async function fetchTableMetrics(tableName: string): Promise<TableMetrics> {
   const sanitizedTableName = encodeURIComponent(tableName);
   const path = `/metrics/tables/${sanitizedTableName}`;
+  return await fetchWithHandling<TableMetrics>(path);
+}
+
+export async function fetchTableTabletInfo(tableName: string): Promise<TabletMetrics[]> {
+  const sanitizedTableName = encodeURIComponent(tableName);
+  const path = `/metrics/tables/${sanitizedTableName}/tablets`;
   return await fetchWithHandling<TabletMetrics[]>(path, { returnEmptyOn404: true });
 }
 
