@@ -75,11 +75,19 @@ public class RunningCompaction {
   }
 
   public Long getStartTime() {
-    return startTime;
+    if (startTime == Long.MAX_VALUE) {
+      throw new IllegalStateException("Start time has not been set for RunningCompcation");
+    } else {
+      return startTime;
+    }
   }
 
   public void setStartTime(Long time) {
-    startTime = time;
+    if (startTime == Long.MAX_VALUE) {
+      startTime = time;
+    } else {
+      throw new IllegalStateException("Start time already set for RunningCompcation");
+    }
   }
 
 }

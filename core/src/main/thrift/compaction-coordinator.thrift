@@ -129,7 +129,7 @@ service CompactionCoordinatorService {
    * Called by the Monitor to get progress information, returns
    * a size-limited list of the oldest compactions, oldest first.
    */
-  TExternalCompactionList getOldestRunningCompactions(
+  map<string,TExternalCompactionList> getLongRunningCompactions(
     1:client.TInfo tinfo
     2:security.TCredentials credentials
   )

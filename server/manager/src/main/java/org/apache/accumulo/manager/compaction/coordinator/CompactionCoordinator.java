@@ -41,6 +41,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -54,6 +55,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.apache.accumulo.core.Constants;
 import org.apache.accumulo.core.client.AccumuloSecurityException;
@@ -160,45 +162,50 @@ public class CompactionCoordinator
   // Object that serves as a TopN view of the RunningCompactions, ordered by
   // RunningCompaction start time. The first entry in this Set should be the
   // oldest RunningCompaction.
-  private static class TimeOrderedRunningCompactionSet
-      extends ConcurrentSkipListSet<RunningCompaction> {
+  private static class TimeOrderedRunningCompactionSet {
 
-    // TODO: Could make this configurable, but probably should not be large. These
-    // are shown on the monitor, can't imagine that someone is going to page through
-    // all of them.
-    private static final int UPPER_LIMIT = 250;
+    private static final int UPPER_LIMIT = 50;
 
-    private static final long serialVersionUID = 1L;
+    private final ConcurrentSkipListSet<RunningCompaction> compactions =
+        new ConcurrentSkipListSet<>(new Comparator<RunningCompaction>() {
+          @Override
+          public int compare(RunningCompaction rc1, RunningCompaction rc2) {
+            int result = Long.compare(rc1.getStartTime(), rc2.getStartTime());
+            if (result == 0) {
+              result = rc1.getJob().getExternalCompactionId()
+                  .compareTo(rc2.getJob().getExternalCompactionId());
+            }
+            return result;
+          }
+        });
 
+    // Tracking size here as ConcurrentSkipListSet.size() is not constant time
     private final AtomicInteger size = new AtomicInteger(0);
 
-    TimeOrderedRunningCompactionSet() {
-      super(new Comparator<RunningCompaction>() {
-        @Override
-        public int compare(RunningCompaction rc1, RunningCompaction rc2) {
-          return Long.compare(rc1.getStartTime(), rc2.getStartTime());
-        }
-      });
-    }
-
-    @Override
     public boolean add(RunningCompaction e) {
-      boolean added = super.add(e);
+      boolean added = compactions.add(e);
       if (added) {
         if (size.incrementAndGet() > UPPER_LIMIT) {
-          this.remove(this.last());
+          this.remove(compactions.last());
         }
       }
       return added;
     }
 
-    @Override
     public boolean remove(Object o) {
-      boolean removed = super.remove(o);
+      boolean removed = compactions.remove(o);
       if (removed) {
         size.decrementAndGet();
       }
       return removed;
+    }
+
+    public Iterator<RunningCompaction> iterator() {
+      return compactions.iterator();
+    }
+
+    public Stream<RunningCompaction> stream() {
+      return compactions.stream();
     }
 
   }
@@ -218,8 +225,8 @@ public class CompactionCoordinator
   protected final Map<ExternalCompactionId,RunningCompaction> RUNNING_CACHE =
       new ConcurrentHashMap<>();
 
-  private final Set<RunningCompaction> TIME_ORDERED_RUNNING_SET =
-      new TimeOrderedRunningCompactionSet();
+  private final Map<String,TimeOrderedRunningCompactionSet> LONG_RUNNING_COMPACTIONS_BY_RG =
+      new ConcurrentHashMap<>();
 
   /* Map of group name to last time compactor called to get a compaction job */
   private final Map<CompactorGroupId,Long> TIME_COMPACTOR_LAST_CHECKED = new ConcurrentHashMap<>();
@@ -346,9 +353,17 @@ public class CompactionCoordinator
         update.setState(TCompactionState.IN_PROGRESS);
         update.setMessage(RESTART_UPDATE_MSG);
         rc.addUpdate(System.currentTimeMillis(), update);
-        rc.setStartTime(this.coordinatorStartTime);
+        // Find the start time
+        long compactionStartTime = this.coordinatorStartTime;
+        for (Entry<Long,TCompactionStatusUpdate> e : rc.getUpdates().entrySet()) {
+          if (e.getValue().getState() == TCompactionState.STARTED) {
+            compactionStartTime = e.getKey();
+          }
+        }
+        rc.setStartTime(compactionStartTime);
         RUNNING_CACHE.put(ExternalCompactionId.of(rc.getJob().getExternalCompactionId()), rc);
-        TIME_ORDERED_RUNNING_SET.add(rc);
+        LONG_RUNNING_COMPACTIONS_BY_RG
+            .computeIfAbsent(rc.getGroupName(), k -> new TimeOrderedRunningCompactionSet()).add(rc);
       });
     }
 
@@ -960,12 +975,15 @@ public class CompactionCoordinator
       rc.addUpdate(timestamp, update);
       switch (update.state) {
         case STARTED:
-          TIME_ORDERED_RUNNING_SET.add(rc);
+          LONG_RUNNING_COMPACTIONS_BY_RG
+              .computeIfAbsent(rc.getGroupName(), k -> new TimeOrderedRunningCompactionSet())
+              .add(rc);
           break;
         case CANCELLED:
         case FAILED:
         case SUCCEEDED:
-          TIME_ORDERED_RUNNING_SET.remove(rc);
+          LONG_RUNNING_COMPACTIONS_BY_RG
+              .getOrDefault(rc.getGroupName(), new TimeOrderedRunningCompactionSet()).remove(rc);
           break;
         case ASSIGNED:
         case IN_PROGRESS:
@@ -981,7 +999,8 @@ public class CompactionCoordinator
     var rc = RUNNING_CACHE.remove(ecid);
     if (rc != null) {
       completed.put(ecid, rc);
-      TIME_ORDERED_RUNNING_SET.remove(rc);
+      LONG_RUNNING_COMPACTIONS_BY_RG
+          .getOrDefault(rc.getGroupName(), new TimeOrderedRunningCompactionSet()).remove(rc);
     }
   }
 
@@ -1024,24 +1043,30 @@ public class CompactionCoordinator
   }
 
   @Override
-  public TExternalCompactionList getOldestRunningCompactions(TInfo tinfo, TCredentials credentials)
-      throws ThriftSecurityException {
+  public Map<String,TExternalCompactionList> getLongRunningCompactions(TInfo tinfo,
+      TCredentials credentials) throws ThriftSecurityException {
     // do not expect users to call this directly, expect other tservers to call this method
     if (!security.canPerformSystemActions(credentials)) {
       throw new AccumuloSecurityException(credentials.getPrincipal(),
           SecurityErrorCode.PERMISSION_DENIED).asThriftException();
     }
 
-    final TExternalCompactionList result = new TExternalCompactionList();
-    Iterator<RunningCompaction> iter = TIME_ORDERED_RUNNING_SET.iterator();
-    while (iter.hasNext()) {
-      RunningCompaction rc = iter.next();
-      TExternalCompaction trc = new TExternalCompaction();
-      trc.setGroupName(rc.getGroupName());
-      trc.setCompactor(rc.getCompactorAddress());
-      trc.setUpdates(rc.getUpdates());
-      trc.setJob(rc.getJob());
-      result.addToCompactions(trc);
+    final Map<String,TExternalCompactionList> result = new HashMap<>();
+
+    for (Entry<String,TimeOrderedRunningCompactionSet> e : LONG_RUNNING_COMPACTIONS_BY_RG
+        .entrySet()) {
+      final TExternalCompactionList compactions = new TExternalCompactionList();
+      Iterator<RunningCompaction> iter = e.getValue().iterator();
+      while (iter.hasNext()) {
+        RunningCompaction rc = iter.next();
+        TExternalCompaction trc = new TExternalCompaction();
+        trc.setGroupName(rc.getGroupName());
+        trc.setCompactor(rc.getCompactorAddress());
+        trc.setUpdates(rc.getUpdates());
+        trc.setJob(rc.getJob());
+        compactions.addToCompactions(trc);
+      }
+      result.put(e.getKey(), compactions);
     }
     return result;
   }
@@ -1207,7 +1232,7 @@ public class CompactionCoordinator
 
     // This method does the following:
     //
-    // 1. Removes entries from RUNNING_CACHE and TIME_ORDERED_RUNNING_SET that are not really
+    // 1. Removes entries from RUNNING_CACHE and LONG_RUNNING_COMPACTIONS_BY_RG that are not really
     // running
     // 2. Cancels running compactions for groups that are not in the current configuration
     // 3. Remove groups not in configuration from TIME_COMPACTOR_LAST_CHECKED
@@ -1217,7 +1242,11 @@ public class CompactionCoordinator
 
     // grab a snapshot of the ids in the set before reading the metadata table. This is done to
     // avoid removing things that are added while reading the metadata.
-    final Set<ExternalCompactionId> idsSnapshot = Set.copyOf(RUNNING_CACHE.keySet());
+    final Set<ExternalCompactionId> idsSnapshot = Set.copyOf(Sets.union(RUNNING_CACHE.keySet(),
+        LONG_RUNNING_COMPACTIONS_BY_RG.values().stream()
+            .flatMap(TimeOrderedRunningCompactionSet::stream)
+            .map(rc -> rc.getJob().getExternalCompactionId()).map(ExternalCompactionId::of)
+            .collect(Collectors.toSet())));
 
     // grab the ids that are listed as running in the metadata table. It important that this is done
     // after getting the snapshot.

@@ -21,11 +21,11 @@ package org.apache.accumulo.monitor.next;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
-import java.util.Iterator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -317,7 +317,7 @@ public class SystemInformation {
 
   // Compaction Information
   private final Map<String,List<FMetric>> queueMetrics = new ConcurrentHashMap<>();
-  private final AtomicReference<TExternalCompactionList> oldestCompactions =
+  private final AtomicReference<Map<String,TExternalCompactionList>> oldestCompactions =
       new AtomicReference<>();
 
   // Table Information
@@ -448,7 +448,7 @@ public class SystemInformation {
 
   }
 
-  public void processExternalCompactionList(TExternalCompactionList running) {
+  public void processExternalCompactionList(Map<String,TExternalCompactionList> running) {
     oldestCompactions.set(running);
   }
 
@@ -548,21 +548,19 @@ public class SystemInformation {
     return this.queueMetrics;
   }
 
-  public Collection<TExternalCompaction> getCompactions(int topN) {
-    List<TExternalCompaction> results = new ArrayList<>();
+  public Map<String, List<TExternalCompaction>> getCompactions(int topN) {
+    Map<String, List<TExternalCompaction>> results = new HashMap<>();
 
-    TExternalCompactionList oldest = oldestCompactions.get();
+    Map<String,TExternalCompactionList> oldest = oldestCompactions.get();
     if (oldest == null) {
       return results;
     }
-
-    Iterator<TExternalCompaction> oldestIter = oldest.getCompactionsIterator();
-    if (oldestIter == null) {
-      return results;
-    }
-
-    for (int i = 0; i < topN && oldestIter.hasNext(); i++) {
-      results.add(oldestIter.next());
+    
+    for (Entry<String,TExternalCompactionList> e : oldest.entrySet()) {
+      List<TExternalCompaction> compactions = e.getValue().getCompactions();
+      if (compactions != null && compactions.size() > 0) {
+        results.put(e.getKey(), compactions);
+      }
     }
     return results;
   }
