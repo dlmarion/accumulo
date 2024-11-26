@@ -21,6 +21,7 @@ package org.apache.accumulo.core.util.compaction;
 import java.util.Map;
 import java.util.TreeMap;
 
+import org.apache.accumulo.core.compaction.thrift.TCompactionState;
 import org.apache.accumulo.core.compaction.thrift.TCompactionStatusUpdate;
 import org.apache.accumulo.core.compaction.thrift.TExternalCompaction;
 import org.apache.accumulo.core.tabletserver.thrift.TExternalCompactionJob;
@@ -31,6 +32,10 @@ public class RunningCompaction {
   private final String compactorAddress;
   private final String groupName;
   private final Map<Long,TCompactionStatusUpdate> updates = new TreeMap<>();
+
+  // If this object were to be added to a time sorted list before the start time
+  // is set, then it will end up at the end of the list.
+  private Long startTime = Long.MAX_VALUE;
 
   public RunningCompaction(TExternalCompactionJob job, String compactorAddress, String groupName) {
     this.job = job;
@@ -51,6 +56,9 @@ public class RunningCompaction {
   public void addUpdate(Long timestamp, TCompactionStatusUpdate update) {
     synchronized (updates) {
       this.updates.put(timestamp, update);
+      if (update.getState() == TCompactionState.STARTED) {
+        startTime = timestamp;
+      }
     }
   }
 
@@ -64,6 +72,14 @@ public class RunningCompaction {
 
   public String getGroupName() {
     return groupName;
+  }
+
+  public Long getStartTime() {
+    return startTime;
+  }
+
+  public void setStartTime(Long time) {
+    startTime = time;
   }
 
 }

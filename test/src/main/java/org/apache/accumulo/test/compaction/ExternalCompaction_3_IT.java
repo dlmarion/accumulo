@@ -45,7 +45,7 @@ import org.apache.accumulo.core.client.IteratorSetting;
 import org.apache.accumulo.core.compaction.thrift.TCompactionState;
 import org.apache.accumulo.core.compaction.thrift.TCompactionStatusUpdate;
 import org.apache.accumulo.core.compaction.thrift.TExternalCompaction;
-import org.apache.accumulo.core.compaction.thrift.TExternalCompactionList;
+import org.apache.accumulo.core.compaction.thrift.TExternalCompactionMap;
 import org.apache.accumulo.core.conf.Property;
 import org.apache.accumulo.core.data.TableId;
 import org.apache.accumulo.core.iterators.IteratorUtil.IteratorScope;
@@ -226,7 +226,7 @@ public class ExternalCompaction_3_IT extends SharedMiniClusterBase {
     final Map<ExternalCompactionId,RunningCompactionInfo> results = new HashMap<>();
 
     while (results.isEmpty()) {
-      TExternalCompactionList running = null;
+      TExternalCompactionMap running = null;
       while (running == null || running.getCompactions() == null) {
         try {
           Optional<HostAndPort> coordinatorHost =

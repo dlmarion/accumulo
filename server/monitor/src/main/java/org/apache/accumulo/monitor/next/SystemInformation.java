@@ -28,8 +28,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.TreeMap;
-import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -312,9 +310,7 @@ public class SystemInformation {
 
   // Compaction Information
   private final Map<String,List<FMetric>> queueMetrics = new ConcurrentHashMap<>();
-  private final AtomicReference<Map<String,TExternalCompaction>> runningCompactions =
-      new AtomicReference<>();
-  private final AtomicReference<Map<Long,String>> runningCompactionsDurationIndex =
+  private final AtomicReference<TExternalCompactionList> oldestCompactions =
       new AtomicReference<>();
 
   // Table Information
@@ -437,20 +433,7 @@ public class SystemInformation {
   }
 
   public void processExternalCompactionList(TExternalCompactionList running) {
-    // Create an index into the running compaction list that is
-    // sorted by duration, meaning earliest start time first. This
-    // will allow us to show topN longest running compactions.
-    Map<Long,String> timeSortedEcids = new TreeMap<>();
-    if (running.getCompactions() != null) {
-      running.getCompactions().forEach((ecid, extComp) -> {
-        if (extComp.getUpdates() != null && !extComp.getUpdates().isEmpty()) {
-          Set<Long> orderedUpdateTimes = new TreeSet<>(extComp.getUpdates().keySet());
-          timeSortedEcids.put(orderedUpdateTimes.iterator().next(), ecid);
-        }
-      });
-    }
-    runningCompactions.set(running.getCompactions());
-    runningCompactionsDurationIndex.set(timeSortedEcids);
+    oldestCompactions.set(running);
   }
 
   public void processTabletInformation(String tableName, TabletInformation info) {
@@ -538,10 +521,19 @@ public class SystemInformation {
 
   public Collection<TExternalCompaction> getCompactions(int topN) {
     List<TExternalCompaction> results = new ArrayList<>();
-    Map<String,TExternalCompaction> compactions = runningCompactions.get();
-    Iterator<String> ecids = runningCompactionsDurationIndex.get().values().iterator();
-    for (int i = 0; i < topN && ecids.hasNext(); i++) {
-      results.add(compactions.get(ecids.next()));
+
+    TExternalCompactionList oldest = oldestCompactions.get();
+    if (oldest == null) {
+      return results;
+    }
+
+    Iterator<TExternalCompaction> oldestIter = oldest.getCompactionsIterator();
+    if (oldestIter == null) {
+      return results;
+    }
+
+    for (int i = 0; i < topN && oldestIter.hasNext(); i++) {
+      results.add(oldestIter.next());
     }
     return results;
   }
