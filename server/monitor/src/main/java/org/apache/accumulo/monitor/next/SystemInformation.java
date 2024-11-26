@@ -29,9 +29,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.apache.accumulo.core.Constants;
 import org.apache.accumulo.core.client.admin.TabletAvailability;
 import org.apache.accumulo.core.client.admin.TabletInformation;
 import org.apache.accumulo.core.client.admin.servers.ServerId;
@@ -40,10 +42,14 @@ import org.apache.accumulo.core.compaction.thrift.TExternalCompactionList;
 import org.apache.accumulo.core.data.TabletId;
 import org.apache.accumulo.core.dataImpl.KeyExtent;
 import org.apache.accumulo.core.dataImpl.TabletIdImpl;
+import org.apache.accumulo.core.metadata.AccumuloTable;
 import org.apache.accumulo.core.metadata.TabletState;
 import org.apache.accumulo.core.metrics.flatbuffers.FMetric;
 import org.apache.accumulo.core.metrics.flatbuffers.FTag;
 import org.apache.accumulo.core.metrics.thrift.MetricResponse;
+import org.apache.accumulo.core.spi.balancer.TableLoadBalancer;
+import org.apache.accumulo.server.ServerContext;
+import org.apache.accumulo.server.conf.TableConfiguration;
 import org.apache.accumulo.server.metrics.MetricResponseWrapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -278,6 +284,7 @@ public class SystemInformation {
           .maximumExpectedValue(Double.POSITIVE_INFINITY).expiry(Duration.ofMinutes(10))
           .bufferLength(3).build();
 
+  private final ServerContext ctx;
   private final Cache<ServerId,MetricResponse> allMetrics;
 
   private final Set<String> resourceGroups = ConcurrentHashMap.newKeySet();
@@ -320,12 +327,16 @@ public class SystemInformation {
   // Deployment Overview
   private final Map<String,Map<String,ProcessSummary>> deployment = new ConcurrentHashMap<>();
 
-  public SystemInformation(Cache<ServerId,MetricResponse> allMetrics) {
+  private final Set<String> suggestions = new ConcurrentSkipListSet<>();
+
+  public SystemInformation(Cache<ServerId,MetricResponse> allMetrics, ServerContext ctx) {
     this.allMetrics = allMetrics;
+    this.ctx = ctx;
   }
 
   public void clear() {
     resourceGroups.clear();
+    problemHosts.clear();
     compactors.clear();
     sservers.clear();
     tservers.clear();
@@ -335,6 +346,11 @@ public class SystemInformation {
     rgCompactorMetrics.clear();
     rgSServerMetrics.clear();
     rgTServerMetrics.clear();
+    queueMetrics.clear();
+    tables.clear();
+    tablets.clear();
+    deployment.clear();
+    suggestions.clear();
   }
 
   private void updateAggregates(final MetricResponse response,
@@ -441,6 +457,10 @@ public class SystemInformation {
     tablets.computeIfAbsent(tableName, (t) -> Collections.synchronizedList(new ArrayList<>()))
         .add(sti);
     tables.computeIfAbsent(tableName, (t) -> new TableSummary()).addTablet(sti);
+    if (sti.getEstimatedEntries() == 0) {
+      suggestions.add("Tablet " + sti.getTabletId().toString() + " (tid: "
+          + sti.getTabletId().getTable() + ") may have zero entries and could be merged.");
+    }
   }
 
   public void processError(ServerId server) {
@@ -458,6 +478,15 @@ public class SystemInformation {
           .computeIfAbsent(serverId.getType().name(), t -> new ProcessSummary())
           .addNotResponded(serverId);
     });
+    for (AccumuloTable table : AccumuloTable.values()) {
+      TableConfiguration tconf = this.ctx.getTableConfiguration(table.tableId());
+      String balancerRG = tconf.get(TableLoadBalancer.TABLE_ASSIGNMENT_GROUP_PROPERTY);
+      balancerRG = balancerRG == null ? Constants.DEFAULT_RESOURCE_GROUP_NAME : balancerRG;
+      if (!tservers.containsKey(balancerRG)) {
+        suggestions.add("Table " + table.tableName() + " configured to balance tablets in resource"
+            + " group " + balancerRG + ", but there are no TabletServers.");
+      }
+    }
   }
 
   public Set<String> getResourceGroups() {
@@ -548,6 +577,10 @@ public class SystemInformation {
 
   public Map<String,Map<String,ProcessSummary>> getDeploymentOverview() {
     return this.deployment;
+  }
+
+  public Set<String> getSuggestions() {
+    return this.suggestions;
   }
 
 }
