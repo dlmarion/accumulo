@@ -548,14 +548,14 @@ public class SystemInformation {
     return this.queueMetrics;
   }
 
-  public Map<String, List<TExternalCompaction>> getCompactions(int topN) {
-    Map<String, List<TExternalCompaction>> results = new HashMap<>();
+  public Map<String,List<TExternalCompaction>> getCompactions(int topN) {
+    Map<String,List<TExternalCompaction>> results = new HashMap<>();
 
     Map<String,TExternalCompactionList> oldest = oldestCompactions.get();
     if (oldest == null) {
       return results;
     }
-    
+
     for (Entry<String,TExternalCompactionList> e : oldest.entrySet()) {
       List<TExternalCompaction> compactions = e.getValue().getCompactions();
       if (compactions != null && compactions.size() > 0) {

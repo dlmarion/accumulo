@@ -19,14 +19,19 @@
 package org.apache.accumulo.core.util.compaction;
 
 import java.util.Map;
+import java.util.Objects;
 import java.util.TreeMap;
 
 import org.apache.accumulo.core.compaction.thrift.TCompactionState;
 import org.apache.accumulo.core.compaction.thrift.TCompactionStatusUpdate;
 import org.apache.accumulo.core.compaction.thrift.TExternalCompaction;
 import org.apache.accumulo.core.tabletserver.thrift.TExternalCompactionJob;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class RunningCompaction {
+
+  private final static Logger LOG = LoggerFactory.getLogger(RunningCompaction.class);
 
   private final TExternalCompactionJob job;
   private final String compactorAddress;
@@ -38,9 +43,10 @@ public class RunningCompaction {
   private Long startTime = Long.MAX_VALUE;
 
   public RunningCompaction(TExternalCompactionJob job, String compactorAddress, String groupName) {
-    this.job = job;
-    this.compactorAddress = compactorAddress;
-    this.groupName = groupName;
+    this.job = Objects.requireNonNull(job, "job cannot be null");
+    this.compactorAddress =
+        Objects.requireNonNull(compactorAddress, "compactor address cannot be null");
+    this.groupName = Objects.requireNonNull(groupName, "groupName cannot be null");
   }
 
   public RunningCompaction(TExternalCompaction tEC) {
@@ -74,19 +80,21 @@ public class RunningCompaction {
     return groupName;
   }
 
+  public boolean isStartTimeSet() {
+    return startTime != Long.MAX_VALUE;
+  }
+
   public Long getStartTime() {
     if (startTime == Long.MAX_VALUE) {
-      throw new IllegalStateException("Start time has not been set for RunningCompcation");
-    } else {
-      return startTime;
+      LOG.warn("Programming error, RunningCompaction::startTime not set before being compared.");
     }
+    return startTime;
   }
 
   public void setStartTime(Long time) {
+    // Ignore update if startTime has already been set
     if (startTime == Long.MAX_VALUE) {
       startTime = time;
-    } else {
-      throw new IllegalStateException("Start time already set for RunningCompcation");
     }
   }
 

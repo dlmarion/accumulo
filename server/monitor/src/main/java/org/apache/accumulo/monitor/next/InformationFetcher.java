@@ -471,7 +471,7 @@ public class InformationFetcher implements RemovalListener<ServerId,MetricRespon
     return getSummary().getCompactionMetricSummary();
   }
 
-  public Map<String, List<TExternalCompaction>> getCompactions(int topN) {
+  public Map<String,List<TExternalCompaction>> getCompactions(int topN) {
     return getSummary().getCompactions(topN);
   }
 

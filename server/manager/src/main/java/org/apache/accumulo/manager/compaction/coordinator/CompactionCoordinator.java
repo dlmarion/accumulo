@@ -162,7 +162,7 @@ public class CompactionCoordinator
   // Object that serves as a TopN view of the RunningCompactions, ordered by
   // RunningCompaction start time. The first entry in this Set should be the
   // oldest RunningCompaction.
-  private static class TimeOrderedRunningCompactionSet {
+  public static class TimeOrderedRunningCompactionSet {
 
     private static final int UPPER_LIMIT = 50;
 
@@ -181,6 +181,10 @@ public class CompactionCoordinator
 
     // Tracking size here as ConcurrentSkipListSet.size() is not constant time
     private final AtomicInteger size = new AtomicInteger(0);
+
+    public int size() {
+      return size.get();
+    }
 
     public boolean add(RunningCompaction e) {
       boolean added = compactions.add(e);
@@ -225,7 +229,7 @@ public class CompactionCoordinator
   protected final Map<ExternalCompactionId,RunningCompaction> RUNNING_CACHE =
       new ConcurrentHashMap<>();
 
-  private final Map<String,TimeOrderedRunningCompactionSet> LONG_RUNNING_COMPACTIONS_BY_RG =
+  protected final Map<String,TimeOrderedRunningCompactionSet> LONG_RUNNING_COMPACTIONS_BY_RG =
       new ConcurrentHashMap<>();
 
   /* Map of group name to last time compactor called to get a compaction job */
@@ -353,14 +357,9 @@ public class CompactionCoordinator
         update.setState(TCompactionState.IN_PROGRESS);
         update.setMessage(RESTART_UPDATE_MSG);
         rc.addUpdate(System.currentTimeMillis(), update);
-        // Find the start time
-        long compactionStartTime = this.coordinatorStartTime;
-        for (Entry<Long,TCompactionStatusUpdate> e : rc.getUpdates().entrySet()) {
-          if (e.getValue().getState() == TCompactionState.STARTED) {
-            compactionStartTime = e.getKey();
-          }
+        if (!rc.isStartTimeSet()) {
+          rc.setStartTime(this.coordinatorStartTime);
         }
-        rc.setStartTime(compactionStartTime);
         RUNNING_CACHE.put(ExternalCompactionId.of(rc.getJob().getExternalCompactionId()), rc);
         LONG_RUNNING_COMPACTIONS_BY_RG
             .computeIfAbsent(rc.getGroupName(), k -> new TimeOrderedRunningCompactionSet()).add(rc);
@@ -1042,6 +1041,14 @@ public class CompactionCoordinator
     return result;
   }
 
+  /**
+   * Return topN longest running compactions for each resource group
+   *
+   * @param tinfo trace info
+   * @param credentials tcredentials object
+   * @return map of group name to list of compactions in sorted order, oldest compaction first.
+   * @throws ThriftSecurityException permission error
+   */
   @Override
   public Map<String,TExternalCompactionList> getLongRunningCompactions(TInfo tinfo,
       TCredentials credentials) throws ThriftSecurityException {
