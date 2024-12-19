@@ -26,6 +26,7 @@ import static org.apache.accumulo.core.metrics.MetricsInfo.RESOURCE_GROUP_TAG_KE
 
 import java.nio.ByteBuffer;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -81,11 +82,11 @@ public class MetricResponseWrapper extends MetricResponse {
    * Remove tags from the Metric that duplicate other information found in the MetricResponse
    */
   private List<Tag> reduceTags(List<Tag> tags, List<Tag> extraTags) {
-    return Stream.concat(tags.stream(), extraTags.stream()).filter(t -> {
-      return !t.getKey().equals(INSTANCE_NAME_TAG_KEY) && !t.getKey().equals(PROCESS_NAME_TAG_KEY)
-          && !t.getKey().equals(RESOURCE_GROUP_TAG_KEY) && !t.getKey().equals(HOST_TAG_KEY)
-          && !t.getKey().equals(PORT_TAG_KEY);
-    }).collect(Collectors.toList());
+    final Set<String> existingTags = Set.of(INSTANCE_NAME_TAG_KEY, PROCESS_NAME_TAG_KEY,
+        RESOURCE_GROUP_TAG_KEY, HOST_TAG_KEY, PORT_TAG_KEY);
+
+    return Stream.concat(tags.stream(), extraTags.stream())
+        .filter(t -> !existingTags.contains(t.getKey())).collect(Collectors.toList());
   }
 
   private void parseAndCreateCommonInfo(Meter.Id id, List<Tag> extraTags) {
