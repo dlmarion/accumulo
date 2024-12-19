@@ -30,11 +30,11 @@ import io.micrometer.core.instrument.Tag;
 
 public interface MetricsInfo {
 
-  public static final String INSTANCE_NAME_TAG_KEY = "instance.name";
-  public static final String PROCESS_NAME_TAG_KEY = "process.name";
-  public static final String RESOURCE_GROUP_TAG_KEY = "resource.group";
-  public static final String HOST_TAG_KEY = "host";
-  public static final String PORT_TAG_KEY = "port";
+  String INSTANCE_NAME_TAG_KEY = "instance.name";
+  String PROCESS_NAME_TAG_KEY = "process.name";
+  String RESOURCE_GROUP_TAG_KEY = "resource.group";
+  String HOST_TAG_KEY = "host";
+  String PORT_TAG_KEY = "port";
 
   /**
    * Convenience method to create tag name / value pair for the instance name
