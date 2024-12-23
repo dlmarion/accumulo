@@ -59,7 +59,6 @@ import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
@@ -964,10 +963,10 @@ public class TabletServer extends AbstractServer
         .numMaxThreads(16).build();
 
     ManagerClientService.Client iface = managerConnection(getManagerAddress());
-    final AtomicBoolean managerDown = new AtomicBoolean(false);
+    boolean managerDown = false;
 
     try {
-      for (DataLevel level : DataLevel.values()) {
+      for (DataLevel level : new DataLevel[] {DataLevel.USER, DataLevel.METADATA, DataLevel.ROOT}) {
         getOnlineTablets().keySet().forEach(ke -> {
           if (DataLevel.of(ke.tableId()) == level) {
             futures.add(
@@ -975,30 +974,29 @@ public class TabletServer extends AbstractServer
           }
         });
         while (!futures.isEmpty()) {
-          futures.removeIf(f -> {
-            if (!f.isDone()) {
-              return false;
-            }
-            if (!managerDown.get()) {
-              ManagerMessage mm = managerMessages.poll();
-              try {
-                if (mm != null) {
+          Iterator<Future<?>> unloads = futures.iterator();
+          while (unloads.hasNext()) {
+            Future<?> f = unloads.next();
+            if (f.isDone()) {
+              if (!managerDown) {
+                ManagerMessage mm = managerMessages.poll();
+                try {
                   mm.send(getContext().rpcCreds(), getClientAddressString(), iface);
+                } catch (TException e) {
+                  managerDown = true;
+                  LOG.debug("Error sending message to Manager during tablet unloading, msg: {}",
+                      e.getMessage());
                 }
-              } catch (TException e) {
-                managerDown.set(true);
-                log.debug("Error sending message to Manager during tablet unloading, msg: {}",
-                    e.getMessage());
               }
+              unloads.remove();
             }
-            return true;
-          });
+          }
           log.debug("Waiting on {} {} tablets to close.", futures.size(), level);
           UtilWaitThread.sleep(1000);
         }
       }
     } finally {
-      if (!managerDown.get()) {
+      if (!managerDown) {
         try {
           ManagerMessage mm = managerMessages.poll();
           do {
