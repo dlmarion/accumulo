@@ -96,6 +96,7 @@ import org.apache.thrift.transport.TTransportException;
 import org.apache.zookeeper.KeeperException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.event.Level;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
@@ -675,18 +676,28 @@ public class CompactionCoordinator extends AbstractServer implements
 
   protected void startFailureSummaryLogging() {
     ScheduledFuture<?> future = getContext().getScheduledExecutor()
-        .scheduleWithFixedDelay(this::printFailures, 0, 5, TimeUnit.MINUTES);
+        .scheduleWithFixedDelay(this::printStats, 0, 5, TimeUnit.MINUTES);
     ThreadPools.watchNonCriticalScheduledTask(future);
   }
 
-  private <T> void printFailures(String logPrefix,
-      ConcurrentHashMap<T,FailureCounts> failureCounts) {
+  private <T> void printStats(String logPrefix, ConcurrentHashMap<T,FailureCounts> failureCounts,
+      boolean logSuccessAtTrace) {
     for (var key : failureCounts.keySet()) {
       failureCounts.compute(key, (k, counts) -> {
-        if (counts != null && counts.failures > 0) {
-          LOG.warn("{} {} failures:{} successes:{} since last time this was logged ", logPrefix, k,
-              counts.failures, counts.successes);
+        if (counts != null) {
+          Level level;
+          if (counts.failures > 0) {
+            level = Level.WARN;
+          } else if (logSuccessAtTrace) {
+            level = Level.TRACE;
+          } else {
+            level = Level.DEBUG;
+          }
+
+          LOG.atLevel(level).log("{} {} failures:{} successes:{} since last time this was logged ",
+              logPrefix, k, counts.failures, counts.successes);
         }
+
         // clear the counts so they can start building up for the next logging if this key is ever
         // used again
         return null;
@@ -694,7 +705,7 @@ public class CompactionCoordinator extends AbstractServer implements
     }
   }
 
-  private void printFailures() {
+  private void printStats() {
 
     // Remove down compactors from failing list
     Map<String,List<HostAndPort>> allCompactors =
@@ -703,9 +714,9 @@ public class CompactionCoordinator extends AbstractServer implements
     allCompactors.values().forEach(l -> l.forEach(c -> allCompactorAddrs.add(c.toString())));
     failingCompactors.keySet().retainAll(allCompactorAddrs);
 
-    printFailures("Queue", failingQueues);
-    printFailures("Table", failingTables);
-    printFailures("Compactor", failingCompactors);
+    printStats("Queue", failingQueues, false);
+    printStats("Table", failingTables, false);
+    printStats("Compactor", failingCompactors, true);
   }
 
   private void captureSuccess(ExternalCompactionId ecid, KeyExtent extent) {
