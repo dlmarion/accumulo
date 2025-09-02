@@ -35,6 +35,7 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
@@ -49,6 +50,7 @@ import org.apache.accumulo.core.lock.ServiceLockPaths.ServiceLockPath;
 import org.apache.accumulo.core.rpc.ThriftUtil;
 import org.apache.accumulo.core.rpc.clients.ThriftClientTypes;
 import org.apache.accumulo.core.util.Pair;
+import org.apache.accumulo.core.util.Timer;
 import org.apache.accumulo.core.util.threads.Threads;
 import org.apache.commons.collections4.set.CompositeSet;
 import org.apache.thrift.TConfiguration;
@@ -146,6 +148,8 @@ public class ThriftTransportPool {
   @SuppressWarnings("unchecked")
   public Pair<String,TTransport> getAnyCachedTransport(ThriftClientTypes<?> type, ClientContext ctx,
       ThriftService service, ResourceGroupPredicate rgp) {
+
+    final Timer timer = Timer.startNew();
     final List<ThriftTransportKey> serversSet = new ArrayList<>();
 
     Function<AddressSelector,Set<ServiceLockPath>> paths = null;
@@ -196,7 +200,8 @@ public class ThriftTransportPool {
       CachedConnection connection = connectionPool.reserveAny(ttk);
       if (connection != null) {
         final String serverAddr = ttk.getServer().toString();
-        log.trace("Using existing connection to {}", serverAddr);
+        log.trace("Took {} ms to evaluate existing connection to {}",
+            timer.elapsed(TimeUnit.MILLISECONDS), serverAddr);
         return new Pair<>(serverAddr, connection.transport);
       }
     }
