@@ -161,27 +161,16 @@ public class AdminTest {
   /**
    * SServer cleanup without group filter should delete all host nodes.
    */
-  @SuppressWarnings("deprecation")
   @Test
   public void testSserverDeleteAllNoGroupFilter() throws Exception {
     ZooReaderWriter zoo = EasyMock.createNiceMock(ZooReaderWriter.class);
-    ZooKeeper zk = EasyMock.createNiceMock(ZooKeeper.class);
 
     String basePath = "/accumulo/iid/sservers";
     String host1 = "host1:10000";
     String host2 = "host2:10001";
-    String zlock1 = "zlock#00000000-0000-0000-0000-aaaaaaaaaaaa#0000000001";
-    String zlock2 = "zlock#00000000-0000-0000-0000-bbbbbbbbbbbb#0000000001";
 
     EasyMock.expect(zoo.exists(basePath)).andReturn(true);
     EasyMock.expect(zoo.getChildren(basePath)).andReturn(List.of(host1, host2));
-    EasyMock.expect(zoo.getZooKeeper()).andReturn(zk);
-    EasyMock.expect(zk.getChildren(basePath + "/" + host1, null)).andReturn(List.of(zlock1));
-    EasyMock.expect(zk.getData(basePath + "/" + host1 + "/" + zlock1, false, null))
-        .andReturn((UUID.randomUUID().toString() + ",default").getBytes(UTF_8));
-    EasyMock.expect(zk.getChildren(basePath + "/" + host2, null)).andReturn(List.of(zlock2));
-    EasyMock.expect(zk.getData(basePath + "/" + host2 + "/" + zlock2, false, null))
-        .andReturn((UUID.randomUUID().toString() + ",rg1").getBytes(UTF_8));
 
     AtomicBoolean deletedHost1 = new AtomicBoolean(false);
     AtomicBoolean deletedHost2 = new AtomicBoolean(false);
@@ -198,10 +187,10 @@ public class AdminTest {
       return null;
     });
 
-    EasyMock.replay(zoo, zk);
+    EasyMock.replay(zoo);
 
     ZooZap.Opts opts = new ZooZap.Opts();
-    ZooZap.removeScanServerGroupLocks(zoo, basePath, hp -> true, g -> true, opts);
+    ZooZap.removeLocks(zoo, basePath, hp -> true, opts);
 
     assertAll(() -> {
       assertTrue(deletedHost1.get(),
@@ -210,6 +199,6 @@ public class AdminTest {
           "Expected scan server lock for host2 to be deleted when no group filter is set.");
     });
 
-    EasyMock.verify(zoo, zk);
+    EasyMock.verify(zoo);
   }
 }
