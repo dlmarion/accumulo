@@ -115,7 +115,7 @@ public class ScanServerOfflineTableIT extends SharedMiniClusterBase {
   @EnumSource(value = ScanServerAllowedTablesIT.ScannerType.class)
   public void testScan(ScannerType stype) throws Exception {
 
-    final int rows = 500;
+    final int rows = 1000;
 
     try (AccumuloClient client = Accumulo.newClient().from(getClientProps()).build()) {
       String tableName = getUniqueNames(1)[0] + stype.name();

@@ -141,7 +141,23 @@ public enum ClientProperty {
       "A list of span receiver classes to send trace spans"),
   @Deprecated(since = "2.1.0", forRemoval = true)
   TRACE_ZOOKEEPER_PATH("trace.zookeeper.path", Constants.ZTRACERS, PropertyType.PATH,
-      "The zookeeper node where tracers are registered", "2.0.0", false);
+      "The zookeeper node where tracers are registered", "2.0.0", false),
+
+  /*
+   * For use with OfflineTabletLocatorImpl
+   */
+  OFFLINE_LOCATOR_CACHE_DURATION("offline.locator.cache.duration", "10m", PropertyType.TIMEDURATION,
+      "Amount of time for which offline extent information should be cached in the client. The offline"
+          + " extent information is used when performing eventual scans on offline tables.",
+      "2.1.5", false),
+  OFFLINE_LOCATOR_CACHE_PREFETCH("offline.locator.cache.prefetch", "10", PropertyType.COUNT,
+      "The number of offline extents that should be pre-loaded into the cache. The offline"
+          + " extent information is used when performing eventual scans on offline tables.",
+      "2.1.5", false),
+  OFFLINE_LOCATOR_CACHE_SIZE("offline.locator.cache.size", "100", PropertyType.COUNT,
+      "The number of offline extents that should be cached in the client. The offline"
+          + " extent information is used when performing eventual scans on offline tables.",
+      "2.1.5", false);
 
   @Deprecated(since = "2.1.0", forRemoval = true)
   public static final String TRACE_SPAN_RECEIVER_PREFIX = "trace.span.receiver";
