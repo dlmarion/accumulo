@@ -175,7 +175,7 @@ public class OfflineTabletLocatorImpl extends TabletLocator {
         }
         if (LOG.isDebugEnabled()) {
           LOG.debug("Took {}ms to scan and load {} metadata tablets for table {}",
-            scanTimer.elapsed(TimeUnit.MILLISECONDS) , added , tid);
+              scanTimer.elapsed(TimeUnit.MILLISECONDS), added, tid);
         }
         return extents.ceiling(searchKey);
       } finally {
