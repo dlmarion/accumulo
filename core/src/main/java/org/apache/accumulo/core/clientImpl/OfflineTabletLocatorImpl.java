@@ -130,7 +130,8 @@ public class OfflineTabletLocatorImpl extends TabletLocator {
         KeyExtent match = extents.ceiling(searchKey);
         if (match != null && match.contains(searchKey)) {
           // update access time in cache
-          cache.getIfPresent(match);
+          @SuppressWarnings("unused")
+          var unused = cache.getIfPresent(match);
           LOG.trace("Extent {} found in cache for start row {}", match, searchKey);
           return match;
         }
