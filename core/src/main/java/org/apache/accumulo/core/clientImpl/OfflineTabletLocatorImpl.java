@@ -45,8 +45,6 @@ import org.apache.accumulo.core.dataImpl.KeyExtent;
 import org.apache.accumulo.core.manager.state.tables.TableState;
 import org.apache.accumulo.core.metadata.schema.TabletMetadata;
 import org.apache.accumulo.core.metadata.schema.TabletMetadata.ColumnType;
-import org.apache.accumulo.core.metadata.schema.TabletMetadata.Location;
-import org.apache.accumulo.core.metadata.schema.TabletMetadata.LocationType;
 import org.apache.accumulo.core.metadata.schema.TabletsMetadata;
 import org.apache.hadoop.io.Text;
 import org.slf4j.Logger;
@@ -58,6 +56,9 @@ import com.github.benmanes.caffeine.cache.RemovalCause;
 import com.github.benmanes.caffeine.cache.RemovalListener;
 import com.github.benmanes.caffeine.cache.Ticker;
 import com.google.common.base.Preconditions;
+
+import io.micrometer.core.instrument.Metrics;
+import io.micrometer.core.instrument.binder.cache.CaffeineStatsCounter;
 
 public class OfflineTabletLocatorImpl extends TabletLocator {
 
@@ -95,7 +96,10 @@ public class OfflineTabletLocatorImpl extends TabletLocator {
       prefetch = Integer
           .parseInt(ClientProperty.OFFLINE_LOCATOR_CACHE_PREFETCH.getValue(clientProperties));
       cache = Caffeine.newBuilder().expireAfterAccess(cacheDuration).initialCapacity(maxCacheSize)
-          .maximumSize(maxCacheSize).removalListener(this).ticker(Ticker.systemTicker()).build();
+          .maximumSize(maxCacheSize).removalListener(this).ticker(Ticker.systemTicker())
+          .recordStats(() -> new CaffeineStatsCounter(Metrics.globalRegistry,
+              OfflineTabletsCache.class.getSimpleName()))
+          .build();
     }
 
     @Override
@@ -149,9 +153,13 @@ public class OfflineTabletLocatorImpl extends TabletLocator {
         for (int i = 0; i < prefetch && iter.hasNext(); i++) {
           TabletMetadata t = iter.next();
           KeyExtent ke = t.getExtent();
-          Location loc = t.getLocation();
-          if (loc != null && loc.getType() != LocationType.LAST) {
-            throw new IllegalStateException("Extent has current or future location: " + ke);
+          if (t.getLocation() != null) {
+            if (context.getTableState(tid) == TableState.ONLINE) {
+              throw new IllegalStateException(
+                  "Cannot continue scan with OfflineTabletLocator, table is now online");
+            }
+            throw new IllegalStateException(
+                "Extent " + ke + " has current or future location, but table is not online");
           }
           LOG.trace("Caching extent: {}", ke);
           cache.put(ke, ke);
