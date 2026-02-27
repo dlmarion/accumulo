@@ -21,15 +21,15 @@ package org.apache.accumulo.core.clientImpl;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.NavigableSet;
 import java.util.Properties;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import org.apache.accumulo.core.client.AccumuloException;
@@ -57,6 +57,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.RemovalCause;
 import com.github.benmanes.caffeine.cache.RemovalListener;
 import com.github.benmanes.caffeine.cache.Ticker;
+import com.google.common.base.Preconditions;
 
 public class OfflineTabletLocatorImpl extends TabletLocator {
 
@@ -80,14 +81,13 @@ public class OfflineTabletLocatorImpl extends TabletLocator {
     private final ClientContext context;
     private final int prefetch;
     private final Cache<KeyExtent,KeyExtent> cache;
-    private final Set<KeyExtent> evictions = new HashSet<>();
-    private final NavigableSet<KeyExtent> extents =
-        Collections.synchronizedNavigableSet(new TreeSet<>());
+    private final LinkedBlockingQueue<KeyExtent> evictions = new LinkedBlockingQueue<>();
+    private final TreeSet<KeyExtent> extents = new TreeSet<>();
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
     private OfflineTabletsCache(ClientContext context) {
       this.context = context;
-      Properties clientProperties = ClientConfConverter.toProperties(context.getConfiguration());
+      Properties clientProperties = context.getProperties();
       Duration cacheDuration = Duration.ofMillis(
           ClientProperty.OFFLINE_LOCATOR_CACHE_DURATION.getTimeInMillis(clientProperties));
       int maxCacheSize =
@@ -95,24 +95,43 @@ public class OfflineTabletLocatorImpl extends TabletLocator {
       prefetch = Integer
           .parseInt(ClientProperty.OFFLINE_LOCATOR_CACHE_PREFETCH.getValue(clientProperties));
       cache = Caffeine.newBuilder().expireAfterAccess(cacheDuration).initialCapacity(maxCacheSize)
-          .maximumSize(maxCacheSize).evictionListener(this).removalListener(this)
-          .ticker(Ticker.systemTicker()).build();
+          .maximumSize(maxCacheSize).removalListener(this).ticker(Ticker.systemTicker()).build();
     }
 
     @Override
     public void onRemoval(KeyExtent key, KeyExtent value, RemovalCause cause) {
       LOG.trace("Extent was evicted from cache: {}", key);
-      synchronized (evictions) {
-        evictions.add(key);
+      evictions.add(key);
+      try {
+        if (lock.writeLock().tryLock(50, TimeUnit.MILLISECONDS)) {
+          try {
+            processEvictions();
+          } finally {
+            lock.writeLock().unlock();
+          }
+        }
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new RuntimeException("Interrupted while waiting to acquire write lock", e);
       }
     }
 
-    private KeyExtent findOrLoadExtent(KeyExtent start) {
+    private void processEvictions() {
+      Preconditions.checkArgument(lock.writeLock().isHeldByCurrentThread());
+      LOG.trace("Processing prior evictions");
+      Set<KeyExtent> copy = new HashSet<>();
+      evictions.drainTo(copy);
+      extents.removeAll(copy);
+    }
+
+    private KeyExtent findOrLoadExtent(KeyExtent searchKey) {
       lock.readLock().lock();
       try {
-        KeyExtent match = extents.ceiling(start);
-        if (match != null && match.contains(start)) {
-          LOG.trace("Extent {} found in cache for start row {}", match, start);
+        KeyExtent match = extents.ceiling(searchKey);
+        if (match != null && match.contains(searchKey)) {
+          // update access time in cache
+          cache.getIfPresent(match);
+          LOG.trace("Extent {} found in cache for start row {}", match, searchKey);
           return match;
         }
       } finally {
@@ -123,7 +142,7 @@ public class OfflineTabletLocatorImpl extends TabletLocator {
       processEvictions();
       // Load TabletMetadata
       try (TabletsMetadata tm =
-          context.getAmple().readTablets().forTable(tid).overlapping(start.endRow(), true, null)
+          context.getAmple().readTablets().forTable(tid).overlapping(searchKey.endRow(), true, null)
               .fetch(ColumnType.PREV_ROW, ColumnType.LOCATION).build()) {
         Iterator<TabletMetadata> iter = tm.iterator();
         for (int i = 0; i < prefetch && iter.hasNext(); i++) {
@@ -135,19 +154,12 @@ public class OfflineTabletLocatorImpl extends TabletLocator {
           }
           LOG.trace("Caching extent: {}", ke);
           cache.put(ke, ke);
+          TabletLocatorImpl.removeOverlapping(extents, ke);
           extents.add(ke);
         }
-        return extents.ceiling(start);
+        return extents.ceiling(searchKey);
       } finally {
         lock.writeLock().unlock();
-      }
-    }
-
-    private void processEvictions() {
-      synchronized (evictions) {
-        LOG.trace("Processing prior evictions");
-        extents.removeAll(evictions);
-        evictions.clear();
       }
     }
 
@@ -190,8 +202,8 @@ public class OfflineTabletLocatorImpl extends TabletLocator {
     metadataRow.append(row.getBytes(), 0, row.getLength());
 
     LOG.trace("Locating offline tablet for row: {}", metadataRow);
-    KeyExtent start = KeyExtent.fromMetaRow(metadataRow);
-    KeyExtent match = extentCache.findOrLoadExtent(start);
+    KeyExtent searchKey = KeyExtent.fromMetaRow(metadataRow);
+    KeyExtent match = extentCache.findOrLoadExtent(searchKey);
     if (match != null) {
       if (match.prevEndRow() == null || match.prevEndRow().compareTo(row) < 0) {
         LOG.trace("Found match for row: {}, extent = {}", row, match);
@@ -232,10 +244,11 @@ public class OfflineTabletLocatorImpl extends TabletLocator {
 
       while (tl.tablet_extent.endRow() != null
           && !r.afterEndKey(new Key(tl.tablet_extent.endRow()).followingKey(PartialKey.ROW))) {
+        KeyExtent priorExtent = tl.tablet_extent;
         tl = locateTablet(context, tl.tablet_extent.endRow(), true, false);
 
         if (tl == null) {
-          LOG.trace("NOT FOUND following tablet in range: {}", r);
+          LOG.trace("NOT FOUND tablet following {} in range: {}", priorExtent, r);
           failures.add(r);
           continue l1;
         }
