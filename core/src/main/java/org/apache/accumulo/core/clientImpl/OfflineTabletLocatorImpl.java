@@ -46,6 +46,7 @@ import org.apache.accumulo.core.manager.state.tables.TableState;
 import org.apache.accumulo.core.metadata.schema.TabletMetadata;
 import org.apache.accumulo.core.metadata.schema.TabletMetadata.ColumnType;
 import org.apache.accumulo.core.metadata.schema.TabletsMetadata;
+import org.apache.accumulo.core.util.Timer;
 import org.apache.hadoop.io.Text;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -85,6 +86,7 @@ public class OfflineTabletLocatorImpl extends TabletLocator {
     private final LinkedBlockingQueue<KeyExtent> evictions = new LinkedBlockingQueue<>();
     private final TreeSet<KeyExtent> extents = new TreeSet<>();
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
+    private final Timer scanTimer = Timer.startNew();
 
     private OfflineTabletsCache(ClientContext context) {
       this.context = context;
@@ -146,6 +148,10 @@ public class OfflineTabletLocatorImpl extends TabletLocator {
       // process prior evictions since we have the write lock
       processEvictions();
       // Load TabletMetadata
+      if (LOG.isDebugEnabled()) {
+        scanTimer.restart();
+      }
+      int added = 0;
       try (TabletsMetadata tm =
           context.getAmple().readTablets().forTable(tid).overlapping(searchKey.endRow(), true, null)
               .fetch(ColumnType.PREV_ROW, ColumnType.LOCATION).build()) {
@@ -165,6 +171,11 @@ public class OfflineTabletLocatorImpl extends TabletLocator {
           cache.put(ke, ke);
           TabletLocatorImpl.removeOverlapping(extents, ke);
           extents.add(ke);
+          added++;
+        }
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("Took {}ms to scan and load {} metadata tablets for table {}",
+            scanTimer.elapsed(TimeUnit.MILLISECONDS) , added , tid);
         }
         return extents.ceiling(searchKey);
       } finally {
