@@ -26,6 +26,13 @@
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
     <!-- external resources configurable by setting monitor.resources.external -->
     <!-- make sure jquery is included first - other scripts depend on it -->
+    <script>
+      (function() {
+        if (localStorage.getItem('dark-theme-enabled') === 'true') {
+          document.documentElement.setAttribute('data-bs-theme', 'dark');
+        }
+      })();
+    </script>
     <#if externalResources?has_content>
       <#list externalResources as val>
         ${val}
