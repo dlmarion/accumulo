@@ -156,6 +156,7 @@ $(function () {
   categories = getStoredArray(MESSAGE_CATEGORIES);
   if (categories.length === 0) {
     getMessageCategories().then(function () {
+      categories = getStoredArray(MESSAGE_CATEGORIES);
       updateMessageCategories();
     });
   } else {
