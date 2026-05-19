@@ -194,19 +194,21 @@ function refreshSideBarNotifications() {
 }
 
 /**
- * Set the theme based on the user
- * preferences
+ * Returns the effective dark theme preference.
  */
-function setTheme() {
-  var setDarkMode = false;
+function isDarkThemeEnabled() {
   var storedValue = localStorage.getItem("dark-theme-enabled");
   if (storedValue === null) {
-    setDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
-  } else {
-    setDarkMode = storedValue === 'true';
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
   }
+  return storedValue === 'true';
+}
 
-  if (setDarkMode === true) {
+/**
+ * Set the theme based on the user preferences
+ */
+function setTheme() {
+  if (isDarkThemeEnabled() === true) {
     document.documentElement.setAttribute('data-bs-theme', 'dark');
   } else {
     document.documentElement.setAttribute('data-bs-theme', 'light');
@@ -219,9 +221,8 @@ function setTheme() {
 function updateDarkThemeSwitch() {
   var storageKey = "dark-theme-enabled";
   var darkThemeSwitchElement = $('#darkThemeSwitch');
-  var savedValue = localStorage.getItem(storageKey);
 
-  if (savedValue === 'true') {
+  if (isDarkThemeEnabled() === true) {
     darkThemeSwitchElement.prop('checked', true);
   } else {
     darkThemeSwitchElement.prop('checked', false);
