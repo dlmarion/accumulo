@@ -284,13 +284,13 @@ function updateMessageCategories() {
       var li = $(document.createElement("li"));
 
       var outerDiv = $(document.createElement("div"));
-      outerDiv.addClass("dropdown-item d-flex justify-content-between align-items-center");
+      outerDiv.addClass("dropdown-item d-flex justify-content-between align-items-center small");
 
       var div = $(document.createElement("div"));
-      div.addClass("form-check form-switch mb-0 ms-3");
+      div.addClass("form-check form-switch d-flex align-items-center mb-0 p-0 fs-6");
 
       var input = $(document.createElement("input"));
-      input.addClass("form-check-input mt-0");
+      input.addClass("form-check-input float-none m-0");
       input.attr("type", "checkbox");
       input.attr("role", "switch");
       input.attr("id", switchId);
@@ -310,7 +310,7 @@ function updateMessageCategories() {
       div.append(input);
 
       var label = $(document.createElement("label"));
-      label.addClass("mb-0");
+      label.addClass("form-check-label");
       label.attr("for", switchId);
       label.text(cat);
 
