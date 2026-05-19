@@ -253,7 +253,7 @@ function updateMessagePriorities() {
 
     $(switchElement).on("change", function () {
       localStorage.setItem("msg-pri-switch-" + pri + "-state", $(this).is(':checked'));
-      if (window.location.pathname == '/messages') {
+      if (window.location.pathname.endsWith('/messages')) {
         refresh();
       }
     });
@@ -304,7 +304,7 @@ function updateMessageCategories() {
 
       input.on("change", function () {
         localStorage.setItem("msg-cat-switch-" + cat + "-state", $(this).is(':checked'));
-        if (window.location.pathname == '/messages') {
+        if (window.location.pathname.endsWith('/messages')) {
           refresh();
         }
       });
