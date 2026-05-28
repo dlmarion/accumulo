@@ -25,6 +25,24 @@
       </div>
       <div class="row d-flex justify-content-center">
         <div class="col-xs-12">
+          <div class="row mb-4">
+            <div id="deploymentWarning"></div>
+            <div class="col">
+              <div class="card">
+                <div class="card-header fw-semibold">Server Deployment</div>
+                <div class="card-body">
+                  <div class="deployment-overview-content">
+                    <div class="table-responsive">
+                      <table id="deployment-table" class="table table-bordered table-sm align-middle deployment-matrix-table mb-0">
+                        <#include "table_loading.ftl" >
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="row row-cols-1 row-cols-lg-2 row-cols-xxl-4 g-3 mb-4">
             <div class="col">
               <div class="card h-100">
@@ -76,18 +94,6 @@
                     <span>Loading...</span>
                   </li>
                 </ul>
-              </div>
-            </div>
-          </div>
-
-          <div class="row mb-4">
-            <div id="deploymentWarning"></div>
-            <div class="deployment-overview-content">
-              <div class="table-responsive">
-                <table id="deployment-table" class="table table-bordered table-sm align-middle deployment-matrix-table mb-0">
-                  <caption><span class="table-caption">Server Deployment Overview</span><br /></caption>
-                  <#include "table_loading.ftl" >
-                </table>
               </div>
             </div>
           </div>
