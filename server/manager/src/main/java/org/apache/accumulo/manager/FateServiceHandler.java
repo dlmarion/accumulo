@@ -190,6 +190,20 @@ class FateServiceHandler implements FateService.Iface {
             InitialTableState.valueOf(ByteBufferUtil.toString(arguments.get(2)));
         int splitCount = Integer.parseInt(ByteBufferUtil.toString(arguments.get(3)));
         validateArgumentCount(arguments, tableOp, SPLIT_OFFSET + splitCount);
+        NamespaceId namespaceId;
+
+        try {
+          namespaceId = Namespaces.getNamespaceId(manager.getContext(),
+              TableNameUtil.qualify(tableName).getFirst());
+        } catch (NamespaceNotFoundException e) {
+          throw new ThriftTableOperationException(null, tableName, tableOp,
+              TableOperationExceptionType.NAMESPACE_NOTFOUND, "");
+        }
+
+        if (!manager.security.canCreateTable(c, tableName, namespaceId)) {
+          throw new ThriftSecurityException(c.getPrincipal(), SecurityErrorCode.PERMISSION_DENIED);
+        }
+
         Path splitsPath = null;
         Path splitsDirsPath = null;
         if (splitCount > 0) {
@@ -203,19 +217,6 @@ class FateServiceHandler implements FateService.Iface {
                 TableOperationExceptionType.OTHER,
                 "Exception thrown while writing splits to file system");
           }
-        }
-        NamespaceId namespaceId;
-
-        try {
-          namespaceId = Namespaces.getNamespaceId(manager.getContext(),
-              TableNameUtil.qualify(tableName).getFirst());
-        } catch (NamespaceNotFoundException e) {
-          throw new ThriftTableOperationException(null, tableName, tableOp,
-              TableOperationExceptionType.NAMESPACE_NOTFOUND, "");
-        }
-
-        if (!manager.security.canCreateTable(c, tableName, namespaceId)) {
-          throw new ThriftSecurityException(c.getPrincipal(), SecurityErrorCode.PERMISSION_DENIED);
         }
 
         var namespaceIterProps = manager.getContext().getNamespaceConfiguration(namespaceId)

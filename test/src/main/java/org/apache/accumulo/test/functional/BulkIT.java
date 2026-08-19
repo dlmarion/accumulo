@@ -19,15 +19,22 @@
 package org.apache.accumulo.test.functional;
 
 import static org.apache.accumulo.harness.AccumuloITBase.SUNNY_DAY;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.Set;
 
 import org.apache.accumulo.core.client.Accumulo;
 import org.apache.accumulo.core.client.AccumuloClient;
 import org.apache.accumulo.core.client.AccumuloException;
 import org.apache.accumulo.core.client.AccumuloSecurityException;
 import org.apache.accumulo.core.client.TableNotFoundException;
+import org.apache.accumulo.core.client.security.tokens.PasswordToken;
+import org.apache.accumulo.core.security.SystemPermission;
 import org.apache.accumulo.harness.AccumuloClusterHarness;
 import org.apache.accumulo.test.TestIngest;
 import org.apache.accumulo.test.TestIngest.IngestParams;
@@ -61,10 +68,104 @@ public class BulkIT extends AccumuloClusterHarness {
   }
 
   @Test
+  public void testSrcTableDirFails() throws Exception {
+
+    final FileSystem fs = getCluster().getFileSystem();
+
+    String user = "testSrcTableDirFailsUser";
+    String pass = "testSrcTableDirFailsPass";
+    PasswordToken passToken = new PasswordToken(pass);
+    try (AccumuloClient client = Accumulo.newClient().from(getClientProps()).build()) {
+      client.securityOperations().createLocalUser(user, passToken);
+      client.securityOperations().grantSystemPermission(user, SystemPermission.CREATE_NAMESPACE);
+      // Needed for ReadWriteIT call
+      client.securityOperations().grantSystemPermission(user, SystemPermission.ALTER_USER);
+    }
+
+    String[] tableNames = getUniqueNames(2);
+    String srcTableName = tableNames[0];
+    String srcNamespace = "ns_" + srcTableName;
+    srcTableName = srcNamespace + "." + srcTableName;
+    String dstTableName = tableNames[1];
+    Path srcTableBasePath = null;
+
+    try (AccumuloClient client =
+        Accumulo.newClient().to(getCluster().getInstanceName(), getCluster().getZooKeepers())
+            .as(user, passToken).build()) {
+      client.namespaceOperations().create(srcNamespace);
+      client.tableOperations().create(srcTableName);
+      ReadWriteIT.ingest(client, 10, 10, 10, 0, srcTableName);
+      client.tableOperations().flush(srcTableName);
+      String tableId = client.tableOperations().tableIdMap().get(srcTableName);
+      Set<String> tableDirs = getCluster().getServerContext().getTablesDirs();
+      assertNotNull(tableDirs);
+      assertTrue(!tableDirs.isEmpty());
+      assertEquals(1, tableDirs.size());
+      String tdir = tableDirs.iterator().next();
+      srcTableBasePath = fs.makeQualified(new Path(tdir + "/" + tableId));
+      assertTrue(fs.exists(srcTableBasePath));
+    }
+
+    assertNotNull(srcTableBasePath);
+    Path srcPath = srcTableBasePath;
+    try (AccumuloClient client = Accumulo.newClient().from(getClientProps()).build()) {
+      assertThrows(AccumuloSecurityException.class, () -> runTest(client, fs, srcPath, dstTableName,
+          this.getClass().getName(), testName(), false));
+    }
+  }
+
+  @Test
   public void testOld() throws Exception {
     try (AccumuloClient client = Accumulo.newClient().from(getClientProps()).build()) {
       runTest(client, getCluster().getFileSystem(), getCluster().getTemporaryPath(),
           getUniqueNames(1)[0], this.getClass().getName(), testName(), true);
+    }
+  }
+
+  @Test
+  public void testOldSrcTableDirFails() throws Exception {
+
+    final FileSystem fs = getCluster().getFileSystem();
+
+    String user = "testOldSrcTableDirFailsUser";
+    String pass = "testOldSrcTableDirFailsPass";
+    PasswordToken passToken = new PasswordToken(pass);
+    try (AccumuloClient client = Accumulo.newClient().from(getClientProps()).build()) {
+      client.securityOperations().createLocalUser(user, passToken);
+      client.securityOperations().grantSystemPermission(user, SystemPermission.CREATE_NAMESPACE);
+      // Needed for ReadWriteIT call
+      client.securityOperations().grantSystemPermission(user, SystemPermission.ALTER_USER);
+    }
+
+    String[] tableNames = getUniqueNames(2);
+    String srcTableName = tableNames[0];
+    String srcNamespace = "ns_" + srcTableName;
+    srcTableName = srcNamespace + "." + srcTableName;
+    String dstTableName = tableNames[1];
+    Path srcTableBasePath = null;
+
+    try (AccumuloClient client =
+        Accumulo.newClient().to(getCluster().getInstanceName(), getCluster().getZooKeepers())
+            .as(user, passToken).build()) {
+      client.namespaceOperations().create(srcNamespace);
+      client.tableOperations().create(srcTableName);
+      ReadWriteIT.ingest(client, 10, 10, 10, 0, srcTableName);
+      client.tableOperations().flush(srcTableName);
+      String tableId = client.tableOperations().tableIdMap().get(srcTableName);
+      Set<String> tableDirs = getCluster().getServerContext().getTablesDirs();
+      assertNotNull(tableDirs);
+      assertTrue(!tableDirs.isEmpty());
+      assertEquals(1, tableDirs.size());
+      String tdir = tableDirs.iterator().next();
+      srcTableBasePath = fs.makeQualified(new Path(tdir + "/" + tableId));
+      assertTrue(fs.exists(srcTableBasePath));
+    }
+
+    assertNotNull(srcTableBasePath);
+    Path srcPath = srcTableBasePath;
+    try (AccumuloClient client = Accumulo.newClient().from(getClientProps()).build()) {
+      assertThrows(AccumuloSecurityException.class, () -> runTest(client, fs, srcPath, dstTableName,
+          this.getClass().getName(), testName(), true));
     }
   }
 

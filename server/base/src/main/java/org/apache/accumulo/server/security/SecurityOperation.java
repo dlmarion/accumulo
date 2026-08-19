@@ -24,6 +24,8 @@ import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Supplier;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.apache.accumulo.core.Constants;
 import org.apache.accumulo.core.client.AccumuloSecurityException;
@@ -537,7 +539,36 @@ public class SecurityOperation {
   protected boolean canBulkImport(TCredentials c, TableId tableId, String tableName, String dir,
       String failDir, NamespaceId namespaceId) throws ThriftSecurityException {
     authenticate(c);
-    return hasTablePermission(c, tableId, namespaceId, TablePermission.BULK_IMPORT, false);
+    // check if dir is table directory, if so, parse table id and see if user has alter table
+    // permission on the source table
+    String sourceTableId = null;
+    for (String tableDir : context.getTablesDirs()) {
+      if (dir.startsWith(tableDir)) {
+        String tableDirSuffix = dir.substring(tableDir.length());
+        String regex = "/(.+?)/.*";
+        Matcher m = Pattern.compile(regex).matcher(tableDirSuffix);
+        if (m.matches()) {
+          sourceTableId = m.group(1);
+        }
+      }
+    }
+    if (sourceTableId == null) {
+      return hasTablePermission(c, tableId, namespaceId, TablePermission.BULK_IMPORT, false);
+    } else {
+      TableId srcTableId = TableId.of(sourceTableId);
+      NamespaceId srcNamespaceId = null;
+      try {
+        srcNamespaceId = context.getNamespaceId(srcTableId);
+      } catch (TableNotFoundException e) {
+        // If the table is not found, then the table has been deleted but
+        // the files are still in the directory. Check target table permissions only
+        return hasTablePermission(c, tableId, namespaceId, TablePermission.BULK_IMPORT, false);
+      }
+
+      // Check that the user has ALTER_TABLE on the source and BULK_IMPORT on the target
+      return hasTablePermission(c, srcTableId, srcNamespaceId, TablePermission.ALTER_TABLE, false)
+          && hasTablePermission(c, tableId, namespaceId, TablePermission.BULK_IMPORT, false);
+    }
   }
 
   protected boolean canCompact(TCredentials c, TableId tableId, NamespaceId namespaceId)
