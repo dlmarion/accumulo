@@ -204,6 +204,14 @@ class FateServiceHandler implements FateService.Iface {
           throw new ThriftSecurityException(c.getPrincipal(), SecurityErrorCode.PERMISSION_DENIED);
         }
 
+        var namespaceIterProps = manager.getContext().getNamespaceConfiguration(namespaceId)
+            .getAllPropertiesWithPrefix(Property.TABLE_ITERATOR_PREFIX);
+        IteratorConfigUtil.checkIteratorPriorityConflicts("create table:" + tableName, options,
+            namespaceIterProps);
+        for (Map.Entry<String,String> entry : options.entrySet()) {
+          validateTableProperty(entry.getKey(), entry.getValue(), tableName, tableOp);
+        }
+
         Path splitsPath = null;
         Path splitsDirsPath = null;
         if (splitCount > 0) {
@@ -217,14 +225,6 @@ class FateServiceHandler implements FateService.Iface {
                 TableOperationExceptionType.OTHER,
                 "Exception thrown while writing splits to file system");
           }
-        }
-
-        var namespaceIterProps = manager.getContext().getNamespaceConfiguration(namespaceId)
-            .getAllPropertiesWithPrefix(Property.TABLE_ITERATOR_PREFIX);
-        IteratorConfigUtil.checkIteratorPriorityConflicts("create table:" + tableName, options,
-            namespaceIterProps);
-        for (Map.Entry<String,String> entry : options.entrySet()) {
-          validateTableProperty(entry.getKey(), entry.getValue(), tableName, tableOp);
         }
 
         goalMessage += "Create table " + tableName + " " + initialTableState + " with " + splitCount
