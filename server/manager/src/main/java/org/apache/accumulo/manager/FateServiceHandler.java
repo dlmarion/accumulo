@@ -215,12 +215,14 @@ class FateServiceHandler implements FateService.Iface {
         Path splitsPath = null;
         Path splitsDirsPath = null;
         if (splitCount > 0) {
+          Path tmpDir = null;
           try {
-            Path tmpDir = mkTempDir(opid);
+            tmpDir = mkTempDir(opid);
             splitsPath = new Path(tmpDir, "splits");
             splitsDirsPath = new Path(tmpDir, "splitsDirs");
             writeSplitsToFile(splitsPath, arguments, splitCount, SPLIT_OFFSET);
           } catch (IOException e) {
+            cleanupTempDir(tmpDir);
             throw new ThriftTableOperationException(null, tableName, tableOp,
                 TableOperationExceptionType.OTHER,
                 "Exception thrown while writing splits to file system");
@@ -874,6 +876,21 @@ class FateServiceHandler implements FateService.Iface {
     }
     fs.mkdirs(p);
     return p;
+  }
+
+  /**
+   * Attempt to recursively delete the given temporary directory, logging any errors that occur.
+   *
+   * @param tmpDir the temporary directory to delete
+   */
+  private void cleanupTempDir(Path tmpDir) {
+    if (tmpDir != null) {
+      try {
+        manager.getVolumeManager().deleteRecursively(tmpDir);
+      } catch (IOException e) {
+        log.error("Failed to clean up temporary split files at {}", tmpDir, e);
+      }
+    }
   }
 
   @Override
