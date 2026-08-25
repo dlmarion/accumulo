@@ -18,17 +18,21 @@
  */
 package org.apache.accumulo.manager.tableOps.namespace.rename;
 
+import static org.apache.accumulo.core.util.LazySingletons.GSON;
+
 import org.apache.accumulo.core.clientImpl.thrift.TableOperation;
 import org.apache.accumulo.core.data.NamespaceId;
 import org.apache.accumulo.core.fate.FateId;
 import org.apache.accumulo.core.fate.Repo;
 import org.apache.accumulo.core.fate.zookeeper.DistributedReadWriteLock.LockType;
-import org.apache.accumulo.manager.Manager;
-import org.apache.accumulo.manager.tableOps.ManagerRepo;
+import org.apache.accumulo.manager.tableOps.AbstractFateOperation;
+import org.apache.accumulo.manager.tableOps.FateEnv;
 import org.apache.accumulo.manager.tableOps.Utils;
 import org.slf4j.LoggerFactory;
 
-public class RenameNamespace extends ManagerRepo {
+import com.google.gson.JsonObject;
+
+public class RenameNamespace extends AbstractFateOperation {
 
   private static final long serialVersionUID = 1L;
   private final NamespaceId namespaceId;
@@ -36,9 +40,9 @@ public class RenameNamespace extends ManagerRepo {
   private final String newName;
 
   @Override
-  public long isReady(FateId fateId, Manager environment) throws Exception {
-    return Utils.reserveNamespace(environment, namespaceId, fateId, LockType.WRITE, true,
-        TableOperation.RENAME);
+  public long isReady(FateId fateId, FateEnv environment) throws Exception {
+    return Utils.reserveNamespace(environment.getContext(), namespaceId, fateId, LockType.WRITE,
+        true, TableOperation.RENAME);
   }
 
   public RenameNamespace(NamespaceId namespaceId, String oldName, String newName) {
@@ -48,15 +52,13 @@ public class RenameNamespace extends ManagerRepo {
   }
 
   @Override
-  public Repo<Manager> call(FateId fateId, Manager manager) throws Exception {
+  public Repo<FateEnv> call(FateId fateId, FateEnv env) throws Exception {
 
-    Utils.getTableNameLock().lock();
     try {
-      manager.getContext().getNamespaceMapping().rename(namespaceId, oldName, newName);
-      manager.getContext().clearTableListCache();
+      env.getContext().getNamespaceMapping().rename(namespaceId, oldName, newName);
+      env.getContext().clearTableListCache();
     } finally {
-      Utils.getTableNameLock().unlock();
-      Utils.unreserveNamespace(manager, namespaceId, fateId, LockType.WRITE);
+      Utils.unreserveNamespace(env.getContext(), namespaceId, fateId, LockType.WRITE);
     }
 
     LoggerFactory.getLogger(RenameNamespace.class).debug("Renamed namespace {} {} {}", namespaceId,
@@ -66,8 +68,16 @@ public class RenameNamespace extends ManagerRepo {
   }
 
   @Override
-  public void undo(FateId fateId, Manager env) {
-    Utils.unreserveNamespace(env, namespaceId, fateId, LockType.WRITE);
+  public void undo(FateId fateId, FateEnv env) {
+    Utils.unreserveNamespace(env.getContext(), namespaceId, fateId, LockType.WRITE);
   }
 
+  @Override
+  public String getDetails() {
+    JsonObject details = new JsonObject();
+    details.addProperty("namespaceId", namespaceId.canonical());
+    details.addProperty("oldName", oldName);
+    details.addProperty("newName", newName);
+    return GSON.get().toJson(details);
+  }
 }

@@ -18,12 +18,12 @@
  */
 package org.apache.accumulo.test;
 
-import static org.apache.accumulo.harness.AccumuloITBase.MINI_CLUSTER_ONLY;
+import static org.apache.accumulo.test.harness.AccumuloITBase.MINI_CLUSTER_ONLY;
 
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.Socket;
-import java.net.URL;
+import java.net.URI;
 import java.util.Collection;
 import java.util.Map;
 
@@ -33,7 +33,6 @@ import org.apache.accumulo.core.conf.Property;
 import org.apache.accumulo.core.lock.ServiceLockPaths.ServiceLockPath;
 import org.apache.accumulo.core.util.MonitorUtil;
 import org.apache.accumulo.gc.SimpleGarbageCollector;
-import org.apache.accumulo.harness.AccumuloClusterHarness;
 import org.apache.accumulo.manager.Manager;
 import org.apache.accumulo.minicluster.ServerType;
 import org.apache.accumulo.miniclusterImpl.MiniAccumuloClusterImpl;
@@ -41,6 +40,7 @@ import org.apache.accumulo.miniclusterImpl.ProcessReference;
 import org.apache.accumulo.monitor.Monitor;
 import org.apache.accumulo.server.util.PortUtils;
 import org.apache.accumulo.test.functional.FunctionalTestUtils;
+import org.apache.accumulo.test.harness.AccumuloClusterHarness;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -92,7 +92,7 @@ public class ThriftServerBindsBeforeZooKeeperLockIT extends AccumuloClusterHarne
       monitor = startProcess(cluster, ServerType.MONITOR, freePort);
 
       while (true) {
-        URL url = new URL(monitorUrl);
+        var url = new URI(monitorUrl).toURL();
         try {
           HttpURLConnection cnxn = (HttpURLConnection) url.openConnection();
           final int responseCode = cnxn.getResponseCode();
@@ -244,23 +244,21 @@ public class ThriftServerBindsBeforeZooKeeperLockIT extends AccumuloClusterHarne
   private Process startProcess(MiniAccumuloClusterImpl cluster, ServerType serverType, int port)
       throws IOException {
     final Property property;
-    final Class<?> service;
-    switch (serverType) {
-      case MONITOR:
+    final Class<?> service = switch (serverType) {
+      case MONITOR -> {
         property = Property.MONITOR_PORT;
-        service = Monitor.class;
-        break;
-      case MANAGER:
+        yield Monitor.class;
+      }
+      case MANAGER -> {
         property = Property.MANAGER_CLIENTPORT;
-        service = Manager.class;
-        break;
-      case GARBAGE_COLLECTOR:
+        yield Manager.class;
+      }
+      case GARBAGE_COLLECTOR -> {
         property = Property.GC_PORT;
-        service = SimpleGarbageCollector.class;
-        break;
-      default:
-        throw new IllegalArgumentException("Irrelevant server type for test");
-    }
+        yield SimpleGarbageCollector.class;
+      }
+      default -> throw new IllegalArgumentException("Irrelevant server type for test");
+    };
 
     return cluster._exec(service, serverType, Map.of(property.getKey(), Integer.toString(port)))
         .getProcess();

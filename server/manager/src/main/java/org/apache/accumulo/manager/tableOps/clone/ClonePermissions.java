@@ -18,6 +18,8 @@
  */
 package org.apache.accumulo.manager.tableOps.clone;
 
+import static org.apache.accumulo.core.util.LazySingletons.GSON;
+
 import org.apache.accumulo.core.client.NamespaceNotFoundException;
 import org.apache.accumulo.core.clientImpl.AcceptableThriftTableOperationException;
 import org.apache.accumulo.core.clientImpl.thrift.TableOperation;
@@ -26,11 +28,11 @@ import org.apache.accumulo.core.clientImpl.thrift.ThriftSecurityException;
 import org.apache.accumulo.core.fate.FateId;
 import org.apache.accumulo.core.fate.Repo;
 import org.apache.accumulo.core.security.TablePermission;
-import org.apache.accumulo.manager.Manager;
-import org.apache.accumulo.manager.tableOps.ManagerRepo;
+import org.apache.accumulo.manager.tableOps.AbstractFateOperation;
+import org.apache.accumulo.manager.tableOps.FateEnv;
 import org.slf4j.LoggerFactory;
 
-class ClonePermissions extends ManagerRepo {
+class ClonePermissions extends AbstractFateOperation {
 
   private static final long serialVersionUID = 1L;
 
@@ -41,12 +43,12 @@ class ClonePermissions extends ManagerRepo {
   }
 
   @Override
-  public long isReady(FateId fateId, Manager environment) {
+  public long isReady(FateId fateId, FateEnv environment) {
     return 0;
   }
 
   @Override
-  public Repo<Manager> call(FateId fateId, Manager environment) throws Exception {
+  public Repo<FateEnv> call(FateId fateId, FateEnv environment) throws Exception {
     // give all table permissions to the creator
     for (TablePermission permission : TablePermission.values()) {
       try {
@@ -72,8 +74,13 @@ class ClonePermissions extends ManagerRepo {
   }
 
   @Override
-  public void undo(FateId fateId, Manager environment) throws Exception {
+  public void undo(FateId fateId, FateEnv environment) throws Exception {
     environment.getContext().getSecurityOperation().deleteTable(environment.getContext().rpcCreds(),
         cloneInfo.getTableId(), cloneInfo.getNamespaceId());
+  }
+
+  @Override
+  public String getDetails() {
+    return GSON.get().toJson(cloneInfo);
   }
 }

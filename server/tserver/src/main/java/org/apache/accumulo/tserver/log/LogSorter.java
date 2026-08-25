@@ -19,6 +19,9 @@
 package org.apache.accumulo.tserver.log;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.apache.accumulo.core.metrics.Metric.RECOVERIES_SORTS_AVG_PROGRESS;
+import static org.apache.accumulo.core.metrics.Metric.RECOVERIES_SORTS_IN_PROGRESS;
+import static org.apache.accumulo.core.metrics.Metric.RECOVERIES_SORTS_LONGEST_RUNTIME;
 import static org.apache.accumulo.core.util.threads.ThreadPoolNames.TSERVER_WAL_SORT_CONCURRENT_POOL;
 
 import java.io.DataInputStream;
@@ -32,6 +35,8 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.TreeMap;
 import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.accumulo.core.Constants;
 import org.apache.accumulo.core.conf.AccumuloConfiguration;
@@ -43,6 +48,7 @@ import org.apache.accumulo.core.data.Mutation;
 import org.apache.accumulo.core.file.FileOperations;
 import org.apache.accumulo.core.manager.thrift.RecoveryStatus;
 import org.apache.accumulo.core.metadata.UnreferencedTabletFile;
+import org.apache.accumulo.core.metrics.MetricsProducer;
 import org.apache.accumulo.core.spi.crypto.CryptoEnvironment;
 import org.apache.accumulo.core.spi.crypto.CryptoService;
 import org.apache.accumulo.core.util.Pair;
@@ -64,9 +70,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.util.concurrent.AtomicDouble;
 import com.google.common.util.concurrent.MoreExecutors;
 
-public class LogSorter {
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
+
+public class LogSorter implements MetricsProducer {
 
   private static final Logger log = LoggerFactory.getLogger(LogSorter.class);
 
@@ -170,10 +180,12 @@ public class LogSorter {
         return;
       }
 
-      final long bufferSize = sortedLogConf.getAsBytes(Property.TSERV_WAL_SORT_BUFFER_SIZE);
+      @SuppressWarnings("deprecation")
+      final long bufferSize = sortedLogConf.getAsBytes(sortedLogConf.resolve(
+          Property.GENERAL_SERVER_WAL_SORT_BUFFER_SIZE, Property.TSERV_WAL_SORT_BUFFER_SIZE));
       Thread.currentThread().setName("Sorting " + name + " for recovery");
       while (true) {
-        final ArrayList<Pair<LogFileKey,LogFileValue>> buffer = new ArrayList<>();
+        final ArrayList<Pair<LogFileKey,LogFileValue>> buffer = new ArrayList<>(512);
         try {
           long start = input.getPos();
           while (input.getPos() - start < bufferSize) {
@@ -229,6 +241,9 @@ public class LogSorter {
   private final double walBlockSize;
   private final CryptoService cryptoService;
   private final AccumuloConfiguration sortedLogConf;
+  private final AtomicLong recoveriesInProgress = new AtomicLong(0);
+  private final AtomicLong recoveryRuntime = new AtomicLong(0);
+  private final AtomicDouble recoveryAvgProgress = new AtomicDouble(0.0D);
 
   public LogSorter(AbstractServer server) {
     this.server = server;
@@ -239,6 +254,8 @@ public class LogSorter {
     CryptoEnvironment env = new CryptoEnvironmentImpl(CryptoEnvironment.Scope.RECOVERY);
     this.cryptoService =
         context.getCryptoFactory().getService(env, this.conf.getAllCryptoProperties());
+    ThreadPools.watchNonCriticalScheduledTask(context.getScheduledExecutor()
+        .scheduleWithFixedDelay(() -> updateMetrics(), 60, 60, TimeUnit.SECONDS));
   }
 
   /**
@@ -275,7 +292,8 @@ public class LogSorter {
       var logFileKey = pair.getFirst();
       var logFileValue = pair.getSecond();
       Key k = logFileKey.toKey();
-      keyListMap.computeIfAbsent(k, (key) -> new ArrayList<>()).addAll(logFileValue.mutations);
+      keyListMap.computeIfAbsent(k, (key) -> new ArrayList<>(logFileValue.getMutations().size()))
+          .addAll(logFileValue.getMutations());
     }
 
     try (var writer = FileOperations.getInstance().newWriterBuilder()
@@ -284,7 +302,7 @@ public class LogSorter {
       writer.startDefaultLocalityGroup();
       for (var entry : keyListMap.entrySet()) {
         LogFileValue val = new LogFileValue();
-        val.mutations = entry.getValue();
+        val.setMutations(entry.getValue());
         writer.append(entry.getKey(), val.toValue());
       }
     }
@@ -317,22 +335,59 @@ public class LogSorter {
   }
 
   public List<RecoveryStatus> getLogSorts() {
-    List<RecoveryStatus> result = new ArrayList<>();
     synchronized (currentWork) {
+      List<RecoveryStatus> result = new ArrayList<>(currentWork.size());
       for (Entry<String,LogProcessor> entries : currentWork.entrySet()) {
         RecoveryStatus status = new RecoveryStatus();
-        status.name = entries.getKey();
+        status.setName(entries.getKey());
         try {
           double progress = entries.getValue().getBytesCopied() / walBlockSize;
           // to be sure progress does not exceed 100%
-          status.progress = Math.min(progress, 99.9);
+          status.setProgress(Math.min(progress, 99.9));
         } catch (IOException ex) {
           log.warn("Error getting bytes read");
         }
-        status.runtime = (int) entries.getValue().getSortTime();
+        status.setRuntime((int) entries.getValue().getSortTime());
         result.add(status);
       }
       return result;
     }
+  }
+
+  private void updateMetrics() {
+    synchronized (currentWork) {
+      recoveriesInProgress.set(currentWork.size());
+      if (recoveriesInProgress.get() == 0) {
+        recoveryRuntime.set(0);
+        recoveryAvgProgress.set(0.0D);
+      } else {
+        long runtime = 0;
+        long progress = 0;
+        for (LogProcessor processor : currentWork.values()) {
+          long start = processor.getSortTime();
+          if (start > 0) { // may not have started yet
+            runtime = Math.max(start, runtime);
+          }
+          try {
+            progress += processor.getBytesCopied();
+          } catch (IOException e) {
+            log.warn("Error getting bytes read");
+          }
+        }
+        recoveryRuntime.set(runtime);
+        recoveryAvgProgress
+            .set(Math.min(progress / (walBlockSize * recoveriesInProgress.get()), 99.9));
+      }
+    }
+  }
+
+  @Override
+  public void registerMetrics(MeterRegistry registry) {
+    Gauge.builder(RECOVERIES_SORTS_IN_PROGRESS.getName(), recoveriesInProgress, AtomicLong::get)
+        .description(RECOVERIES_SORTS_IN_PROGRESS.getDescription()).register(registry);
+    Gauge.builder(RECOVERIES_SORTS_LONGEST_RUNTIME.getName(), recoveryRuntime, AtomicLong::get)
+        .description(RECOVERIES_SORTS_LONGEST_RUNTIME.getDescription()).register(registry);
+    Gauge.builder(RECOVERIES_SORTS_AVG_PROGRESS.getName(), recoveryAvgProgress, AtomicDouble::get)
+        .description(RECOVERIES_SORTS_AVG_PROGRESS.getDescription()).register(registry);
   }
 }

@@ -23,9 +23,9 @@ import static java.util.Objects.requireNonNull;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static java.util.stream.Collectors.toUnmodifiableMap;
-import static org.apache.accumulo.core.util.threads.ThreadPoolNames.ACCUMULO_POOL_PREFIX;
 import static org.apache.accumulo.core.util.threads.ThreadPoolNames.METADATA_TABLET_ASSIGNMENT_POOL;
 import static org.apache.accumulo.core.util.threads.ThreadPoolNames.METADATA_TABLET_MIGRATION_POOL;
+import static org.apache.accumulo.core.util.threads.ThreadPoolNames.SCAN_EXECUTOR_PREFIX;
 import static org.apache.accumulo.core.util.threads.ThreadPoolNames.TABLET_ASSIGNMENT_POOL;
 import static org.apache.accumulo.core.util.threads.ThreadPoolNames.TSERVER_CONDITIONAL_UPDATE_META_POOL;
 import static org.apache.accumulo.core.util.threads.ThreadPoolNames.TSERVER_CONDITIONAL_UPDATE_ROOT_POOL;
@@ -202,14 +202,14 @@ public class TabletServerResourceManager {
     }
 
     scanExecQueues.put(sec.name, queue);
-    ThreadPoolExecutor es = ThreadPools.getServerThreadPools()
-        .getPoolBuilder(ACCUMULO_POOL_PREFIX.poolName + ".scan." + sec.name)
-        .numCoreThreads(sec.getCurrentMaxThreads()).numMaxThreads(sec.getCurrentMaxThreads())
-        .withTimeOut(0L, MILLISECONDS).withQueue(queue).atPriority(sec.priority)
-        .enableThreadPoolMetrics(enableMetrics).build();
+    ThreadPoolExecutor es =
+        ThreadPools.getServerThreadPools().getPoolBuilder(SCAN_EXECUTOR_PREFIX.poolName + sec.name)
+            .numCoreThreads(sec.getCurrentMaxThreads()).numMaxThreads(sec.getCurrentMaxThreads())
+            .withTimeOut(0L, MILLISECONDS).withQueue(queue).atPriority(sec.priority)
+            .enableThreadPoolMetrics(enableMetrics).build();
 
     modifyThreadPoolSizesAtRuntime(sec::getCurrentMaxThreads,
-        ACCUMULO_POOL_PREFIX.poolName + ".scan." + sec.name, es);
+        SCAN_EXECUTOR_PREFIX.poolName + sec.name, es);
     return es;
 
   }
@@ -499,10 +499,10 @@ public class TabletServerResourceManager {
       tabletReports = Collections.synchronizedMap(new HashMap<>());
       memUsageReports = new LinkedBlockingQueue<>();
       maxMem = context.getConfiguration().getAsBytes(Property.TSERV_MAXMEM);
-      memoryGuardThread = Threads.createThread("Accumulo Memory Guard",
+      memoryGuardThread = Threads.createCriticalThread("Accumulo Memory Guard",
           OptionalInt.of(Thread.NORM_PRIORITY + 1), this::processTabletMemStats);
       minorCompactionInitiatorThread =
-          Threads.createThread("Accumulo Minor Compaction Initiator", this::manageMemory);
+          Threads.createCriticalThread("Accumulo Minor Compaction Initiator", this::manageMemory);
     }
 
     void startThreads() {
@@ -544,6 +544,7 @@ public class TabletServerResourceManager {
           }
 
         } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
           log.warn("Interrupted processing tablet memory statistics", e);
         }
       }
@@ -598,8 +599,6 @@ public class TabletServerResourceManager {
                 }
               }
             }
-
-            // log.debug("mma.tabletsToMinorCompact = "+mma.tabletsToMinorCompact);
           }
         } catch (Exception t) {
           log.error("Minor compactions for memory management failed", t);
@@ -653,7 +652,9 @@ public class TabletServerResourceManager {
               throw new HoldTimeoutException("Commits are held");
             }
             commitHold.wait(1000);
-          } catch (InterruptedException e) {}
+          } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+          }
         }
       }
     }
@@ -788,6 +789,11 @@ public class TabletServerResourceManager {
     }
   }
 
+  private static final ScanDispatch ROOT_SCAN_DISPATCH =
+      ScanDispatch.builder().setExecutorName("root").build();
+  private static final ScanDispatch META_SCAN_DISPATCH =
+      ScanDispatch.builder().setExecutorName("meta").build();
+
   public void executeReadAhead(KeyExtent tablet, ScanDispatcher dispatcher, ScanSession<?> scanInfo,
       Runnable task) {
 
@@ -795,12 +801,12 @@ public class TabletServerResourceManager {
 
     if (tablet.isRootTablet()) {
       // TODO make meta dispatch??
-      scanInfo.scanParams.setScanDispatch(ScanDispatch.builder().build());
+      scanInfo.scanParams.setScanDispatch(ROOT_SCAN_DISPATCH);
       task.run();
     } else if (tablet.isMeta()) {
       // TODO make meta dispatch??
-      scanInfo.scanParams.setScanDispatch(ScanDispatch.builder().build());
-      scanExecutors.get("meta").execute(task);
+      scanInfo.scanParams.setScanDispatch(META_SCAN_DISPATCH);
+      scanExecutors.get(META_SCAN_DISPATCH.getExecutorName()).execute(task);
     } else {
       DispatchParameters params = new DispatchParameters() {
 

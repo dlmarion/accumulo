@@ -92,6 +92,7 @@ import org.apache.accumulo.core.tabletserver.thrift.TabletStats;
 import org.apache.accumulo.core.trace.TraceUtil;
 import org.apache.accumulo.core.util.ByteBufferUtil;
 import org.apache.accumulo.core.util.Halt;
+import org.apache.accumulo.core.util.Timer;
 import org.apache.accumulo.core.util.threads.Threads;
 import org.apache.accumulo.core.util.time.SteadyTime;
 import org.apache.accumulo.server.ServerContext;
@@ -195,6 +196,7 @@ public class TabletClientHandler implements TabletServerClientService.Iface,
       tableId = keyExtent.tableId();
       if (sameTable || security.canWrite(us.getCredentials(), tableId,
           server.getContext().getNamespaceId(tableId))) {
+        logDurabilityWarning(keyExtent, us.durability);
         long t2 = System.currentTimeMillis();
         us.authTimes.addStat(t2 - t1);
         us.currentTablet = server.getOnlineTablet(keyExtent);
@@ -320,6 +322,7 @@ public class TabletClientHandler implements TabletServerClientService.Iface,
         Tablet tablet = entry.getKey();
         Durability durability =
             DurabilityImpl.resolveDurabilty(us.durability, tablet.getDurability());
+        logDurabilityWarning(tablet.getExtent(), durability);
         List<Mutation> mutations = entry.getValue();
         if (!mutations.isEmpty()) {
           preppedMutations += mutations.size();
@@ -569,7 +572,7 @@ public class TabletClientHandler implements TabletServerClientService.Iface,
 
   private void checkConditions(Map<KeyExtent,List<ServerConditionalMutation>> updates,
       ArrayList<TCMResult> results, ConditionalSession cs, List<String> symbols)
-      throws IOException {
+      throws IOException, ReflectiveOperationException {
     Iterator<Entry<KeyExtent,List<ServerConditionalMutation>>> iter = updates.entrySet().iterator();
 
     final CompressedIterators compressedIters = new CompressedIterators(symbols);
@@ -581,6 +584,7 @@ public class TabletClientHandler implements TabletServerClientService.Iface,
       final Tablet tablet = server.getOnlineTablet(entry.getKey());
 
       if (tablet == null || tablet.isClosed()) {
+        results.ensureCapacity(results.size() + entry.getValue().size());
         for (ServerConditionalMutation scm : entry.getValue()) {
           results.add(new TCMResult(scm.getID(), TCMStatus.IGNORED));
         }
@@ -604,6 +608,7 @@ public class TabletClientHandler implements TabletServerClientService.Iface,
           // clear anything added while checking conditions.
           resultsSubList.clear();
 
+          results.ensureCapacity(results.size() + entry.getValue().size());
           for (ServerConditionalMutation scm : entry.getValue()) {
             results.add(new TCMResult(scm.getID(), TCMStatus.IGNORED));
           }
@@ -634,7 +639,7 @@ public class TabletClientHandler implements TabletServerClientService.Iface,
         } else {
           final Durability durability =
               DurabilityImpl.resolveDurabilty(sess.durability, tablet.getDurability());
-
+          logDurabilityWarning(tablet.getExtent(), durability);
           List<Mutation> mutations = Collections.unmodifiableList(entry.getValue());
           preppedMutions += mutations.size();
           if (!mutations.isEmpty()) {
@@ -727,7 +732,7 @@ public class TabletClientHandler implements TabletServerClientService.Iface,
 
   private Map<KeyExtent,List<ServerConditionalMutation>> conditionalUpdate(ConditionalSession cs,
       Map<KeyExtent,List<ServerConditionalMutation>> updates, ArrayList<TCMResult> results,
-      List<String> symbols) throws IOException {
+      List<String> symbols) throws IOException, ReflectiveOperationException {
     // sort each list of mutations, this is done to avoid deadlock and doing seeks in order is
     // more efficient and detect duplicate rows.
     int numMutations = ConditionalMutationSet.sortConditionalMutations(updates);
@@ -739,17 +744,16 @@ public class TabletClientHandler implements TabletServerClientService.Iface,
     ConditionalMutationSet.deferDuplicatesRows(updates, deferred);
 
     // get as many locks as possible w/o blocking... defer any rows that are locked
-    long lt1 = System.nanoTime();
+    Timer timer = Timer.startNew();
     List<RowLock> locks = rowLocks.acquireRowlocks(updates, deferred);
-    long lt2 = System.nanoTime();
-    updateAverageLockTime(lt2 - lt1, TimeUnit.NANOSECONDS, numMutations);
+    updateAverageLockTime(timer.elapsed(TimeUnit.NANOSECONDS), TimeUnit.NANOSECONDS, numMutations);
     try {
       Span span = TraceUtil.startSpan(this.getClass(), "conditionalUpdate::Check conditions");
       try (Scope scope = span.makeCurrent()) {
-        long t1 = System.nanoTime();
+        timer.restart();
         checkConditions(updates, results, cs, symbols);
-        long t2 = System.nanoTime();
-        updateAverageCheckTime(t2 - t1, TimeUnit.NANOSECONDS, numMutations);
+        updateAverageCheckTime(timer.elapsed(TimeUnit.NANOSECONDS), TimeUnit.NANOSECONDS,
+            numMutations);
       } catch (Exception e) {
         TraceUtil.setException(span, e, true);
         throw e;
@@ -863,6 +867,9 @@ public class TabletClientHandler implements TabletServerClientService.Iface,
 
       return future.get();
     } catch (ExecutionException | InterruptedException e) {
+      if (e instanceof InterruptedException) {
+        Thread.currentThread().interrupt();
+      }
       log.warn("Exception returned for conditionalUpdate. tableId: {}, opid: {}",
           cs == null ? null : cs.tableId, opid, e);
       throw new TException(e);
@@ -922,10 +929,10 @@ public class TabletClientHandler implements TabletServerClientService.Iface,
       if (ke.tableId().compareTo(text) == 0) {
         Tablet tablet = entry.getValue();
         TabletStats stats = tablet.getTabletStats();
-        stats.extent = ke.toThrift();
-        stats.ingestRate = tablet.ingestRate();
-        stats.queryRate = tablet.queryRate();
-        stats.numEntries = tablet.getNumEntries();
+        stats.setExtent(ke.toThrift());
+        stats.setIngestRate(tablet.ingestRate());
+        stats.setQueryRate(tablet.queryRate());
+        stats.setNumEntries(tablet.getNumEntries());
         result.add(stats);
       }
     }
@@ -962,11 +969,9 @@ public class TabletClientHandler implements TabletServerClientService.Iface,
     log.trace("Got {} message from user: {}", request, credentials.getPrincipal());
     if (server.getLock() != null && server.getLock().wasLockAcquired()
         && !server.getLock().isLocked()) {
-      Halt.halt(1, () -> {
-        log.info("Tablet server no longer holds lock during checkPermission() : {}, exiting",
-            request);
-        context.getLowMemoryDetector().logGCInfo(server.getConfiguration());
-      });
+      Halt.halt(1,
+          "Tablet server no longer holds lock during checkPermission() : " + request + ", exiting",
+          () -> context.getLowMemoryDetector().logGCInfo(server.getConfiguration()));
     }
 
     if (lock != null) {
@@ -1017,7 +1022,9 @@ public class TabletClientHandler implements TabletServerClientService.Iface,
           Set<KeyExtent> onlineOverlapping =
               KeyExtent.findOverlapping(extent, server.getOnlineTablets());
 
-          Set<KeyExtent> all = new HashSet<>();
+          Set<KeyExtent> all = new HashSet<>(
+              unopenedOverlapping.size() + openingOverlapping.size() + onlineOverlapping.size(),
+              1.0f);
           all.addAll(unopenedOverlapping);
           all.addAll(openingOverlapping);
           all.addAll(onlineOverlapping);
@@ -1044,11 +1051,10 @@ public class TabletClientHandler implements TabletServerClientService.Iface,
     TabletLogger.loading(extent, server.getTabletSession());
 
     final AssignmentHandler ah = new AssignmentHandler(server, extent);
-    // final Runnable ah = new LoggingRunnable(log, );
     // Root tablet assignment must take place immediately
 
     if (extent.isRootTablet()) {
-      Threads.createThread("Root Tablet Assignment", () -> {
+      Threads.createNonCriticalThread("Root Tablet Assignment", () -> {
         ah.run();
         if (server.getOnlineTablets().containsKey(extent)) {
           log.info("Root tablet loaded: {}", extent);
@@ -1056,12 +1062,10 @@ public class TabletClientHandler implements TabletServerClientService.Iface,
           log.info("Root tablet failed to load");
         }
       }).start();
+    } else if (extent.isMeta()) {
+      server.resourceManager.addMetaDataAssignment(extent, log, ah);
     } else {
-      if (extent.isMeta()) {
-        server.resourceManager.addMetaDataAssignment(extent, log, ah);
-      } else {
-        server.resourceManager.addAssignment(extent, log, ah);
-      }
+      server.resourceManager.addAssignment(extent, log, ah);
     }
   }
 
@@ -1142,8 +1146,7 @@ public class TabletClientHandler implements TabletServerClientService.Iface,
 
     checkPermission(context, server, credentials, lock, "halt");
 
-    Halt.halt(0, () -> {
-      log.info("Manager requested tablet server halt");
+    Halt.halt(0, "Manager requested tablet server halt", () -> {
       context.getLowMemoryDetector().logGCInfo(server.getConfiguration());
       server.requestStop();
       try {
@@ -1200,11 +1203,12 @@ public class TabletClientHandler implements TabletServerClientService.Iface,
     // handle that more expensive case if needed.
     var tabletsSnapshot = server.getOnlineTablets();
 
-    Map<KeyExtent,Tablet.RefreshSession> refreshSessions = new HashMap<>();
+    Map<KeyExtent,Tablet.RefreshSession> refreshSessions = new HashMap<>(refreshes.size(), 1.0f);
 
     // Created this as synchronized list because it's passed to a lambda that could possibly run in
     // another thread.
-    List<TKeyExtent> unableToRefresh = Collections.synchronizedList(new ArrayList<>());
+    List<TKeyExtent> unableToRefresh =
+        Collections.synchronizedList(new ArrayList<>(refreshes.size()));
 
     for (var tkextent : refreshes) {
       var extent = KeyExtent.fromThrift(tkextent);
@@ -1253,7 +1257,7 @@ public class TabletClientHandler implements TabletServerClientService.Iface,
 
     var tabletsSnapshot = server.getOnlineTablets();
 
-    Map<TKeyExtent,Long> timestamps = new HashMap<>();
+    Map<TKeyExtent,Long> timestamps = new HashMap<>(extents.size(), 1.0f);
 
     for (var textent : extents) {
       var extent = KeyExtent.fromThrift(textent);
@@ -1401,6 +1405,13 @@ public class TabletClientHandler implements TabletServerClientService.Iface,
       return tsums;
     } catch (TimeoutException e) {
       return handleTimeout(sessionId);
+    }
+  }
+
+  private void logDurabilityWarning(KeyExtent tablet, Durability durability) {
+    if (tablet.isMeta() && durability != Durability.SYNC) {
+      log.warn("Property {} is not set to 'sync' for table {}", Property.TABLE_DURABILITY.getKey(),
+          tablet.tableId());
     }
   }
 }

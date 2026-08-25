@@ -22,6 +22,7 @@ import static com.google.common.util.concurrent.Uninterruptibles.sleepUninterrup
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -67,7 +68,7 @@ public class RootClientTabletCache extends ClientTabletCache {
 
   @Override
   public <T extends Mutation> void binMutations(ClientContext context, List<T> mutations,
-      Map<String,TabletServerMutations<T>> binnedMutations, List<T> failures) {
+      Map<String,TabletServerMutations<T>> binnedMutations, ArrayList<T> failures) {
     CachedTablet rootCachedTablet = getRootTabletLocation(context);
     if (rootCachedTablet != null && rootCachedTablet.getTserverLocation().isPresent()) {
       var tsm = new TabletServerMutations<T>(rootCachedTablet.getTserverSession().orElseThrow());
@@ -118,8 +119,7 @@ public class RootClientTabletCache extends ClientTabletCache {
     Timer timer = null;
 
     if (log.isTraceEnabled()) {
-      log.trace("tid={} Looking up root tablet location in zookeeper.",
-          Thread.currentThread().getId());
+      log.trace("Looking up root tablet location in zookeeper.");
       timer = Timer.startNew();
     }
 
@@ -128,7 +128,7 @@ public class RootClientTabletCache extends ClientTabletCache {
         .toTabletMetadata().getLocation();
 
     if (timer != null) {
-      log.trace("tid={} Found root tablet at {} in {}", Thread.currentThread().getId(), loc,
+      log.trace("Found root tablet at {} in {}", loc,
           String.format("%.3f secs", timer.elapsed(MILLISECONDS) / 1000.0));
     }
 

@@ -65,6 +65,9 @@ public final class ZKAuthenticator implements Authenticator {
 
       constructUser(principal, ZKSecurityTool.createPass(token));
     } catch (KeeperException | AccumuloException | InterruptedException e) {
+      if (e instanceof InterruptedException) {
+        Thread.currentThread().interrupt();
+      }
       log.error("{}", e.getMessage(), e);
       throw new IllegalStateException(e);
     }
@@ -91,10 +94,9 @@ public final class ZKAuthenticator implements Authenticator {
   public void createUser(String principal, AuthenticationToken token)
       throws AccumuloSecurityException {
     try {
-      if (!(token instanceof PasswordToken)) {
+      if (!(token instanceof PasswordToken pt)) {
         throw new AccumuloSecurityException(principal, SecurityErrorCode.INVALID_TOKEN);
       }
-      PasswordToken pt = (PasswordToken) token;
       constructUser(principal, ZKSecurityTool.createPass(pt.getPassword()));
     } catch (KeeperException e) {
       if (e.code().equals(KeeperException.Code.NODEEXISTS)) {
@@ -102,6 +104,7 @@ public final class ZKAuthenticator implements Authenticator {
       }
       throw new AccumuloSecurityException(principal, SecurityErrorCode.CONNECTION_ERROR, e);
     } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
       log.error("{}", e.getMessage(), e);
       throw new IllegalStateException(e);
     } catch (AccumuloException e) {
@@ -117,6 +120,7 @@ public final class ZKAuthenticator implements Authenticator {
       context.getZooCache().clear((path) -> path.startsWith(userPath));
       context.getZooSession().asReaderWriter().recursiveDelete(userPath, NodeMissingPolicy.FAIL);
     } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
       log.error("{}", e.getMessage(), e);
       throw new IllegalStateException(e);
     } catch (KeeperException e) {
@@ -131,10 +135,9 @@ public final class ZKAuthenticator implements Authenticator {
   @Override
   public void changePassword(String principal, AuthenticationToken token)
       throws AccumuloSecurityException {
-    if (!(token instanceof PasswordToken)) {
+    if (!(token instanceof PasswordToken pt)) {
       throw new AccumuloSecurityException(principal, SecurityErrorCode.INVALID_TOKEN);
     }
-    PasswordToken pt = (PasswordToken) token;
     if (userExists(principal)) {
       try {
         String userPath = Constants.ZUSERS + "/" + principal;
@@ -145,6 +148,7 @@ public final class ZKAuthenticator implements Authenticator {
         log.error("{}", e.getMessage(), e);
         throw new AccumuloSecurityException(principal, SecurityErrorCode.CONNECTION_ERROR, e);
       } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
         log.error("{}", e.getMessage(), e);
         throw new IllegalStateException(e);
       } catch (AccumuloException e) {
@@ -170,10 +174,9 @@ public final class ZKAuthenticator implements Authenticator {
   @Override
   public boolean authenticateUser(String principal, AuthenticationToken token)
       throws AccumuloSecurityException {
-    if (!(token instanceof PasswordToken)) {
+    if (!(token instanceof PasswordToken pt)) {
       throw new AccumuloSecurityException(principal, SecurityErrorCode.INVALID_TOKEN);
     }
-    PasswordToken pt = (PasswordToken) token;
     byte[] zkData;
     String zpath = Constants.ZUSERS + "/" + principal;
     zkData = context.getZooCache().get(zpath);

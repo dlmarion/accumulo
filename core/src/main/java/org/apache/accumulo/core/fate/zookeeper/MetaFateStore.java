@@ -55,6 +55,7 @@ import org.apache.accumulo.core.fate.Fate.TxInfo;
 import org.apache.accumulo.core.fate.FateId;
 import org.apache.accumulo.core.fate.FateInstanceType;
 import org.apache.accumulo.core.fate.FateKey;
+import org.apache.accumulo.core.fate.FatePartition;
 import org.apache.accumulo.core.fate.ReadOnlyRepo;
 import org.apache.accumulo.core.fate.Repo;
 import org.apache.accumulo.core.fate.StackOverflowException;
@@ -71,9 +72,16 @@ import org.slf4j.LoggerFactory;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Suppliers;
+import com.google.common.collect.Range;
+import com.google.common.collect.RangeSet;
+import com.google.common.collect.TreeRangeSet;
+
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 //TODO use zoocache? - ACCUMULO-1297
 //TODO handle zookeeper being down gracefully - ACCUMULO-1297
+@SuppressFBWarnings(value = "CT_CONSTRUCTOR_THROW",
+    justification = "Constructor validation is required for proper initialization")
 public class MetaFateStore<T> extends AbstractFateStore<T> {
 
   private static final Logger log = LoggerFactory.getLogger(MetaFateStore.class);
@@ -124,6 +132,9 @@ public class MetaFateStore<T> extends AbstractFateStore<T> {
       } catch (NodeExistsException nee) {
         // exist, so just try another random #
       } catch (KeeperException | InterruptedException e) {
+        if (e instanceof InterruptedException) {
+          Thread.currentThread().interrupt();
+        }
         throw new IllegalStateException(e);
       }
     }
@@ -176,6 +187,9 @@ public class MetaFateStore<T> extends AbstractFateStore<T> {
         return Optional.empty();
       }
     } catch (InterruptedException | KeeperException | AcceptableThriftTableOperationException e) {
+      if (e instanceof InterruptedException) {
+        Thread.currentThread().interrupt();
+      }
       throw new IllegalStateException(e);
     }
   }
@@ -275,8 +289,8 @@ public class MetaFateStore<T> extends AbstractFateStore<T> {
   }
 
   @Override
-  public void deleteDeadReservations() {
-    for (Map.Entry<FateId,FateReservation> entry : getActiveReservations().entrySet()) {
+  public void deleteDeadReservations(Set<FatePartition> partitions) {
+    for (Map.Entry<FateId,FateReservation> entry : getActiveReservations(partitions).entrySet()) {
       FateId fateId = entry.getKey();
       FateReservation reservation = entry.getValue();
       if (isLockHeld.test(reservation.getLockID())) {
@@ -453,6 +467,9 @@ public class MetaFateStore<T> extends AbstractFateStore<T> {
               "Deletion of ZK node fate data for {} was not able to be completed atomically... Retrying",
               fateId);
         } catch (InterruptedException | KeeperException e) {
+          if (e instanceof InterruptedException) {
+            Thread.currentThread().interrupt();
+          }
           throw new IllegalStateException(e);
         }
       }
@@ -554,6 +571,9 @@ public class MetaFateStore<T> extends AbstractFateStore<T> {
       return new FateData<>(TStatus.UNKNOWN, null, null, createEmptyRepoDeque(),
           createEmptyTxInfo());
     } catch (KeeperException | InterruptedException e) {
+      if (e instanceof InterruptedException) {
+        Thread.currentThread().interrupt();
+      }
       throw new IllegalStateException(e);
     }
   }
@@ -565,6 +585,9 @@ public class MetaFateStore<T> extends AbstractFateStore<T> {
       return new FateData<>(TStatus.UNKNOWN, null, null, createEmptyRepoDeque(),
           createEmptyTxInfo());
     } catch (KeeperException | InterruptedException e) {
+      if (e instanceof InterruptedException) {
+        Thread.currentThread().interrupt();
+      }
       throw new IllegalStateException(e);
     }
   }
@@ -608,8 +631,21 @@ public class MetaFateStore<T> extends AbstractFateStore<T> {
       }
       return stream.filter(s -> statuses.contains(s.getStatus()));
     } catch (KeeperException | InterruptedException e) {
+      if (e instanceof InterruptedException) {
+        Thread.currentThread().interrupt();
+      }
       throw new IllegalStateException(e);
     }
+  }
+
+  @Override
+  protected Stream<FateIdStatus> getTransactions(Set<FatePartition> partitions,
+      EnumSet<TStatus> statuses) {
+
+    RangeSet<FateId> rangeSet = TreeRangeSet.create();
+    partitions.forEach(partition -> rangeSet.add(Range.closed(partition.start(), partition.end())));
+
+    return getTransactions(statuses).filter(fis -> rangeSet.contains(fis.getFateId()));
   }
 
   @Override
@@ -649,8 +685,16 @@ public class MetaFateStore<T> extends AbstractFateStore<T> {
         }
       });
     } catch (InterruptedException | AcceptableThriftTableOperationException e) {
+      if (e instanceof InterruptedException) {
+        Thread.currentThread().interrupt();
+      }
       throw new IllegalStateException(e);
     }
+  }
+
+  @Override
+  public void close() {
+    // no-op
   }
 
   protected static class FateData<T> {

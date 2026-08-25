@@ -20,6 +20,7 @@ package org.apache.accumulo.test.functional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -42,6 +43,7 @@ import org.apache.accumulo.core.data.ByteSequence;
 import org.apache.accumulo.core.data.Key;
 import org.apache.accumulo.core.data.Mutation;
 import org.apache.accumulo.core.data.Range;
+import org.apache.accumulo.core.data.RowRange;
 import org.apache.accumulo.core.data.TableId;
 import org.apache.accumulo.core.data.Value;
 import org.apache.accumulo.core.iterators.Filter;
@@ -74,6 +76,11 @@ public class SplitMillionIT extends ConfigurableMacBase {
   public void configure(MiniAccumuloConfigImpl cfg, Configuration hadoopCoreSite) {
     cfg.setMemory(ServerType.MANAGER, 1, MemoryUnit.GIGABYTE);
     cfg.setMemory(ServerType.TABLET_SERVER, 1, MemoryUnit.GIGABYTE);
+  }
+
+  @Override
+  protected Duration defaultTimeout() {
+    return Duration.ofMinutes(20);
   }
 
   @SuppressFBWarnings(value = {"PREDICTABLE_RANDOM", "DMI_RANDOM_USED_ONLY_ONCE"},
@@ -153,7 +160,7 @@ public class SplitMillionIT extends ConfigurableMacBase {
       long count;
       t1 = System.currentTimeMillis();
       try (var tabletInformation =
-          c.tableOperations().getTabletInformation(tableName, new Range())) {
+          c.tableOperations().getTabletInformation(tableName, List.of(RowRange.all()))) {
         count = tabletInformation.count();
       }
       t2 = System.currentTimeMillis();
@@ -175,7 +182,7 @@ public class SplitMillionIT extends ConfigurableMacBase {
       // of the tablets for the clone table will be hosted. The subsequent merge operation
       // is a metadata-only operation unless the tablet is hosted. If the tablet is hosted
       // then the tablet has to be closed making the merge operation take longer.
-      c.tableOperations().setTabletAvailability(tableName, new Range(),
+      c.tableOperations().setTabletAvailability(tableName, RowRange.all(),
           TabletAvailability.UNHOSTED);
 
       // clone the table to test cloning with lots of tablets and also to give merge its own table

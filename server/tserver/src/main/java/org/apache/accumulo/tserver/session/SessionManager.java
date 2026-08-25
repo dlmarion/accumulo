@@ -131,6 +131,7 @@ public class SessionManager {
           try {
             session.wait(1000);
           } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             throw new RuntimeException();
           }
         }
@@ -331,8 +332,7 @@ public class SessionManager {
   private long countZombieScans(long reportTimeMillis) {
     return Stream.concat(deferredCleanupQueue.stream(), sessions.values().stream())
         .filter(session -> {
-          if (session instanceof ScanSession) {
-            var scanSession = (ScanSession<?>) session;
+          if (session instanceof ScanSession<?> scanSession) {
             synchronized (scanSession) {
               var scanTask = scanSession.getScanTask();
               if (scanTask != null && scanSession.getState() == State.REMOVED
@@ -396,12 +396,10 @@ public class SessionManager {
       ScanTask<?> nbt = null;
       TableId tableID = null;
 
-      if (session instanceof SingleScanSession) {
-        SingleScanSession ss = (SingleScanSession) session;
+      if (session instanceof SingleScanSession ss) {
         nbt = ss.getScanTask();
         tableID = ss.extent.tableId();
-      } else if (session instanceof MultiScanSession) {
-        MultiScanSession mss = (MultiScanSession) session;
+      } else if (session instanceof MultiScanSession mss) {
         nbt = mss.getScanTask();
         tableID = mss.threadPoolExtent.tableId();
       }
@@ -419,12 +417,12 @@ public class SessionManager {
 
   public List<ActiveScan> getActiveScans() {
 
-    final List<ActiveScan> activeScans = new ArrayList<>();
+    final List<ActiveScan> activeScans =
+        new ArrayList<>(sessions.size() + deferredCleanupQueue.size());
     final long ct = System.currentTimeMillis();
 
     Stream.concat(sessions.values().stream(), deferredCleanupQueue.stream()).forEach(session -> {
-      if (session instanceof ScanSession) {
-        ScanSession<?> scanSession = (ScanSession<?>) session;
+      if (session instanceof ScanSession<?> scanSession) {
         boolean isSingle = session instanceof SingleScanSession;
 
         addActiveScan(activeScans, scanSession,

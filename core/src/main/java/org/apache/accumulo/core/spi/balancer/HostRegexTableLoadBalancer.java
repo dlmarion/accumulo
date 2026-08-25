@@ -66,7 +66,6 @@ import org.apache.commons.lang3.builder.ToStringBuilder;
 import org.apache.commons.lang3.builder.ToStringStyle;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.event.Level;
 
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.google.common.collect.HashMultimap;
@@ -106,8 +105,8 @@ public class HostRegexTableLoadBalancer extends TableLoadBalancer {
   private static final String PROP_PREFIX = Property.TABLE_ARBITRARY_PROP_PREFIX.getKey();
 
   private static final Logger LOG = LoggerFactory.getLogger(HostRegexTableLoadBalancer.class);
-  private static final Logger MIGRATIONS_LOGGER =
-      new EscalatingLogger(LOG, Duration.ofMinutes(5), 1000, Level.WARN);
+  private static final EscalatingLogger MIGRATIONS_LOGGER =
+      new EscalatingLogger(LOG, Duration.ofMinutes(5), 1000, Logger::warn);
   public static final String HOST_BALANCER_PREFIX = PROP_PREFIX + "balancer.host.regex.";
   public static final String HOST_BALANCER_OOB_CHECK_KEY =
       PROP_PREFIX + "balancer.host.regex.oob.period";
@@ -148,7 +147,7 @@ public class HostRegexTableLoadBalancer extends TableLoadBalancer {
   /**
    * Host Regex Table Load Balance Config
    */
-  static class HrtlbConf {
+  static final class HrtlbConf {
 
     protected long oobCheckMillis =
         ConfigurationTypeHelper.getTimeInMillis(HOST_BALANCER_OOB_DEFAULT);
@@ -370,12 +369,13 @@ public class HostRegexTableLoadBalancer extends TableLoadBalancer {
           continue;
         }
       }
-      LOG.debug("Sending {} tablets to balancer for table {} for assignment within tservers {}",
-          e.getValue().size(), tableName, currentView.keySet());
+      LOG.debug("Sending {} tablets to balancer for table {} for assignment within {} tservers",
+          e.getValue().size(), tableName, currentView.keySet().size());
+      LOG.trace("table {} tserver assignment set {}", tableName, currentView.keySet());
       assignmentTimer.restart();
       getBalancerForTable(e.getKey()).getAssignments(new AssignmentParamsImpl(currentView,
           params.currentResourceGroups(), e.getValue(), newAssignments));
-      LOG.trace("assignment results table:{} assignments:{} time:{}ms", tableName,
+      LOG.debug("assignment results table:{} assignments:{} time:{}ms", tableName,
           newAssignments.size(), assignmentTimer.elapsed(TimeUnit.MILLISECONDS));
       newAssignments.forEach(params::addAssignment);
     }
@@ -421,6 +421,14 @@ public class HostRegexTableLoadBalancer extends TableLoadBalancer {
             if (tid == null) {
               LOG.warn("Unable to check for out of bounds tablets for table {},"
                   + " it may have been deleted or renamed.", table);
+              continue;
+            }
+            // If current information in the Manager indicates that the tserver
+            // is not hosting tablets for the table, then move on to the next
+            // tserver
+            if (e.getValue().getTableMap() != null
+                && !e.getValue().getTableMap().containsKey(tid.canonical())) {
+              LOG.debug("TServer {} is not hosting any tablets for table {}", e.getKey(), table);
               continue;
             }
             try {
@@ -519,10 +527,11 @@ public class HostRegexTableLoadBalancer extends TableLoadBalancer {
       }
       ArrayList<TabletMigration> newMigrations = new ArrayList<>();
       balanceTimer.restart();
-      getBalancerForTable(tableId)
-          .balance(new BalanceParamsImpl(currentView, params.currentResourceGroups(), migrations,
-              newMigrations, DataLevel.of(tableId), Map.of(tableName, tableId)));
-      LOG.trace("balance results tableId:{} migrations:{} time:{}ms", tableId, newMigrations.size(),
+      TabletBalancer tabletBalancer = getBalancerForTable(tableId);
+      tabletBalancer.balance(new BalanceParamsImpl(currentView, params.currentResourceGroups(),
+          migrations, newMigrations, DataLevel.of(tableId), Map.of(tableName, tableId)));
+      LOG.debug("balance results class:{} tableId:{} migrations:{} time:{}ms",
+          tabletBalancer.getClass().getSimpleName(), tableId, newMigrations.size(),
           balanceTimer.elapsed(TimeUnit.MILLISECONDS));
 
       if (newMigrations.isEmpty()) {
@@ -549,7 +558,7 @@ public class HostRegexTableLoadBalancer extends TableLoadBalancer {
     }
 
     LOG.info("Migrating {} tablets for balance.", migrationsOut.size());
-    LOG.debug("Tablets currently migrating: {}", migrationsOut);
+    LOG.trace("Tablets currently migrating: {}", migrationsOut);
     return minBalanceTime;
   }
 

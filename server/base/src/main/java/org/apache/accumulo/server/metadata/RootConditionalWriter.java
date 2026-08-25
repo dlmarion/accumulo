@@ -89,8 +89,6 @@ public class RootConditionalWriter implements ConditionalWriter {
 
     ServerConditionalMutation scm = new ServerConditionalMutation(tcm);
 
-    context.getZooCache().clear(RootTable.ZROOT_TABLET);
-
     List<ServerConditionalMutation> okMutations = new ArrayList<>();
     List<TCMResult> results = new ArrayList<>();
 
@@ -120,7 +118,7 @@ public class RootConditionalWriter implements ConditionalWriter {
 
         } catch (IOException e) {
           throw new UncheckedIOException(e);
-        } catch (AccumuloException e) {
+        } catch (AccumuloException | ReflectiveOperationException e) {
           throw new RuntimeException(e);
         } catch (AccumuloSecurityException e) {
           throw new RuntimeException(e);
@@ -129,10 +127,7 @@ public class RootConditionalWriter implements ConditionalWriter {
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
-
-    // TODO this is racy...
     context.getZooCache().clear(RootTable.ZROOT_TABLET);
-
     return getResult(okMutations, results, mutation);
   }
 

@@ -24,6 +24,7 @@ import static org.apache.accumulo.core.metadata.schema.TabletMetadata.ColumnType
 import static org.apache.accumulo.core.metadata.schema.TabletMetadata.ColumnType.LOCATION;
 import static org.apache.accumulo.core.metadata.schema.TabletMetadata.ColumnType.OPID;
 import static org.apache.accumulo.core.metadata.schema.TabletMetadata.ColumnType.SELECTED;
+import static org.apache.accumulo.core.util.LazySingletons.GSON;
 
 import java.time.Duration;
 import java.util.HashSet;
@@ -47,16 +48,18 @@ import org.apache.accumulo.core.metadata.schema.TabletMetadata;
 import org.apache.accumulo.core.spi.compaction.CompactionKind;
 import org.apache.accumulo.core.tabletserver.thrift.TCompactionStats;
 import org.apache.accumulo.core.util.Retry;
-import org.apache.accumulo.manager.Manager;
-import org.apache.accumulo.manager.tableOps.ManagerRepo;
+import org.apache.accumulo.manager.tableOps.AbstractFateOperation;
+import org.apache.accumulo.manager.tableOps.FateEnv;
 import org.apache.accumulo.server.ServerContext;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Preconditions;
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 
-public class CommitCompaction extends ManagerRepo {
+public class CommitCompaction extends AbstractFateOperation {
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(CommitCompaction.class);
   private final CompactionCommitData commitData;
@@ -68,7 +71,7 @@ public class CommitCompaction extends ManagerRepo {
   }
 
   @Override
-  public Repo<Manager> call(FateId fateId, Manager manager) throws Exception {
+  public Repo<FateEnv> call(FateId fateId, FateEnv env) throws Exception {
     var ecid = ExternalCompactionId.of(commitData.ecid);
     var newFile = Optional.ofNullable(newDatafile).map(f -> ReferencedTabletFile.of(new Path(f)));
 
@@ -79,7 +82,7 @@ public class CommitCompaction extends ManagerRepo {
     // process died and now its running again. In this case commit should do nothing, but its
     // important to still carry on with the rest of the steps after commit. This code ignores a that
     // fact that a commit may not have happened in the current call and continues for this reason.
-    TabletMetadata tabletMetadata = commitCompaction(manager.getContext(), ecid, newFile);
+    TabletMetadata tabletMetadata = commitCompaction(env.getContext(), ecid, newFile);
 
     String loc = null;
     if (tabletMetadata != null && tabletMetadata.getLocation() != null) {
@@ -88,7 +91,7 @@ public class CommitCompaction extends ManagerRepo {
 
     // This will causes the tablet to be reexamined to see if it needs any more compactions.
     var extent = KeyExtent.fromThrift(commitData.textent);
-    manager.getEventCoordinator().event(extent, "Compaction completed %s", extent);
+    env.getEventPublisher().event(extent, "Compaction completed %s", extent);
 
     return new PutGcCandidates(commitData, loc);
   }
@@ -152,6 +155,7 @@ public class CommitCompaction extends ManagerRepo {
 
         retry.waitForNextAttempt(LOG, "Failed to commit " + ecid + " for tablet " + getExtent());
       } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
         throw new RuntimeException(e);
       }
     }
@@ -280,4 +284,13 @@ public class CommitCompaction extends ManagerRepo {
 
     return true;
   }
+
+  @Override
+  public String getDetails() {
+    Gson gson = GSON.get();
+    JsonObject details = gson.toJsonTree(commitData).getAsJsonObject();
+    details.addProperty("NewDataFile", newDatafile);
+    return gson.toJson(details);
+  }
+
 }

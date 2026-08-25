@@ -31,10 +31,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.http.HttpResponse.BodyHandlers;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.OptionalLong;
@@ -93,22 +91,13 @@ public class FunctionalTestUtils {
     }
   }
 
-  public static List<String> getRFilePaths(AccumuloClient c, String tableName) throws Exception {
-    return getStoredTabletFiles(c, tableName).stream().map(StoredTabletFile::getMetadataPath)
-        .collect(Collectors.toList());
-  }
-
-  public static List<StoredTabletFile> getStoredTabletFiles(AccumuloClient c, String tableName)
-      throws Exception {
-    List<StoredTabletFile> files = new ArrayList<>();
-    try (Scanner scanner =
-        c.createScanner(SystemTables.METADATA.tableName(), Authorizations.EMPTY)) {
-      TableId tableId = TableId.of(c.tableOperations().tableIdMap().get(tableName));
-      scanner.setRange(TabletsSection.getRange(tableId));
-      scanner.fetchColumnFamily(DataFileColumnFamily.NAME);
-      scanner.forEach(entry -> files.add(StoredTabletFile.of(entry.getKey().getColumnQualifier())));
+  public static Set<StoredTabletFile> getStoredTabletFiles(ServerContext context,
+      String tableName) {
+    TableId tableId = TableId.of(context.tableOperations().tableIdMap().get(tableName));
+    try (var tabletsMetadata = context.getAmple().readTablets().forTable(tableId).build()) {
+      return tabletsMetadata.stream().flatMap(tm -> tm.getFiles().stream())
+          .collect(Collectors.toSet());
     }
-    return files;
   }
 
   static void checkRFiles(AccumuloClient c, String tableName, int minTablets, int maxTablets,
@@ -166,27 +155,30 @@ public class FunctionalTestUtils {
   public static void createRFiles(final AccumuloClient c, final FileSystem fs, String path,
       int rows, int splits, int threads) throws Exception {
     fs.delete(new Path(path), true);
-    ExecutorService threadPool = Executors.newFixedThreadPool(threads);
     final AtomicBoolean fail = new AtomicBoolean(false);
-    for (int i = 0; i < rows; i += rows / splits) {
-      TestIngest.IngestParams params = new TestIngest.IngestParams(c.properties());
-      params.outputFile = String.format("%s/mf%s", path, i);
-      params.random = 56;
-      params.timestamp = 1;
-      params.dataSize = 50;
-      params.rows = rows / splits;
-      params.startRow = i;
-      params.cols = 1;
-      threadPool.execute(() -> {
-        try {
-          TestIngest.ingest(c, fs, params);
-        } catch (Exception e) {
-          fail.set(true);
-        }
-      });
+    ExecutorService threadPool = Executors.newFixedThreadPool(threads);
+    try {
+      for (int i = 0; i < rows; i += rows / splits) {
+        TestIngest.IngestParams params = new TestIngest.IngestParams(c.properties());
+        params.outputFile = String.format("%s/mf%s", path, i);
+        params.random = 56;
+        params.timestamp = 1;
+        params.dataSize = 50;
+        params.rows = rows / splits;
+        params.startRow = i;
+        params.cols = 1;
+        threadPool.execute(() -> {
+          try {
+            TestIngest.ingest(c, fs, params);
+          } catch (Exception e) {
+            fail.set(true);
+          }
+        });
+      }
+    } finally {
+      threadPool.shutdown();
+      threadPool.awaitTermination(1, TimeUnit.HOURS);
     }
-    threadPool.shutdown();
-    threadPool.awaitTermination(1, TimeUnit.HOURS);
     assertFalse(fail.get());
   }
 
@@ -231,14 +223,17 @@ public class FunctionalTestUtils {
       AdminUtil<String> admin = new AdminUtil<>();
       ServerContext context = cluster.getServerContext();
       var zk = context.getZooSession();
-      MetaFateStore<String> readOnlyMFS = new MetaFateStore<>(zk, null, null);
-      UserFateStore<String> readOnlyUFS =
+      ReadOnlyFateStore<String> readOnlyUFS =
           new UserFateStore<>(context, SystemTables.FATE.tableName(), null, null);
+      ReadOnlyFateStore<String> readOnlyMFS = new MetaFateStore<>(zk, null, null);
       Map<FateInstanceType,ReadOnlyFateStore<String>> readOnlyFateStores =
           Map.of(FateInstanceType.META, readOnlyMFS, FateInstanceType.USER, readOnlyUFS);
       var lockPath = context.getServerPaths().createTableLocksPath();
-      return admin.getStatus(readOnlyFateStores, zk, lockPath, null, null, null);
+      return admin.getStatus(readOnlyFateStores, zk, lockPath, null, null, null, false);
     } catch (KeeperException | InterruptedException e) {
+      if (e instanceof InterruptedException) {
+        Thread.currentThread().interrupt();
+      }
       throw new RuntimeException(e);
     }
   }

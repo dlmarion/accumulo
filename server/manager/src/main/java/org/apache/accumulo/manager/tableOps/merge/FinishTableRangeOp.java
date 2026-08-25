@@ -21,6 +21,7 @@ package org.apache.accumulo.manager.tableOps.merge;
 import static org.apache.accumulo.core.metadata.schema.TabletMetadata.ColumnType.LOCATION;
 import static org.apache.accumulo.core.metadata.schema.TabletMetadata.ColumnType.OPID;
 import static org.apache.accumulo.core.metadata.schema.TabletMetadata.ColumnType.PREV_ROW;
+import static org.apache.accumulo.core.util.LazySingletons.GSON;
 
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
@@ -32,15 +33,15 @@ import org.apache.accumulo.core.fate.zookeeper.DistributedReadWriteLock.LockType
 import org.apache.accumulo.core.metadata.schema.Ample;
 import org.apache.accumulo.core.metadata.schema.TabletOperationId;
 import org.apache.accumulo.core.metadata.schema.TabletOperationType;
-import org.apache.accumulo.manager.Manager;
-import org.apache.accumulo.manager.tableOps.ManagerRepo;
+import org.apache.accumulo.manager.tableOps.AbstractFateOperation;
+import org.apache.accumulo.manager.tableOps.FateEnv;
 import org.apache.accumulo.manager.tableOps.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Preconditions;
 
-class FinishTableRangeOp extends ManagerRepo {
+class FinishTableRangeOp extends AbstractFateOperation {
   private static final Logger log = LoggerFactory.getLogger(FinishTableRangeOp.class);
 
   private static final long serialVersionUID = 1L;
@@ -52,15 +53,15 @@ class FinishTableRangeOp extends ManagerRepo {
   }
 
   @Override
-  public Repo<Manager> call(FateId fateId, Manager manager) throws Exception {
-    removeOperationIds(log, data, fateId, manager);
+  public Repo<FateEnv> call(FateId fateId, FateEnv env) throws Exception {
+    removeOperationIds(log, data, fateId, env);
 
-    Utils.unreserveTable(manager, data.tableId, fateId, LockType.WRITE);
-    Utils.unreserveNamespace(manager, data.namespaceId, fateId, LockType.READ);
+    Utils.unreserveTable(env.getContext(), data.tableId, fateId, LockType.WRITE);
+    Utils.unreserveNamespace(env.getContext(), data.namespaceId, fateId, LockType.READ);
     return null;
   }
 
-  static void removeOperationIds(Logger log, MergeInfo data, FateId fateId, Manager manager) {
+  static void removeOperationIds(Logger log, MergeInfo data, FateId fateId, FateEnv env) {
     KeyExtent range = data.getReserveExtent();
     var opid = TabletOperationId.from(TabletOperationType.MERGING, fateId);
     log.debug("{} unreserving tablet in range {}", fateId, range);
@@ -80,10 +81,10 @@ class FinishTableRangeOp extends ManagerRepo {
     int submitted = 0;
     int count = 0;
 
-    try (var tablets = manager.getContext().getAmple().readTablets().forTable(data.tableId)
+    try (var tablets = env.getContext().getAmple().readTablets().forTable(data.tableId)
         .overlapping(range.prevEndRow(), range.endRow()).fetch(PREV_ROW, LOCATION, OPID).build();
         var tabletsMutator =
-            manager.getContext().getAmple().conditionallyMutateTablets(resultConsumer)) {
+            env.getContext().getAmple().conditionallyMutateTablets(resultConsumer)) {
 
       for (var tabletMeta : tablets) {
         if (opid.equals(tabletMeta.getOperationId())) {
@@ -100,11 +101,15 @@ class FinishTableRangeOp extends ManagerRepo {
     log.debug("{} deleted {}/{} opids out of {} tablets", fateId, acceptedCount.get(), submitted,
         count);
 
-    manager.getEventCoordinator().event(range, "Merge or deleterows completed %s", fateId);
+    env.getEventPublisher().event(range, "Merge or deleterows completed %s", fateId);
 
     Preconditions.checkState(acceptedCount.get() == submitted && rejectedCount.get() == 0,
         "Failed to delete tablets accepted:%s != %s rejected:%s", acceptedCount.get(), submitted,
         rejectedCount.get());
   }
 
+  @Override
+  public String getDetails() {
+    return GSON.get().toJson(data);
+  }
 }

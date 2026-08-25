@@ -23,22 +23,17 @@ import jakarta.ws.rs.ext.Provider;
 
 import org.apache.accumulo.core.compaction.thrift.TExternalCompaction;
 import org.apache.accumulo.core.data.TabletId;
-import org.apache.accumulo.core.metrics.flatbuffers.FMetric;
-import org.apache.accumulo.core.process.thrift.MetricResponse;
 import org.apache.accumulo.core.tabletserver.thrift.TExternalCompactionJob;
-import org.apache.accumulo.monitor.next.serializers.CumulativeDistributionSummarySerializer;
-import org.apache.accumulo.monitor.next.serializers.FMetricSerializer;
 import org.apache.accumulo.monitor.next.serializers.IdSerializer;
-import org.apache.accumulo.monitor.next.serializers.MetricResponseSerializer;
 import org.apache.accumulo.monitor.next.serializers.TabletIdSerializer;
 import org.apache.accumulo.monitor.next.serializers.ThriftSerializer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 import io.micrometer.core.instrument.Meter.Id;
-import io.micrometer.core.instrument.cumulative.CumulativeDistributionSummary;
 
 @Provider
 public class CustomObjectMapper implements ContextResolver<ObjectMapper> {
@@ -50,15 +45,12 @@ public class CustomObjectMapper implements ContextResolver<ObjectMapper> {
     mapper = new ObjectMapper();
     SimpleModule module = new SimpleModule();
     module.addKeySerializer(Id.class, new IdSerializer());
-    module.addSerializer(FMetric.class, new FMetricSerializer());
-    module.addSerializer(MetricResponse.class, new MetricResponseSerializer());
     module.addSerializer(TExternalCompaction.class, new ThriftSerializer());
     module.addSerializer(TExternalCompactionJob.class, new ThriftSerializer());
-    module.addSerializer(CumulativeDistributionSummary.class,
-        new CumulativeDistributionSummarySerializer());
     module.addSerializer(TabletId.class, new TabletIdSerializer());
     mapper.registerModule(module);
     mapper.registerModule(new Jdk8Module());
+    mapper.registerModule(new JavaTimeModule());
 
   }
 

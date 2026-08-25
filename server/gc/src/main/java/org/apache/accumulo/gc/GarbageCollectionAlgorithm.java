@@ -141,7 +141,7 @@ public class GarbageCollectionAlgorithm {
 
     List<GcCandidate> candidateEntriesToBeDeleted = new ArrayList<>();
     Set<TableId> tableIdsBefore = gce.getCandidateTableIDs();
-    Set<TableId> tableIdsSeen = new HashSet<>();
+    Set<TableId> tableIdsSeen = new HashSet<>(tableIdsBefore.size());
     try (Stream<Reference> references = gce.getReferences()) {
       references.forEach(ref -> {
         tableIdsSeen.add(ref.getTableId());
@@ -241,10 +241,10 @@ public class GarbageCollectionAlgorithm {
     return blipCount;
   }
 
-  @VisibleForTesting
   /**
    * Double check no tables were missed during GC
    */
+  @VisibleForTesting
   protected void ensureAllTablesChecked(Set<TableId> tableIdsBefore, Set<TableId> tableIdsSeen,
       Set<TableId> tableIdsAfter) {
 

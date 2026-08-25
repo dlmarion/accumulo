@@ -43,9 +43,9 @@ import org.apache.accumulo.core.metadata.SystemTables;
 import org.apache.accumulo.core.metadata.schema.MetadataSchema.DeletesSection;
 import org.apache.accumulo.core.security.Authorizations;
 import org.apache.accumulo.core.zookeeper.ZooCache;
-import org.apache.accumulo.harness.AccumuloClusterHarness;
 import org.apache.accumulo.minicluster.ServerType;
 import org.apache.accumulo.miniclusterImpl.MiniAccumuloConfigImpl;
+import org.apache.accumulo.test.harness.AccumuloClusterHarness;
 import org.apache.accumulo.test.util.Wait;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.Text;
@@ -78,7 +78,8 @@ public class BadDeleteMarkersCreatedIT extends AccumuloClusterHarness {
     timeoutFactor = Wait.getTimeoutFactor(e -> 1);
   }
 
-  private String gcCycleDelay, gcCycleStart;
+  private String gcCycleDelay;
+  private String gcCycleStart;
 
   @BeforeEach
   public void alterConfig() throws Exception {

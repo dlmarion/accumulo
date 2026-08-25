@@ -18,6 +18,8 @@
  */
 package org.apache.accumulo.manager.compaction.coordinator.commit;
 
+import static org.apache.accumulo.core.util.LazySingletons.GSON;
+
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -27,28 +29,26 @@ import org.apache.accumulo.core.dataImpl.thrift.TKeyExtent;
 import org.apache.accumulo.core.fate.FateId;
 import org.apache.accumulo.core.fate.Repo;
 import org.apache.accumulo.core.metadata.TServerInstance;
-import org.apache.accumulo.core.metadata.schema.ExternalCompactionId;
 import org.apache.accumulo.core.metadata.schema.TabletMetadata;
-import org.apache.accumulo.manager.Manager;
-import org.apache.accumulo.manager.tableOps.ManagerRepo;
+import org.apache.accumulo.manager.tableOps.AbstractFateOperation;
+import org.apache.accumulo.manager.tableOps.FateEnv;
 import org.apache.accumulo.manager.tableOps.bulkVer2.TabletRefresher;
 
 import com.google.common.util.concurrent.MoreExecutors;
+import com.google.gson.JsonObject;
 
-public class RefreshTablet extends ManagerRepo {
+public class RefreshTablet extends AbstractFateOperation {
   private static final long serialVersionUID = 1L;
   private final TKeyExtent extent;
   private final String tserverInstance;
-  private final String compactionId;
 
-  public RefreshTablet(String ecid, TKeyExtent extent, String tserverInstance) {
-    this.compactionId = ecid;
+  public RefreshTablet(TKeyExtent extent, String tserverInstance) {
     this.extent = extent;
     this.tserverInstance = tserverInstance;
   }
 
   @Override
-  public Repo<Manager> call(FateId fateId, Manager manager) throws Exception {
+  public Repo<FateEnv> call(FateId fateId, FateEnv env) throws Exception {
 
     TServerInstance tsi = new TServerInstance(tserverInstance);
 
@@ -57,14 +57,21 @@ public class RefreshTablet extends ManagerRepo {
     ExecutorService executorService = MoreExecutors.newDirectExecutorService();
     try {
       TabletRefresher.refreshTablets(executorService, "compaction:" + KeyExtent.fromThrift(extent),
-          manager.getContext(), manager::onlineTabletServers,
+          env.getContext(), env::onlineTabletServers,
           Map.of(TabletMetadata.Location.current(tsi), List.of(extent)));
     } finally {
       executorService.shutdownNow();
     }
 
-    manager.getCompactionCoordinator().recordCompletion(ExternalCompactionId.of(compactionId));
-
     return null;
   }
+
+  @Override
+  public String getDetails() {
+    JsonObject details = new JsonObject();
+    details.addProperty("extent", extent.toString());
+    details.addProperty("TServerInstance", tserverInstance);
+    return GSON.get().toJson(details);
+  }
+
 }

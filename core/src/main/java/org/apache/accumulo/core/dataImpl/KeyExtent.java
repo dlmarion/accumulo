@@ -53,7 +53,6 @@ import org.apache.accumulo.core.dataImpl.thrift.TKeyExtent;
 import org.apache.accumulo.core.metadata.SystemTables;
 import org.apache.accumulo.core.metadata.schema.MetadataSchema.TabletsSection;
 import org.apache.accumulo.core.metadata.schema.MetadataSchema.TabletsSection.TabletColumnFamily;
-import org.apache.accumulo.core.util.ByteBufferUtil;
 import org.apache.accumulo.core.util.Pair;
 import org.apache.accumulo.core.util.TextUtil;
 import org.apache.hadoop.io.BinaryComparable;
@@ -64,7 +63,7 @@ import org.apache.hadoop.io.Text;
 /**
  * keeps track of information needed to identify a tablet
  */
-public class KeyExtent implements Comparable<KeyExtent> {
+public final class KeyExtent implements Comparable<KeyExtent> {
 
   private static final String OBSCURING_HASH_ALGORITHM = "SHA-256";
 
@@ -116,10 +115,9 @@ public class KeyExtent implements Comparable<KeyExtent> {
    * @param tke the KeyExtent in its Thrift object form
    */
   public static KeyExtent fromThrift(TKeyExtent tke) {
-    TableId tableId = TableId.of(new String(ByteBufferUtil.toBytes(tke.table), UTF_8));
-    Text endRow = tke.endRow == null ? null : new Text(ByteBufferUtil.toBytes(tke.endRow));
-    Text prevEndRow =
-        tke.prevEndRow == null ? null : new Text(ByteBufferUtil.toBytes(tke.prevEndRow));
+    TableId tableId = TableId.of(new String(tke.getTable(), UTF_8));
+    Text endRow = tke.getEndRow() == null ? null : new Text(tke.getEndRow());
+    Text prevEndRow = tke.getPrevEndRow() == null ? null : new Text(tke.getPrevEndRow());
     return new KeyExtent(tableId, endRow, prevEndRow);
   }
 
@@ -284,10 +282,9 @@ public class KeyExtent implements Comparable<KeyExtent> {
     if (o == this) {
       return true;
     }
-    if (!(o instanceof KeyExtent)) {
+    if (!(o instanceof KeyExtent oke)) {
       return false;
     }
-    KeyExtent oke = (KeyExtent) o;
     return tableId().equals(oke.tableId()) && Objects.equals(endRow(), oke.endRow())
         && Objects.equals(prevEndRow(), oke.prevEndRow());
   }

@@ -41,7 +41,7 @@ import org.apache.accumulo.minicluster.ServerType;
 import org.apache.accumulo.miniclusterImpl.MiniAccumuloClusterImpl.ProcessInfo;
 import org.apache.accumulo.miniclusterImpl.MiniAccumuloConfigImpl;
 import org.apache.accumulo.miniclusterImpl.ProcessReference;
-import org.apache.accumulo.server.util.Admin;
+import org.apache.accumulo.server.util.adminCommand.StopAll;
 import org.apache.accumulo.test.functional.ConfigurableMacBase;
 import org.apache.accumulo.tserver.TabletServer;
 import org.apache.hadoop.conf.Configuration;
@@ -117,7 +117,7 @@ public class VerifySerialRecoveryIT extends ConfigurableMacBase {
       try (Scanner scanner = c.createScanner(tableName, Authorizations.EMPTY)) {
         scanner.forEach((k, v) -> {});
       }
-      assertEquals(0, cluster.exec(Admin.class, "stopAll").getProcess().waitFor());
+      assertEquals(0, cluster.exec(StopAll.class).getProcess().waitFor());
       ts.getProcess().waitFor();
       String result = ts.readStdOut();
       log.info(result);
@@ -126,25 +126,31 @@ public class VerifySerialRecoveryIT extends ConfigurableMacBase {
       // time
       boolean ongoingRecovery = false;
       int recoveries = 0;
+      String recoveryStartLine = null;
       var pattern =
           Pattern.compile(".*recovered \\d+ mutations creating \\d+ entries from \\d+ walogs.*");
       for (String line : result.split("\n")) {
-        // ignore metadata and root tables
-        if (line.contains(SystemTables.METADATA.tableId().canonical())
-            || line.contains(SystemTables.ROOT.tableId().canonical())) {
+        // ignore system tables
+        if (SystemTables.tableIds().stream()
+            .anyMatch(tableId -> line.contains(tableId.canonical()))) {
           continue;
         }
         if (line.contains("recovering data from walogs")) {
-          assertFalse(ongoingRecovery, "Saw recovery start before previous recovery finished");
+          assertFalse(ongoingRecovery,
+              "Saw recovery start before previous recovery finished. Previous start: "
+                  + recoveryStartLine + ", new start: " + line);
           ongoingRecovery = true;
+          recoveryStartLine = line;
           recoveries++;
         }
         if (pattern.matcher(line).matches()) {
-          assertTrue(ongoingRecovery, "Saw recovery end without recovery start");
+          assertTrue(ongoingRecovery, "Saw recovery end without recovery start: " + line);
           ongoingRecovery = false;
+          recoveryStartLine = null;
         }
       }
-      assertFalse(ongoingRecovery, "Expected no ongoing recovery at end of test");
+      assertFalse(ongoingRecovery,
+          "Expected no ongoing recovery at end of test. Last start: " + recoveryStartLine);
       assertTrue(recoveries > 0, "Expected at least one recovery to have occurred");
     }
   }

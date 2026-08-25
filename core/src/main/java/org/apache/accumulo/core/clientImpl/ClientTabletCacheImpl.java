@@ -155,8 +155,6 @@ public class ClientTabletCacheImpl extends ClientTabletCache {
 
   public interface TabletServerLockChecker {
     boolean isLockHeld(String tserver, String session);
-
-    void invalidateCache(String server);
   }
 
   private class LockCheckerSession {
@@ -221,15 +219,14 @@ public class ClientTabletCacheImpl extends ClientTabletCache {
 
   @Override
   public <T extends Mutation> void binMutations(ClientContext context, List<T> mutations,
-      Map<String,TabletServerMutations<T>> binnedMutations, List<T> failures)
+      Map<String,TabletServerMutations<T>> binnedMutations, ArrayList<T> failures)
       throws AccumuloException, AccumuloSecurityException, TableNotFoundException,
       InvalidTabletHostingRequestException {
 
     Timer timer = null;
 
     if (log.isTraceEnabled()) {
-      log.trace("tid={} Binning {} mutations for table {}", Thread.currentThread().getId(),
-          mutations.size(), tableId);
+      log.trace("Binning {} mutations for table {}", mutations.size(), tableId);
       timer = Timer.startNew();
     }
 
@@ -260,6 +257,8 @@ public class ClientTabletCacheImpl extends ClientTabletCache {
       notInCache.sort((o1, o2) -> WritableComparator.compareBytes(o1.getRow(), 0,
           o1.getRow().length, o2.getRow(), 0, o2.getRow().length));
 
+      failures.ensureCapacity(failures.size() + notInCache.size());
+
       // Want to ignore any entries in the cache w/o a location that were created before the
       // following time. Entries created after the following time may have been populated by the
       // following loop, and we want to use those.
@@ -284,9 +283,8 @@ public class ClientTabletCacheImpl extends ClientTabletCache {
     requestTabletHosting(context, locationLess);
 
     if (timer != null) {
-      log.trace("tid={} Binned {} mutations for table {} to {} tservers in {}",
-          Thread.currentThread().getId(), mutations.size(), tableId, binnedMutations.size(),
-          String.format("%.3f secs", timer.elapsed(MILLISECONDS) / 1000.0));
+      log.trace("Binned {} mutations for table {} to {} tservers in {}", mutations.size(), tableId,
+          binnedMutations.size(), String.format("%.3f secs", timer.elapsed(MILLISECONDS) / 1000.0));
     }
 
   }
@@ -439,8 +437,7 @@ public class ClientTabletCacheImpl extends ClientTabletCache {
     Timer timer = null;
 
     if (log.isTraceEnabled()) {
-      log.trace("tid={} Binning {} ranges for table {}", Thread.currentThread().getId(),
-          ranges.size(), tableId);
+      log.trace("Binning {} ranges for table {}", ranges.size(), tableId);
       timer = Timer.startNew();
     }
 
@@ -476,8 +473,8 @@ public class ClientTabletCacheImpl extends ClientTabletCache {
     }
 
     if (timer != null) {
-      log.trace("tid={} Binned {} ranges for table {} in {}", Thread.currentThread().getId(),
-          ranges.size(), tableId, String.format("%.3f secs", timer.elapsed(MILLISECONDS) / 1000.0));
+      log.trace("Binned {} ranges for table {} in {}", ranges.size(), tableId,
+          String.format("%.3f secs", timer.elapsed(MILLISECONDS) / 1000.0));
     }
 
     return failures;
@@ -518,8 +515,8 @@ public class ClientTabletCacheImpl extends ClientTabletCache {
     Timer timer = null;
 
     if (log.isTraceEnabled()) {
-      log.trace("tid={} Locating tablet  table={} row={} skipRow={}",
-          Thread.currentThread().getId(), tableId, TextUtil.truncate(row), skipRow);
+      log.trace("Locating tablet  table={} row={} skipRow={}", tableId, TextUtil.truncate(row),
+          skipRow);
       timer = Timer.startNew();
     }
 
@@ -527,8 +524,8 @@ public class ClientTabletCacheImpl extends ClientTabletCache {
     CachedTablet tl = _findTablet(context, row, skipRow, lcSession, locationNeed, Timer.startNew());
 
     if (timer != null) {
-      log.trace("tid={} Located tablet {} at {} in {}", Thread.currentThread().getId(),
-          (tl == null ? "null" : tl.getExtent()), (tl == null ? "null" : tl.getTserverLocation()),
+      log.trace("Located tablet {} at {} in {}", (tl == null ? "null" : tl.getExtent()),
+          (tl == null ? "null" : tl.getTserverLocation()),
           String.format("%.3f secs", timer.elapsed(MILLISECONDS) / 1000.0));
     }
 
@@ -612,11 +609,6 @@ public class ClientTabletCacheImpl extends ClientTabletCache {
   }
 
   @VisibleForTesting
-  public void resetTabletHostingRequestCount() {
-    tabletHostingRequestCount.set(0);
-  }
-
-  @VisibleForTesting
   public void enableTabletHostingRequests(boolean enabled) {
     HOSTING_ENABLED.set(enabled);
   }
@@ -645,7 +637,7 @@ public class ClientTabletCacheImpl extends ClientTabletCache {
       return;
     }
 
-    List<TKeyExtent> extentsToBringOnline = new ArrayList<>();
+    List<TKeyExtent> extentsToBringOnline = new ArrayList<>(tabletsWithNoLocation.size());
     for (var cachedTablet : tabletsWithNoLocation) {
       if (cachedTablet.getCreationTimer().elapsed().compareTo(STALE_DURATION) < 0) {
         if (cachedTablet.getAvailability() == TabletAvailability.ONDEMAND) {
@@ -682,33 +674,29 @@ public class ClientTabletCacheImpl extends ClientTabletCache {
     }
   }
 
-  private void lookupTablet(ClientContext context, Text row, LockCheckerSession lcSession)
-      throws AccumuloException, AccumuloSecurityException, TableNotFoundException,
-      InvalidTabletHostingRequestException {
+  private void lookupTablet(ClientContext context, Text row, LockCheckerSession lcSession,
+      CachedTablet before) throws AccumuloException, AccumuloSecurityException,
+      TableNotFoundException, InvalidTabletHostingRequestException {
     Text metadataRow = new Text(tableId.canonical());
     metadataRow.append(new byte[] {';'}, 0, 1);
     metadataRow.append(row.getBytes(), 0, row.getLength());
     CachedTablet ptl = parent.findTablet(context, metadataRow, false, LocationNeed.REQUIRED);
 
-    if (ptl != null) {
-      // Only allow a single lookup at time per parent tablet. For example if a tables tablets are
-      // all stored in three metadata tablets, then that table could have up to three concurrent
-      // metadata lookups.
-      Timer timer = Timer.startNew();
-      try (var unused = lookupLocks.lock(ptl.getExtent())) {
-        // See if entry was added to cache by another thread while we were waiting on the lock
-        var cached = findTabletInCache(row);
-        if (cached != null && cached.getCreationTimer().startedAfter(timer)) {
-          // This cache entry was added after we started waiting on the lock so lets use it and not
-          // go to the metadata table. This means another thread was holding the lock and doing
-          // metadata lookups when we requested the lock.
-          return;
-        }
-        // Lookup tablets in metadata table and update cache. Also updating the cache while holding
-        // the lock is important as it ensures other threads that are waiting on the lock will see
-        // what this thread found and may be able to avoid metadata lookups.
-        lookupTablet(context, lcSession, ptl, metadataRow);
+    if (ptl == null) {
+      return;
+    }
+
+    try (var unused = lookupLocks.lock(ptl.getExtent())) {
+      // Now that the lock is acquired, detect if another thread populated cache since the last time
+      // the cache was read. If so then do not need to read from metadata store.
+      CachedTablet after = findTabletInCache(row);
+      if (after != null && after != before && lcSession.checkLock(after) != null) {
+        return;
       }
+      // Lookup tablets in metadata table and update cache. Also updating the cache while holding
+      // the lock is important as it ensures other threads that are waiting on the lock will see
+      // what this thread found and may be able to avoid metadata lookups.
+      lookupTablet(context, lcSession, ptl, metadataRow);
     }
   }
 
@@ -860,7 +848,7 @@ public class ClientTabletCacheImpl extends ClientTabletCache {
 
       // not in cache OR the cutoff timer was started after when the cached entry timer was started,
       // so obtain info from metadata table
-      tl = lookupTabletLocationAndCheckLock(context, row, lcSession);
+      tl = lookupTabletLocationAndCheckLock(context, row, lcSession, tl);
 
     }
 
@@ -868,9 +856,9 @@ public class ClientTabletCacheImpl extends ClientTabletCache {
   }
 
   private CachedTablet lookupTabletLocationAndCheckLock(ClientContext context, Text row,
-      LockCheckerSession lcSession) throws AccumuloException, AccumuloSecurityException,
-      TableNotFoundException, InvalidTabletHostingRequestException {
-    lookupTablet(context, row, lcSession);
+      LockCheckerSession lcSession, CachedTablet before) throws AccumuloException,
+      AccumuloSecurityException, TableNotFoundException, InvalidTabletHostingRequestException {
+    lookupTablet(context, row, lcSession, before);
     return lcSession.checkLock(findTabletInCache(row));
   }
 

@@ -19,10 +19,13 @@
 package org.apache.accumulo.test.functional;
 
 import static org.apache.accumulo.core.util.LazySingletons.RANDOM;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
@@ -31,10 +34,10 @@ import org.apache.accumulo.core.client.Accumulo;
 import org.apache.accumulo.core.client.AccumuloClient;
 import org.apache.accumulo.core.client.admin.NewTableConfiguration;
 import org.apache.accumulo.core.conf.Property;
-import org.apache.accumulo.harness.AccumuloClusterHarness;
 import org.apache.accumulo.miniclusterImpl.MiniAccumuloConfigImpl;
 import org.apache.accumulo.test.TestIngest;
 import org.apache.accumulo.test.TestIngest.IngestParams;
+import org.apache.accumulo.test.harness.AccumuloClusterHarness;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.Text;
 import org.junit.jupiter.api.Test;
@@ -83,26 +86,38 @@ public class FateStarvationIT extends AccumuloClusterHarness {
 
       List<Text> splits = new ArrayList<>(TestIngest.getSplitPoints(0, 100000, 67));
 
-      List<Future<?>> futures = new ArrayList<>();
+      int numTasks = 100;
+      List<Future<?>> futures = new ArrayList<>(numTasks);
       var executor = Executors.newCachedThreadPool();
+      try {
+        // wait for a portion of the tasks to be ready
+        CountDownLatch startLatch = new CountDownLatch(32);
+        assertTrue(numTasks >= startLatch.getCount(),
+            "Not enough tasks to satisfy latch count - deadlock risk");
 
-      for (int i = 0; i < 100; i++) {
-        int idx1 = RANDOM.get().nextInt(splits.size() - 1);
-        int idx2 = RANDOM.get().nextInt(splits.size() - (idx1 + 1)) + idx1 + 1;
+        for (int i = 0; i < numTasks; i++) {
+          int idx1 = RANDOM.get().nextInt(splits.size() - 1);
+          int idx2 = RANDOM.get().nextInt(splits.size() - (idx1 + 1)) + idx1 + 1;
 
-        var future = executor.submit(() -> {
-          c.tableOperations().compact(tableName, splits.get(idx1), splits.get(idx2), false, true);
-          return null;
-        });
+          var future = executor.submit(() -> {
+            startLatch.countDown();
+            startLatch.await();
+            c.tableOperations().compact(tableName, splits.get(idx1), splits.get(idx2), false, true);
+            return null;
+          });
 
-        futures.add(future);
-      }
+          futures.add(future);
+        }
+        assertEquals(numTasks, futures.size());
 
-      log.debug("Started compactions");
+        log.debug("Started compactions");
 
-      // wait for all compactions to complete
-      for (var future : futures) {
-        future.get();
+        // wait for all compactions to complete
+        for (var future : futures) {
+          future.get();
+        }
+      } finally {
+        executor.shutdown();
       }
 
       FunctionalTestUtils.assertNoDanglingFateLocks(getCluster());

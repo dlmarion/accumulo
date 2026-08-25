@@ -19,6 +19,8 @@
 package org.apache.accumulo.manager.compaction.coordinator.commit;
 
 import java.io.Serializable;
+import java.lang.reflect.Type;
+import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -30,11 +32,42 @@ import org.apache.accumulo.core.metadata.schema.CompactionMetadata;
 import org.apache.accumulo.core.metadata.schema.ExternalCompactionId;
 import org.apache.accumulo.core.spi.compaction.CompactionKind;
 import org.apache.accumulo.core.tabletserver.thrift.TCompactionStats;
+import org.apache.accumulo.manager.compaction.coordinator.commit.CompactionCommitData.CompactionCommitDataSerializer;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonSerializationContext;
+import com.google.gson.JsonSerializer;
+import com.google.gson.annotations.JsonAdapter;
+
+@JsonAdapter(CompactionCommitDataSerializer.class)
 public class CompactionCommitData implements Serializable {
+
+  public static class CompactionCommitDataSerializer
+      implements JsonSerializer<CompactionCommitData> {
+
+    @Override
+    public JsonElement serialize(CompactionCommitData src, Type typeOfSrc,
+        JsonSerializationContext context) {
+      JsonObject obj = new JsonObject();
+      obj.addProperty("kind", src.kind.name());
+      obj.addProperty("ecid", src.ecid);
+      obj.addProperty("extent", src.textent.toString());
+      obj.addProperty("outputTmpPath", src.outputTmpPath);
+      obj.addProperty("entriesRead", src.stats.getEntriesRead());
+      obj.addProperty("entriesWritten", src.stats.getEntriesWritten());
+      obj.addProperty("fileSize", src.stats.getFileSize());
+      JsonArray arr = new JsonArray();
+      src.inputPaths.forEach(arr::add);
+      obj.add("inputs", arr);
+      return obj;
+    }
+  }
+
   private static final long serialVersionUID = 1L;
   final CompactionKind kind;
-  final Set<String> inputPaths;
+  final HashSet<String> inputPaths; // type must be serializable
   final String outputTmpPath;
   final String ecid;
   final TKeyExtent textent;
@@ -45,8 +78,8 @@ public class CompactionCommitData implements Serializable {
     this.ecid = ecid.canonical();
     this.textent = extent.toThrift();
     this.kind = ecm.getKind();
-    this.inputPaths =
-        ecm.getJobFiles().stream().map(StoredTabletFile::getMetadata).collect(Collectors.toSet());
+    this.inputPaths = ecm.getJobFiles().stream().map(StoredTabletFile::getMetadata)
+        .collect(Collectors.toCollection(HashSet::new));
     this.outputTmpPath = ecm.getCompactTmpName().getNormalizedPathStr();
     this.stats = stats;
   }

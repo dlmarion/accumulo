@@ -49,12 +49,13 @@ import org.apache.accumulo.core.data.Range;
 import org.apache.accumulo.core.data.Value;
 import org.apache.accumulo.core.metadata.SystemTables;
 import org.apache.accumulo.core.metrics.MetricsInfo;
+import org.apache.accumulo.core.metrics.MetricsUtil;
 import org.apache.accumulo.core.spi.metrics.LoggingMeterRegistryFactory;
-import org.apache.accumulo.harness.MiniClusterConfigurationCallback;
-import org.apache.accumulo.harness.SharedMiniClusterBase;
 import org.apache.accumulo.minicluster.MemoryUnit;
 import org.apache.accumulo.minicluster.ServerType;
 import org.apache.accumulo.miniclusterImpl.MiniAccumuloConfigImpl;
+import org.apache.accumulo.test.harness.MiniClusterConfigurationCallback;
+import org.apache.accumulo.test.harness.SharedMiniClusterBase;
 import org.apache.accumulo.test.metrics.TestStatsDRegistryFactory;
 import org.apache.accumulo.test.metrics.TestStatsDSink;
 import org.apache.accumulo.test.metrics.TestStatsDSink.Metric;
@@ -65,8 +66,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import com.google.common.collect.Iterables;
 
 public class MemoryStarvedScanIT extends SharedMiniClusterBase {
 
@@ -123,7 +122,8 @@ public class MemoryStarvedScanIT extends SharedMiniClusterBase {
               SCAN_RETURNED_EARLY.add(val);
             } else if (metric.getName().equals(LOW_MEMORY.getName())) {
               String process = metric.getTags().get(MetricsInfo.PROCESS_NAME_TAG_KEY);
-              if (process != null && process.contains(ServerId.Type.TABLET_SERVER.name())) {
+              if (process != null && process
+                  .contains(MetricsUtil.formatString(ServerId.Type.TABLET_SERVER.name()))) {
                 int val = Integer.parseInt(metric.getValue());
                 LOW_MEM_DETECTED.set(val);
               }
@@ -188,7 +188,7 @@ public class MemoryStarvedScanIT extends SharedMiniClusterBase {
     try (Scanner scanner = client.createScanner(SystemTables.METADATA.tableName())) {
       IteratorSetting is = new IteratorSetting(11, MemoryFreeingIterator.class, Map.of());
       scanner.addScanIterator(is);
-      assertNotEquals(0, Iterables.size(scanner)); // consume the key/values
+      assertNotEquals(0, scanner.stream().count()); // consume the key/values
     }
   }
 

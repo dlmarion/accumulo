@@ -19,6 +19,12 @@
 
 # https://github.com/apache/infrastructure-asfyaml/blob/main/README.md
 
+notifications:
+  commits:      commits@accumulo.apache.org
+  issues:       notifications@accumulo.apache.org
+  pullrequests: notifications@accumulo.apache.org
+  jira_options: worklog
+
 github:
   description: "Apache Accumulo"
   homepage: https://accumulo.apache.org
@@ -33,3 +39,16 @@ github:
   dependabot_alerts:  true
   dependabot_updates: false
 
+  rulesets:
+    - name: "Default Branch Protection"
+      type: branch
+      branches:
+        includes:
+          - "~DEFAULT_BRANCH"
+          - "release/*"
+          - "rel/*"
+        excludes: []
+      bypass_teams:
+        - root
+      restrict_deletion: true
+      restrict_force_push: true

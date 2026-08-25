@@ -20,20 +20,21 @@ package org.apache.accumulo.manager.tableOps.merge;
 
 import static org.apache.accumulo.core.metadata.schema.TabletMetadata.ColumnType.FILES;
 import static org.apache.accumulo.core.metadata.schema.TabletMetadata.ColumnType.MERGEABILITY;
+import static org.apache.accumulo.core.util.LazySingletons.GSON;
 
 import org.apache.accumulo.core.conf.Property;
 import org.apache.accumulo.core.fate.FateId;
 import org.apache.accumulo.core.fate.Repo;
-import org.apache.accumulo.manager.Manager;
 import org.apache.accumulo.manager.merge.FindMergeableRangeTask.MergeableRange;
-import org.apache.accumulo.manager.tableOps.ManagerRepo;
+import org.apache.accumulo.manager.tableOps.AbstractFateOperation;
+import org.apache.accumulo.manager.tableOps.FateEnv;
 import org.apache.accumulo.manager.tableOps.merge.MergeInfo.Operation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Preconditions;
 
-public class VerifyMergeability extends ManagerRepo {
+public class VerifyMergeability extends AbstractFateOperation {
   private static final Logger log = LoggerFactory.getLogger(VerifyMergeability.class);
   private static final long serialVersionUID = 1L;
   private final MergeInfo data;
@@ -44,7 +45,7 @@ public class VerifyMergeability extends ManagerRepo {
   }
 
   @Override
-  public Repo<Manager> call(FateId fateId, Manager env) throws Exception {
+  public Repo<FateEnv> call(FateId fateId, FateEnv env) throws Exception {
 
     var range = data.getReserveExtent();
 
@@ -77,4 +78,8 @@ public class VerifyMergeability extends ManagerRepo {
     return new MergeTablets(data);
   }
 
+  @Override
+  public String getDetails() {
+    return GSON.get().toJson(data);
+  }
 }

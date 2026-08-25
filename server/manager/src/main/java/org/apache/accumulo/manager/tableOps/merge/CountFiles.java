@@ -19,19 +19,20 @@
 package org.apache.accumulo.manager.tableOps.merge;
 
 import static org.apache.accumulo.core.metadata.schema.TabletMetadata.ColumnType.FILES;
+import static org.apache.accumulo.core.util.LazySingletons.GSON;
 import static org.apache.accumulo.manager.tableOps.merge.MergeInfo.Operation.SYSTEM_MERGE;
 
 import org.apache.accumulo.core.conf.Property;
 import org.apache.accumulo.core.fate.FateId;
 import org.apache.accumulo.core.fate.Repo;
-import org.apache.accumulo.manager.Manager;
-import org.apache.accumulo.manager.tableOps.ManagerRepo;
+import org.apache.accumulo.manager.tableOps.AbstractFateOperation;
+import org.apache.accumulo.manager.tableOps.FateEnv;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Preconditions;
 
-public class CountFiles extends ManagerRepo {
+public class CountFiles extends AbstractFateOperation {
   private static final Logger log = LoggerFactory.getLogger(CountFiles.class);
   private static final long serialVersionUID = 1L;
   private final MergeInfo data;
@@ -41,7 +42,7 @@ public class CountFiles extends ManagerRepo {
   }
 
   @Override
-  public Repo<Manager> call(FateId fateId, Manager env) throws Exception {
+  public Repo<FateEnv> call(FateId fateId, FateEnv env) throws Exception {
     // SYSTEM_MERGE should be executing VerifyMergeability repo, which already
     // will count files
     Preconditions.checkState(data.op != SYSTEM_MERGE, "Unexpected op %s", SYSTEM_MERGE);
@@ -81,14 +82,16 @@ public class CountFiles extends ManagerRepo {
     if (totalFiles >= maxFiles) {
       return new UnreserveAndError(data, totalFiles, maxFiles);
     } else {
-      switch (data.op) {
-        case MERGE:
-          return new MergeTablets(data);
-        case DELETE:
-          return new DeleteRows(data);
-        default:
-          throw new IllegalStateException("Unknown op " + data.op);
-      }
+      return switch (data.op) {
+        case MERGE -> new MergeTablets(data);
+        case DELETE -> new DeleteRows(data);
+        default -> throw new IllegalStateException("Unknown op " + data.op);
+      };
     }
+  }
+
+  @Override
+  public String getDetails() {
+    return GSON.get().toJson(data);
   }
 }

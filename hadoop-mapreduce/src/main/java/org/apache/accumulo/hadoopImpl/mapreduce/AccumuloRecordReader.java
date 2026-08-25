@@ -167,8 +167,7 @@ public abstract class AccumuloRecordReader<K,V> extends RecordReader<K,V> {
     log.debug("Creating scanner for table: " + table);
     log.debug("Authorizations are: " + authorizations);
 
-    if (split instanceof BatchInputSplit) {
-      BatchInputSplit batchSplit = (BatchInputSplit) split;
+    if (split instanceof BatchInputSplit batchSplit) {
 
       BatchScanner scanner;
       try {
@@ -421,6 +420,7 @@ public abstract class AccumuloRecordReader<K,V> extends RecordReader<K,V> {
                       String.format("locating tablets in table %s(%s) for %d ranges", tableName,
                           tableId, ranges.size()));
                 } catch (InterruptedException e) {
+                  Thread.currentThread().interrupt();
                   throw new RuntimeException(e);
                 }
                 unhostedRanges.get("").clear();

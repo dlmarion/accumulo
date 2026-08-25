@@ -23,40 +23,60 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 import java.lang.reflect.Method;
-import java.util.Collection;
+import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import jakarta.inject.Inject;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.GET;
+import jakarta.ws.rs.MatrixParam;
 import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 
 import org.apache.accumulo.core.Constants;
 import org.apache.accumulo.core.client.admin.TabletInformation;
 import org.apache.accumulo.core.client.admin.servers.ServerId;
-import org.apache.accumulo.core.compaction.thrift.TExternalCompaction;
 import org.apache.accumulo.core.data.TableId;
-import org.apache.accumulo.core.metrics.flatbuffers.FMetric;
 import org.apache.accumulo.core.process.thrift.MetricResponse;
+import org.apache.accumulo.core.util.compaction.RunningCompactionInfo;
 import org.apache.accumulo.monitor.Monitor;
 import org.apache.accumulo.monitor.next.InformationFetcher.InstanceSummary;
-import org.apache.accumulo.monitor.next.SystemInformation.ProcessSummary;
+import org.apache.accumulo.monitor.next.SystemInformation.AlertCategory;
+import org.apache.accumulo.monitor.next.SystemInformation.AlertPriority;
+import org.apache.accumulo.monitor.next.SystemInformation.CompactionGroupSummary;
+import org.apache.accumulo.monitor.next.SystemInformation.CompactionTableSummary;
+import org.apache.accumulo.monitor.next.SystemInformation.FateTransaction;
+import org.apache.accumulo.monitor.next.SystemInformation.FetchCycleTimes;
+import org.apache.accumulo.monitor.next.SystemInformation.InstanceOverview;
+import org.apache.accumulo.monitor.next.SystemInformation.RecoveryInformation;
+import org.apache.accumulo.monitor.next.SystemInformation.Scan;
 import org.apache.accumulo.monitor.next.SystemInformation.TableSummary;
-
-import io.micrometer.core.instrument.Meter.Id;
-import io.micrometer.core.instrument.cumulative.CumulativeDistributionSummary;
+import org.apache.accumulo.monitor.next.SystemInformation.TimeOrderedRunningCompactionSet;
+import org.apache.accumulo.monitor.next.deployment.DeploymentOverview;
+import org.apache.accumulo.monitor.next.views.Status;
+import org.apache.accumulo.monitor.next.views.TableData;
+import org.apache.accumulo.monitor.next.views.TableDataFactory;
 
 @Path("/")
 public class Endpoints {
+
+  /**
+   * A {@code String} constant representing the supplied tableId in path parameter.
+   */
+  private static final String TABLEID_PARAM_KEY = "tableId";
 
   @Target(ElementType.METHOD)
   @Retention(RetentionPolicy.RUNTIME)
@@ -67,11 +87,8 @@ public class Endpoints {
   @Inject
   private Monitor monitor;
 
-  private void validateResourceGroup(String resourceGroup) {
-    if (monitor.getInformationFetcher().getSummary().getResourceGroups().contains(resourceGroup)) {
-      return;
-    }
-    throw new NotFoundException("Resource Group " + resourceGroup + " not found");
+  public record MonitorStatus(String managerGoalState, Map<ServerId.Type,Status> componentStatuses,
+      long timestamp) {
   }
 
   @GET
@@ -85,7 +102,9 @@ public class Endpoints {
      * dependency convergence issues as we were using newer version of some of the same
      * dependencies.
      */
-    final String basePath = request.getRequestURL().toString();
+    final String requestPath = request.getRequestURL().toString();
+    int idx = requestPath.indexOf("/endpoints");
+    final String basePath = requestPath.substring(0, idx);
     final Map<String,String> documentation = new TreeMap<>();
 
     for (Method m : Endpoints.class.getMethods()) {
@@ -109,51 +128,21 @@ public class Endpoints {
   @Produces(MediaType.APPLICATION_JSON)
   @Description("Returns a list of the resource groups that are in use")
   public Set<String> getResourceGroups() {
-    return monitor.getInformationFetcher().getSummary().getResourceGroups();
+    return monitor.getInformationFetcher().getSummaryForEndpoint().getResourceGroups();
   }
 
   @GET
-  @Path("problems")
+  @Path("status")
   @Produces(MediaType.APPLICATION_JSON)
-  @Description("Returns a list of the servers that are potentially down")
-  public Collection<ServerId> getProblemHosts() {
-    return monitor.getInformationFetcher().getSummary().getProblemHosts();
+  @Description("Returns status of server components")
+  public MonitorStatus getStatus() {
+    SystemInformation summary = monitor.getInformationFetcher().getSummaryForEndpoint();
+    return new MonitorStatus(summary.getManagerGoalState(), summary.getComponentStatuses(),
+        summary.getCollectionTiming().finishTime());
   }
 
   @GET
-  @Path("metrics")
-  @Produces(MediaType.APPLICATION_JSON)
-  @Description("Returns the metric responses for all servers")
-  public Collection<MetricResponse> getAll() {
-    return monitor.getInformationFetcher().getAllMetrics().asMap().values();
-  }
-
-  @GET
-  @Path("manager")
-  @Produces(MediaType.APPLICATION_JSON)
-  @Description("Returns the metric response for the Manager")
-  public MetricResponse getManager() {
-    final ServerId s = monitor.getInformationFetcher().getSummary().getManager();
-    if (s == null) {
-      throw new NotFoundException("Manager not found");
-    }
-    return monitor.getInformationFetcher().getAllMetrics().asMap().get(s);
-  }
-
-  @GET
-  @Path("gc")
-  @Produces(MediaType.APPLICATION_JSON)
-  @Description("Returns the metric response for the Garbage Collector")
-  public MetricResponse getGarbageCollector() {
-    final ServerId s = monitor.getInformationFetcher().getSummary().getGarbageCollector();
-    if (s == null) {
-      throw new NotFoundException("Garbage Collector not found");
-    }
-    return monitor.getInformationFetcher().getAllMetrics().asMap().get(s);
-  }
-
-  @GET
-  @Path("instance")
+  @Path("instance/info")
   @Produces(MediaType.APPLICATION_JSON)
   @Description("Returns the instance name, instance id, version, zookeepers, and volumes")
   public InstanceSummary getInstanceSummary() {
@@ -166,149 +155,101 @@ public class Endpoints {
   }
 
   @GET
-  @Path("compactors/detail/{group}")
+  @Path("instance/overview")
   @Produces(MediaType.APPLICATION_JSON)
-  @Description("Returns the metric responses for the Compactors in the supplied resource group")
-  public Collection<MetricResponse> getCompactors(@PathParam("group") String resourceGroup) {
-    validateResourceGroup(resourceGroup);
-    final Set<ServerId> servers = monitor.getInformationFetcher().getSummary()
-        .getCompactorResourceGroupServers(resourceGroup);
-    if (servers == null) {
-      return List.of();
+  @Description("Returns an overview of instance level activity")
+  public InstanceOverview getInstanceOverview() {
+    return monitor.getInformationFetcher().getSummaryForEndpoint().getInstanceOverview();
+  }
+
+  @GET
+  @Path("scans")
+  @Produces(MediaType.APPLICATION_JSON)
+  @Description("Returns a list of active scans")
+  public Set<Scan> getScans() {
+    return monitor.getInformationFetcher().getSummaryForEndpoint().getActiveScans();
+  }
+
+  @GET
+  @Path("servers/view")
+  @Produces(MediaType.APPLICATION_JSON)
+  @Description("Returns a UI-ready table model for server process pages. Add ';table=<TableDataFactory.TableName>' to URL")
+  public TableData getServerProcessView(@MatrixParam("table") TableDataFactory.TableName table) {
+    if (table == null) {
+      throw new BadRequestException("A 'table' parameter is required");
     }
-    return monitor.getInformationFetcher().getAllMetrics().getAllPresent(servers).values();
-  }
-
-  @GET
-  @Path("compactors/summary/{group}")
-  @Produces(MediaType.APPLICATION_JSON)
-  @Description("Returns an aggregate view of the metric responses for the Compactors in the supplied resource group")
-  public Map<Id,CumulativeDistributionSummary>
-      getCompactorResourceGroupMetricSummary(@PathParam("group") String resourceGroup) {
-    validateResourceGroup(resourceGroup);
-    final Map<Id,CumulativeDistributionSummary> metrics = monitor.getInformationFetcher()
-        .getSummary().getCompactorResourceGroupMetricSummary(resourceGroup);
-    if (metrics == null) {
-      return Map.of();
+    TableData view =
+        monitor.getInformationFetcher().getSummaryForEndpoint().getServerProcessView(table);
+    if (view == null) {
+      throw new NotFoundException("ServersView object for table " + table.name() + " not found");
     }
-    return metrics;
+    return view;
   }
 
   @GET
-  @Path("compactors/summary")
+  @Path("servers/detail/{type}/{resourceGroup}/{server}")
   @Produces(MediaType.APPLICATION_JSON)
-  @Description("Returns an aggregate view of the metric responses for all Compactors")
-  public Map<Id,CumulativeDistributionSummary> getCompactorAllMetricSummary() {
-    return monitor.getInformationFetcher().getSummary().getCompactorAllMetricSummary();
-  }
-
-  @GET
-  @Path("sservers/detail/{group}")
-  @Produces(MediaType.APPLICATION_JSON)
-  @Description("Returns the metric responses for the ScanServers in the supplied resource group")
-  public Collection<MetricResponse> getScanServers(@PathParam("group") String resourceGroup) {
-    validateResourceGroup(resourceGroup);
-    final Set<ServerId> servers =
-        monitor.getInformationFetcher().getSummary().getSServerResourceGroupServers(resourceGroup);
-    if (servers == null) {
-      return List.of();
+  @Description("Returns a UI-ready metric table for one server process")
+  public TableData getServerDetail(@PathParam("type") ServerId.Type type,
+      @PathParam("resourceGroup") String resourceGroup, @PathParam("server") String server) {
+    if (type == null) {
+      throw new BadRequestException("A 'type' parameter is required");
     }
-    return monitor.getInformationFetcher().getAllMetrics().getAllPresent(servers).values();
-  }
-
-  @GET
-  @Path("sservers/summary/{group}")
-  @Produces(MediaType.APPLICATION_JSON)
-  @Description("Returns an aggregate view of the metric responses for the ScanServers in the supplied resource group")
-  public Map<Id,CumulativeDistributionSummary>
-      getScanServerResourceGroupMetricSummary(@PathParam("group") String resourceGroup) {
-    validateResourceGroup(resourceGroup);
-    final Map<Id,CumulativeDistributionSummary> metrics = monitor.getInformationFetcher()
-        .getSummary().getSServerResourceGroupMetricSummary(resourceGroup);
-    if (metrics == null) {
-      return Map.of();
+    if (resourceGroup == null || resourceGroup.isBlank()) {
+      throw new BadRequestException("A 'resourceGroup' parameter is required");
     }
-    return metrics;
-  }
-
-  @GET
-  @Path("sservers/summary")
-  @Produces(MediaType.APPLICATION_JSON)
-  @Description("Returns an aggregate view of the metric responses for all ScanServers")
-  public Map<Id,CumulativeDistributionSummary> getScanServerAllMetricSummary() {
-    return monitor.getInformationFetcher().getSummary().getSServerAllMetricSummary();
-  }
-
-  @GET
-  @Path("tservers/detail/{group}")
-  @Produces(MediaType.APPLICATION_JSON)
-  @Description("Returns the metric responses for the TabletServers in the supplied resource group")
-  public Collection<MetricResponse> getTabletServers(@PathParam("group") String resourceGroup) {
-    validateResourceGroup(resourceGroup);
-    final Set<ServerId> servers =
-        monitor.getInformationFetcher().getSummary().getTServerResourceGroupServers(resourceGroup);
-    if (servers == null) {
-      return List.of();
+    if (server == null || server.isBlank()) {
+      throw new BadRequestException("A 'server' parameter is required");
     }
-    return monitor.getInformationFetcher().getAllMetrics().getAllPresent(servers).values();
-  }
 
-  @GET
-  @Path("tservers/summary/{group}")
-  @Produces(MediaType.APPLICATION_JSON)
-  @Description("Returns an aggregate view of the metric responses for the TabletServers in the supplied resource group")
-  public Map<Id,CumulativeDistributionSummary>
-      getTabletServerResourceGroupMetricSummary(@PathParam("group") String resourceGroup) {
-    validateResourceGroup(resourceGroup);
-    final Map<Id,CumulativeDistributionSummary> metrics = monitor.getInformationFetcher()
-        .getSummary().getTServerResourceGroupMetricSummary(resourceGroup);
-    if (metrics == null) {
-      return Map.of();
+    MetricResponse response;
+    try {
+      response = monitor.getInformationFetcher().getSummaryForEndpoint()
+          .getServerMetricResponse(type, resourceGroup, server);
+    } catch (IllegalArgumentException e) {
+      throw new BadRequestException("Invalid server metrics parameters", e);
     }
-    return metrics;
-  }
-
-  @GET
-  @Path("tservers/summary")
-  @Produces(MediaType.APPLICATION_JSON)
-  @Description("Returns an aggregate view of the metric responses for all TabletServers")
-  public Map<Id,CumulativeDistributionSummary> getTabletServerAllMetricSummary() {
-    return monitor.getInformationFetcher().getSummary().getTServerAllMetricSummary();
-  }
-
-  @GET
-  @Path("compactions/summary")
-  @Produces(MediaType.APPLICATION_JSON)
-  @Description("Returns the metrics for all compaction queues")
-  public Map<String,List<FMetric>> getCompactionMetricSummary() {
-    return monitor.getInformationFetcher().getSummary().getCompactionMetricSummary();
-  }
-
-  @GET
-  @Path("compactions/detail")
-  @Produces(MediaType.APPLICATION_JSON)
-  @Description("Returns a map of Compactor resource group to the 50 oldest running compactions")
-  public Map<String,List<TExternalCompaction>> getCompactions() {
-    Map<String,List<TExternalCompaction>> all =
-        monitor.getInformationFetcher().getSummary().getCompactions();
-    if (all == null) {
-      return Map.of();
+    if (response == null) {
+      throw new NotFoundException("Server " + type.name() + " " + server + " in resource group "
+          + resourceGroup + " not found");
     }
-    return all;
+    return TableDataFactory.forServer(response);
   }
 
   @GET
-  @Path("compactions/detail/{group}")
+  @Path("compactions/running")
   @Produces(MediaType.APPLICATION_JSON)
-  @Description("Returns a list of the 50 oldest running compactions in the supplied resource group")
-  public List<TExternalCompaction> getCompactions(@PathParam("group") String resourceGroup) {
-    validateResourceGroup(resourceGroup);
-    List<TExternalCompaction> compactions =
-        monitor.getInformationFetcher().getSummary().getCompactions(resourceGroup);
-    if (compactions == null) {
-      return List.of();
-    }
-    return compactions;
+  @Description("Returns all long running major compactions")
+  public List<RunningCompactionInfo> getCompactions() {
+    Map<String,TimeOrderedRunningCompactionSet> longRunning =
+        monitor.getInformationFetcher().getSummaryForEndpoint().getTopRunningCompactions();
+    return longRunning.values().stream().flatMap(TimeOrderedRunningCompactionSet::stream).distinct()
+        .sorted(TimeOrderedRunningCompactionSet.OLDEST_FIRST_COMPARATOR)
+        .collect(Collectors.toList());
+  }
+
+  @GET
+  @Path("compactions/running/group")
+  @Produces(MediaType.APPLICATION_JSON)
+  @Description("Returns number of running major compactions per group")
+  public List<CompactionGroupSummary> getRunningCompactionsPerGroup() {
+    return monitor.getInformationFetcher().getSummaryForEndpoint().getRunningCompactionsPerGroup();
+  }
+
+  @GET
+  @Path("compactions/running/table")
+  @Produces(MediaType.APPLICATION_JSON)
+  @Description("Returns number of running major compactions per table")
+  public List<CompactionTableSummary> getRunningCompactionsPerTable() {
+    return monitor.getInformationFetcher().getSummaryForEndpoint().getRunningCompactionsPerTable();
+  }
+
+  @GET
+  @Path("fate")
+  @Produces(MediaType.APPLICATION_JSON)
+  @Description("Returns a list of fate transaction details")
+  public List<FateTransaction> getFateTransactions() {
+    return monitor.getInformationFetcher().getSummaryForEndpoint().getFateTransactions();
   }
 
   @GET
@@ -316,16 +257,16 @@ public class Endpoints {
   @Produces(MediaType.APPLICATION_JSON)
   @Description("Returns a map of TableId to table details")
   public Map<TableId,TableSummary> getTables() {
-    return monitor.getInformationFetcher().getSummary().getTables();
+    return monitor.getInformationFetcher().getSummaryForEndpoint().getTables();
   }
 
   @GET
-  @Path("tables/{tableId}")
+  @Path("tables/{" + TABLEID_PARAM_KEY + "}")
   @Produces(MediaType.APPLICATION_JSON)
   @Description("Returns table details for the supplied TableId")
-  public TableSummary getTable(@PathParam("tableId") String tableId) {
-    TableSummary ts =
-        monitor.getInformationFetcher().getSummary().getTables().get(TableId.of(tableId));
+  public TableSummary getTable(@PathParam(TABLEID_PARAM_KEY) String tableId) {
+    TableSummary ts = monitor.getInformationFetcher().getSummaryForEndpoint().getTables()
+        .get(TableId.of(tableId));
     if (ts == null) {
       throw new NotFoundException(tableId + " not found");
     }
@@ -333,12 +274,12 @@ public class Endpoints {
   }
 
   @GET
-  @Path("tables/{tableId}/tablets")
+  @Path("tables/{" + TABLEID_PARAM_KEY + "}/tablets")
   @Produces(MediaType.APPLICATION_JSON)
   @Description("Returns tablet details for the supplied table name")
-  public List<TabletInformation> getTablets(@PathParam("tableId") String tableId) {
+  public List<TabletInformation> getTablets(@PathParam(TABLEID_PARAM_KEY) String tableId) {
     List<TabletInformation> ti =
-        monitor.getInformationFetcher().getSummary().getTablets(TableId.of(tableId));
+        monitor.getInformationFetcher().getSummaryForEndpoint().getTablets(TableId.of(tableId));
     if (ti == null) {
       throw new NotFoundException(tableId + " not found");
     }
@@ -346,28 +287,95 @@ public class Endpoints {
   }
 
   @GET
-  @Path("deployment")
+  @Path("recovery")
   @Produces(MediaType.APPLICATION_JSON)
-  @Description("Returns a map of resource group to server type to process summary."
-      + " The process summary contains the number of configured, responding, and not responding servers")
-  public Map<String,Map<String,ProcessSummary>> getDeploymentOverview() {
-    return monitor.getInformationFetcher().getSummary().getDeploymentOverview();
+  @Description("Returns information about tservers performing recovery and tablets needing recovery")
+  public RecoveryInformation getTabletRecoveries() {
+    return monitor.getInformationFetcher().getSummaryForEndpoint().getRecoveryInformation();
   }
 
   @GET
-  @Path("suggestions")
+  @Path("deployment")
   @Produces(MediaType.APPLICATION_JSON)
-  @Description("Returns a list of suggestions")
-  public Set<String> getSuggestions() {
-    return monitor.getInformationFetcher().getSummary().getSuggestions();
+  @Description("Returns a UI-ready deployment overview grouped by resource group. Each process row"
+      + " contains the total and responding server counts.")
+  public DeploymentOverview getDeploymentOverview() {
+    return monitor.getInformationFetcher().getSummaryForEndpoint().getDeploymentView();
+  }
+
+  @GET
+  @Path("alerts/categories")
+  @Produces(MediaType.APPLICATION_JSON)
+  @Description("Returns a list of alert categories")
+  public Set<AlertCategory> getAlertCategories() {
+    return EnumSet.allOf(SystemInformation.AlertCategory.class);
+  }
+
+  public record Alert(String priority, String category, String message) {
+  }
+
+  @GET
+  @Path("alerts/counts")
+  @Produces(MediaType.APPLICATION_JSON)
+  @Description("Returns count of alerts by priority")
+  public Map<AlertPriority,AtomicLong> getAlertCounts() {
+    return monitor.getInformationFetcher().getSummaryForEndpoint().getAlertCounts();
+  }
+
+  @GET
+  @Path("alerts")
+  @Produces(MediaType.APPLICATION_JSON)
+  @Description("Returns a list of alerts")
+  public List<Alert> getAlerts(@QueryParam("high") boolean includeHigh,
+      @QueryParam("info") boolean includeInfo, @QueryParam("category") List<String> categories) {
+    List<Alert> results = new ArrayList<>();
+
+    Map<AlertPriority,Map<AlertCategory,Set<String>>> alerts =
+        monitor.getInformationFetcher().getSummaryForEndpoint().getAlerts();
+
+    for (Entry<AlertPriority,Map<AlertCategory,Set<String>>> e : alerts.entrySet()) {
+      AlertPriority prio = e.getKey();
+      Map<AlertCategory,Set<String>> value = e.getValue();
+      switch (prio) {
+        case Critical:
+          // Always include critical alerts
+          value.forEach((cat, messages) -> {
+            messages.forEach(m -> results.add(new Alert(prio.name(), cat.name(), m)));
+          });
+          break;
+        case High:
+          if (!includeHigh) {
+            break;
+          }
+          value.forEach((cat, messages) -> {
+            if (categories.contains(cat.name())) {
+              messages.forEach(m -> results.add(new Alert(prio.name(), cat.name(), m)));
+            }
+          });
+          break;
+        case Info:
+          if (!includeInfo) {
+            break;
+          }
+          value.forEach((cat, messages) -> {
+            if (categories.contains(cat.name())) {
+              messages.forEach(m -> results.add(new Alert(prio.name(), cat.name(), m)));
+            }
+          });
+          break;
+        default:
+          break;
+      }
+    }
+    return results;
   }
 
   @GET
   @Path("lastUpdate")
   @Produces(MediaType.APPLICATION_JSON)
   @Description("Returns the timestamp of when the monitor information was last refreshed")
-  public long getTimestamp() {
-    return monitor.getInformationFetcher().getSummary().getTimestamp();
+  public FetchCycleTimes getTimestamp() {
+    return monitor.getInformationFetcher().getSummaryForEndpoint().getCollectionTiming();
   }
 
   @GET

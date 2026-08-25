@@ -52,9 +52,13 @@ import com.github.benmanes.caffeine.cache.Ticker;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+
 /**
  * A cache for values stored in ZooKeeper. Values are kept up to date as they change.
  */
+@SuppressFBWarnings(value = "CT_CONSTRUCTOR_THROW",
+    justification = "Constructor validation is required for proper initialization")
 public class ZooCache {
 
   public interface ZooCacheWatcher extends Consumer<WatchedEvent> {}
@@ -64,7 +68,7 @@ public class ZooCache {
   private final NavigableSet<String> watchedPaths;
 
   // visible for tests
-  protected final ZCacheWatcher watcher = new ZCacheWatcher();
+  public final ZCacheWatcher watcher = new ZCacheWatcher();
   private final List<ZooCacheWatcher> externalWatchers =
       Collections.synchronizedList(new ArrayList<>());
 
@@ -85,7 +89,7 @@ public class ZooCache {
 
   private final AtomicLong zkClientTracker = new AtomicLong();
 
-  class ZCacheWatcher implements Watcher {
+  public class ZCacheWatcher implements Watcher {
     @Override
     public void process(WatchedEvent event) {
       if (log.isTraceEnabled()) {
@@ -250,6 +254,9 @@ public class ZooCache {
           zkClientTracker.get());
       return true;
     } catch (KeeperException | InterruptedException e) {
+      if (e instanceof InterruptedException) {
+        Thread.currentThread().interrupt();
+      }
       throw new RuntimeException("Error setting up persistent recursive watcher", e);
     }
 
@@ -312,6 +319,9 @@ public class ZooCache {
             log.warn("Zookeeper error, will retry", e);
           }
         } catch (InterruptedException | ZcInterruptedException e) {
+          if (e instanceof InterruptedException) {
+            Thread.currentThread().interrupt();
+          }
           log.info("Zookeeper error, will retry", e);
         }
 
@@ -319,6 +329,7 @@ public class ZooCache {
           // do not hold lock while sleeping
           Thread.sleep(sleepTime);
         } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
           log.debug("Wait in retry() was interrupted.", e);
         }
         if (sleepTime < 10_000) {
@@ -385,6 +396,7 @@ public class ZooCache {
           } catch (KeeperException e) {
             throw new ZcException(e);
           } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             throw new ZcInterruptedException(e);
           }
         });
@@ -450,6 +462,7 @@ public class ZooCache {
               log.trace("{} zookeeper did not contain {}", cacheId, zPath);
               return ZcNode.NON_EXISTENT;
             } catch (InterruptedException e) {
+              Thread.currentThread().interrupt();
               throw new ZcInterruptedException(e);
             }
             if (log.isTraceEnabled()) {

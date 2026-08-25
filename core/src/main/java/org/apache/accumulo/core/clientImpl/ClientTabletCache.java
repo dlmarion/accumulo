@@ -39,7 +39,6 @@ import org.apache.accumulo.core.data.Range;
 import org.apache.accumulo.core.dataImpl.KeyExtent;
 import org.apache.accumulo.core.util.Interner;
 import org.apache.accumulo.core.util.Timer;
-import org.apache.accumulo.core.util.UtilWaitThread;
 import org.apache.hadoop.io.Text;
 
 /**
@@ -49,7 +48,7 @@ import org.apache.hadoop.io.Text;
 public abstract class ClientTabletCache {
 
   /**
-   * Flipped false on call to {@link #clearInstances}. Checked by client classes that locally cache
+   * Flipped false on call to {@link #invalidate}. Checked by client classes that locally cache
    * Locators.
    */
   private volatile boolean isValid = true;
@@ -116,19 +115,8 @@ public abstract class ClientTabletCache {
     return findTablet(context, row, skipRow, locationNeed, 0, null);
   }
 
-  public CachedTablet findTabletWithRetry(ClientContext context, Text row, boolean skipRow,
-      LocationNeed locationNeed) throws AccumuloException, AccumuloSecurityException,
-      TableNotFoundException, InvalidTabletHostingRequestException {
-    var tl = findTablet(context, row, skipRow, locationNeed);
-    while (tl == null && locationNeed == LocationNeed.REQUIRED) {
-      UtilWaitThread.sleep(100);
-      tl = findTablet(context, row, skipRow, locationNeed);
-    }
-    return tl;
-  }
-
   public abstract <T extends Mutation> void binMutations(ClientContext context, List<T> mutations,
-      Map<String,TabletServerMutations<T>> binnedMutations, List<T> failures)
+      Map<String,TabletServerMutations<T>> binnedMutations, ArrayList<T> failures)
       throws AccumuloException, AccumuloSecurityException, TableNotFoundException,
       InvalidTabletHostingRequestException;
 
@@ -242,8 +230,7 @@ public abstract class ClientTabletCache {
 
     @Override
     public boolean equals(Object o) {
-      if (o instanceof CachedTablet) {
-        CachedTablet otl = (CachedTablet) o;
+      if (o instanceof CachedTablet otl) {
         return getExtent().equals(otl.getExtent())
             && getTserverLocation().equals(otl.getTserverLocation())
             && getTserverSession().equals(otl.getTserverSession())

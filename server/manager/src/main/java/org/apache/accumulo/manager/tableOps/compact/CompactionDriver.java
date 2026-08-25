@@ -25,6 +25,7 @@ import static org.apache.accumulo.core.metadata.schema.TabletMetadata.ColumnType
 import static org.apache.accumulo.core.metadata.schema.TabletMetadata.ColumnType.PREV_ROW;
 import static org.apache.accumulo.core.metadata.schema.TabletMetadata.ColumnType.SELECTED;
 import static org.apache.accumulo.core.metadata.schema.TabletMetadata.ColumnType.USER_COMPACTION_REQUESTED;
+import static org.apache.accumulo.core.util.LazySingletons.GSON;
 
 import java.time.Duration;
 import java.util.Set;
@@ -55,8 +56,8 @@ import org.apache.accumulo.core.metadata.schema.Ample.ConditionalResult.Status;
 import org.apache.accumulo.core.metadata.schema.SelectedFiles;
 import org.apache.accumulo.core.metadata.schema.TabletMetadata;
 import org.apache.accumulo.core.util.Retry;
-import org.apache.accumulo.manager.Manager;
-import org.apache.accumulo.manager.tableOps.ManagerRepo;
+import org.apache.accumulo.manager.tableOps.AbstractFateOperation;
+import org.apache.accumulo.manager.tableOps.FateEnv;
 import org.apache.accumulo.manager.tableOps.bulkVer2.TabletRefresher;
 import org.apache.accumulo.manager.tableOps.delete.PreDeleteTable;
 import org.apache.accumulo.server.ServerContext;
@@ -68,8 +69,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Preconditions;
+import com.google.gson.JsonObject;
 
-public class CompactionDriver extends ManagerRepo {
+public class CompactionDriver extends AbstractFateOperation {
 
   private static final Logger log = LoggerFactory.getLogger(CompactionDriver.class);
 
@@ -89,16 +91,16 @@ public class CompactionDriver extends ManagerRepo {
   }
 
   @Override
-  public long isReady(FateId fateId, Manager manager) throws Exception {
+  public long isReady(FateId fateId, FateEnv env) throws Exception {
 
     if (tableId.equals(SystemTables.ROOT.tableId())) {
       // this codes not properly handle the root table. See #798
       return 0;
     }
 
-    ZooReaderWriter zoo = manager.getContext().getZooSession().asReaderWriter();
+    ZooReaderWriter zoo = env.getContext().getZooSession().asReaderWriter();
 
-    if (isCancelled(fateId, manager.getContext())) {
+    if (isCancelled(fateId, env.getContext())) {
       // compaction was canceled
       throw new AcceptableThriftTableOperationException(tableId.canonical(), null,
           TableOperation.COMPACT, TableOperationExceptionType.OTHER,
@@ -106,7 +108,7 @@ public class CompactionDriver extends ManagerRepo {
     }
 
     String deleteMarkerPath =
-        PreDeleteTable.createDeleteMarkerPath(manager.getContext().getInstanceID(), tableId);
+        PreDeleteTable.createDeleteMarkerPath(env.getContext().getInstanceID(), tableId);
     if (zoo.exists(deleteMarkerPath)) {
       // table is being deleted
       throw new AcceptableThriftTableOperationException(tableId.canonical(), null,
@@ -114,14 +116,14 @@ public class CompactionDriver extends ManagerRepo {
           TableOperationsImpl.TABLE_DELETED_MSG);
     }
 
-    if (manager.getContext().getTableState(tableId) != TableState.ONLINE) {
+    if (env.getContext().getTableState(tableId) != TableState.ONLINE) {
       throw new AcceptableThriftTableOperationException(tableId.canonical(), null,
           TableOperation.COMPACT, TableOperationExceptionType.OFFLINE, "The table is not online.");
     }
 
     long t1 = System.currentTimeMillis();
 
-    int tabletsToWaitFor = updateAndCheckTablets(manager, fateId);
+    int tabletsToWaitFor = updateAndCheckTablets(env, fateId);
 
     long scanTime = System.currentTimeMillis() - t1;
 
@@ -144,10 +146,10 @@ public class CompactionDriver extends ManagerRepo {
     return CompactionConfigStorage.getConfig(context, fateId) == null;
   }
 
-  public int updateAndCheckTablets(Manager manager, FateId fateId)
+  public int updateAndCheckTablets(FateEnv env, FateId fateId)
       throws AcceptableThriftTableOperationException {
 
-    var ample = manager.getContext().getAmple();
+    var ample = env.getContext().getAmple();
 
     // This map tracks tablets that had a conditional mutation submitted to select files. If the
     // conditional mutation is successful then want to log a message. Use a concurrent map as the
@@ -191,7 +193,7 @@ public class CompactionDriver extends ManagerRepo {
             .checkConsistency().build();
         var tabletsMutator = ample.conditionallyMutateTablets(resultConsumer)) {
 
-      CompactionConfig config = CompactionConfigStorage.getConfig(manager.getContext(), fateId);
+      CompactionConfig config = CompactionConfigStorage.getConfig(env.getContext(), fateId);
 
       for (TabletMetadata tablet : tablets) {
 
@@ -221,8 +223,8 @@ public class CompactionDriver extends ManagerRepo {
 
           Set<StoredTabletFile> filesToCompact;
           try {
-            filesToCompact = CompactionPluginUtils.selectFiles(manager.getContext(),
-                tablet.getExtent(), config, tablet.getFilesMap());
+            filesToCompact = CompactionPluginUtils.selectFiles(env.getContext(), tablet.getExtent(),
+                config, tablet.getFilesMap());
           } catch (Exception e) {
             log.warn("{} failed to select files for {} using {}", fateId, tablet.getExtent(),
                 config.getSelector(), e);
@@ -251,7 +253,7 @@ public class CompactionDriver extends ManagerRepo {
             var mutator = tabletsMutator.mutateTablet(tablet.getExtent()).requireAbsentOperation()
                 .requireSame(tablet, FILES, SELECTED, ECOMP, COMPACTED, USER_COMPACTION_REQUESTED);
             var selectedFiles = new SelectedFiles(filesToCompact,
-                tablet.getFiles().equals(filesToCompact), fateId, manager.getSteadyTime());
+                tablet.getFiles().equals(filesToCompact), fateId, env.getSteadyTime());
 
             mutator.putSelectedFiles(selectedFiles);
 
@@ -314,6 +316,9 @@ public class CompactionDriver extends ManagerRepo {
         }
       }
     } catch (InterruptedException | KeeperException e) {
+      if (e instanceof InterruptedException) {
+        Thread.currentThread().interrupt();
+      }
       throw new RuntimeException(e);
     }
 
@@ -334,7 +339,7 @@ public class CompactionDriver extends ManagerRepo {
         userCompactionRequested, userCompactionWaiting, opidsSeen, t2 - t1);
 
     if (selected > 0) {
-      manager.getEventCoordinator().event(
+      env.getEventPublisher().event(
           new KeyExtent(tableId, maxSelected.endRow(), minSelected.prevEndRow()),
           "%s selected files for compaction for %d tablets", fateId, selected);
     }
@@ -343,13 +348,13 @@ public class CompactionDriver extends ManagerRepo {
   }
 
   @Override
-  public Repo<Manager> call(FateId fateId, Manager env) throws Exception {
+  public Repo<FateEnv> call(FateId fateId, FateEnv env) throws Exception {
     return new RefreshTablets(tableId, namespaceId, startRow, endRow);
   }
 
   @Override
-  public void undo(FateId fateId, Manager env) throws Exception {
-    cleanupTabletMetadata(fateId, env);
+  public void undo(FateId fateId, FateEnv env) throws Exception {
+    cleanupTabletMetadata(fateId, env.getContext());
 
     // For any compactions that may have happened before this operation failed, attempt to refresh
     // tablets.
@@ -359,8 +364,8 @@ public class CompactionDriver extends ManagerRepo {
   /**
    * Cleans up any tablet metadata that may have been added as part of this compaction operation.
    */
-  private void cleanupTabletMetadata(FateId fateId, Manager manager) throws Exception {
-    var ample = manager.getContext().getAmple();
+  private void cleanupTabletMetadata(FateId fateId, ServerContext ctx) throws Exception {
+    var ample = ctx.getAmple();
 
     boolean allCleanedUp = false;
 
@@ -419,4 +424,13 @@ public class CompactionDriver extends ManagerRepo {
     }
   }
 
+  @Override
+  public String getDetails() {
+    JsonObject details = new JsonObject();
+    details.addProperty("namespaceId", namespaceId.canonical());
+    details.addProperty("tableId", tableId.canonical());
+    details.addProperty("startRow", startRow == null ? null : new Text(startRow).toString());
+    details.addProperty("endRow", endRow == null ? null : new Text(endRow).toString());
+    return GSON.get().toJson(details);
+  }
 }

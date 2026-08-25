@@ -18,6 +18,8 @@
  */
 package org.apache.accumulo.manager.tableOps.merge;
 
+import static org.apache.accumulo.core.util.LazySingletons.GSON;
+
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
@@ -29,18 +31,20 @@ import org.apache.accumulo.core.metadata.schema.Ample;
 import org.apache.accumulo.core.metadata.schema.TabletOperationId;
 import org.apache.accumulo.core.metadata.schema.TabletOperationType;
 import org.apache.accumulo.core.util.TextUtil;
-import org.apache.accumulo.manager.Manager;
-import org.apache.accumulo.manager.tableOps.ManagerRepo;
+import org.apache.accumulo.manager.tableOps.AbstractFateOperation;
+import org.apache.accumulo.manager.tableOps.FateEnv;
 import org.apache.hadoop.io.Text;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Preconditions;
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 
 /**
  * Delete tablets that were merged into another tablet.
  */
-public class DeleteTablets extends ManagerRepo {
+public class DeleteTablets extends AbstractFateOperation {
 
   private static final long serialVersionUID = 1L;
 
@@ -56,7 +60,7 @@ public class DeleteTablets extends ManagerRepo {
   }
 
   @Override
-  public Repo<Manager> call(FateId fateId, Manager manager) throws Exception {
+  public Repo<FateEnv> call(FateId fateId, FateEnv env) throws Exception {
 
     KeyExtent range = data.getMergeExtent();
     log.debug("{} Deleting tablets for {}", fateId, range);
@@ -77,11 +81,10 @@ public class DeleteTablets extends ManagerRepo {
     long submitted = 0;
 
     try (
-        var tabletsMetadata =
-            manager.getContext().getAmple().readTablets().forTable(range.tableId())
-                .overlapping(range.prevEndRow(), range.endRow()).saveKeyValues().build();
+        var tabletsMetadata = env.getContext().getAmple().readTablets().forTable(range.tableId())
+            .overlapping(range.prevEndRow(), range.endRow()).saveKeyValues().build();
         var tabletsMutator =
-            manager.getContext().getAmple().conditionallyMutateTablets(resultConsumer)) {
+            env.getContext().getAmple().conditionallyMutateTablets(resultConsumer)) {
 
       var lastEndRow = lastTabletEndRow == null ? null : new Text(lastTabletEndRow);
 
@@ -124,5 +127,14 @@ public class DeleteTablets extends ManagerRepo {
     log.debug("{} deleted {} tablets", fateId, submitted);
 
     return new FinishTableRangeOp(data);
+  }
+
+  @Override
+  public String getDetails() {
+    Gson gson = GSON.get();
+    JsonObject details = gson.toJsonTree(data).getAsJsonObject();
+    details.addProperty("lastTabletEndRow",
+        lastTabletEndRow == null ? null : new Text(lastTabletEndRow).toString());
+    return gson.toJson(details);
   }
 }

@@ -18,16 +18,20 @@
  */
 package org.apache.accumulo.manager.tableOps.namespace.delete;
 
+import static org.apache.accumulo.core.util.LazySingletons.GSON;
+
 import org.apache.accumulo.core.clientImpl.thrift.TableOperation;
 import org.apache.accumulo.core.data.NamespaceId;
 import org.apache.accumulo.core.fate.FateId;
 import org.apache.accumulo.core.fate.Repo;
 import org.apache.accumulo.core.fate.zookeeper.DistributedReadWriteLock.LockType;
-import org.apache.accumulo.manager.Manager;
-import org.apache.accumulo.manager.tableOps.ManagerRepo;
+import org.apache.accumulo.manager.tableOps.AbstractFateOperation;
+import org.apache.accumulo.manager.tableOps.FateEnv;
 import org.apache.accumulo.manager.tableOps.Utils;
 
-public class DeleteNamespace extends ManagerRepo {
+import com.google.gson.JsonObject;
+
+public class DeleteNamespace extends AbstractFateOperation {
 
   private static final long serialVersionUID = 1L;
 
@@ -38,20 +42,26 @@ public class DeleteNamespace extends ManagerRepo {
   }
 
   @Override
-  public long isReady(FateId fateId, Manager environment) throws Exception {
-    return Utils.reserveNamespace(environment, namespaceId, fateId, LockType.WRITE, true,
-        TableOperation.DELETE);
+  public long isReady(FateId fateId, FateEnv environment) throws Exception {
+    return Utils.reserveNamespace(environment.getContext(), namespaceId, fateId, LockType.WRITE,
+        true, TableOperation.DELETE);
   }
 
   @Override
-  public Repo<Manager> call(FateId fateId, Manager environment) {
-    environment.getEventCoordinator().event("deleting namespace %s ", namespaceId);
+  public Repo<FateEnv> call(FateId fateId, FateEnv environment) {
+    environment.getEventPublisher().event("deleting namespace %s ", namespaceId);
     return new NamespaceCleanUp(namespaceId);
   }
 
   @Override
-  public void undo(FateId fateId, Manager environment) {
-    Utils.unreserveNamespace(environment, namespaceId, fateId, LockType.WRITE);
+  public void undo(FateId fateId, FateEnv environment) {
+    Utils.unreserveNamespace(environment.getContext(), namespaceId, fateId, LockType.WRITE);
   }
 
+  @Override
+  public String getDetails() {
+    JsonObject details = new JsonObject();
+    details.addProperty("namespaceId", namespaceId.canonical());
+    return GSON.get().toJson(details);
+  }
 }

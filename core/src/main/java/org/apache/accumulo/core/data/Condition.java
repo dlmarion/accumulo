@@ -271,8 +271,8 @@ public class Condition {
     checkArgument(iterators != null, "iterators is null");
 
     if (iterators.length > 1) {
-      HashSet<String> names = new HashSet<>();
-      HashSet<Integer> prios = new HashSet<>();
+      HashSet<String> names = new HashSet<>(iterators.length, 1.0f);
+      HashSet<Integer> prios = new HashSet<>(iterators.length, 1.0f);
 
       for (IteratorSetting iteratorSetting : iterators) {
         if (!names.add(iteratorSetting.getName())) {
@@ -304,10 +304,9 @@ public class Condition {
     if (this == o) {
       return true;
     }
-    if (!(o instanceof Condition)) {
+    if (!(o instanceof Condition condition)) {
       return false;
     }
-    Condition condition = (Condition) o;
     return Objects.equals(cf, condition.cf) && Objects.equals(cq, condition.cq)
         && Objects.equals(cv, condition.cv) && Objects.equals(val, condition.val)
         && Objects.equals(ts, condition.ts) && Arrays.equals(iterators, condition.iterators);

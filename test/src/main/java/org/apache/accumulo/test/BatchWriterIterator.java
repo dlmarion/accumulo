@@ -205,7 +205,9 @@ public class BatchWriterIterator extends WrappingIterator {
   private void processNext() {
     assert hasTop();
     Key k = getTopKey();
-    Text row = k.getRow(), cf = k.getColumnFamily(), cq = k.getColumnQualifier();
+    Text row = k.getRow();
+    Text cf = k.getColumnFamily();
+    Text cq = k.getColumnQualifier();
     Value v = super.getTopValue();
     String failure = null;
     try {
@@ -227,7 +229,9 @@ public class BatchWriterIterator extends WrappingIterator {
           if (sleepAfterFirstWrite > 0) {
             try {
               Thread.sleep(sleepAfterFirstWrite);
-            } catch (InterruptedException ignored) {}
+            } catch (InterruptedException ignored) {
+              Thread.currentThread().interrupt();
+            }
           }
           firstWrite = false;
         }

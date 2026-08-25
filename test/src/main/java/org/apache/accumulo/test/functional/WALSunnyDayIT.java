@@ -18,7 +18,7 @@
  */
 package org.apache.accumulo.test.functional;
 
-import static org.apache.accumulo.harness.AccumuloITBase.SUNNY_DAY;
+import static org.apache.accumulo.test.harness.AccumuloITBase.SUNNY_DAY;
 
 import org.junit.jupiter.api.Tag;
 
@@ -29,6 +29,6 @@ import org.junit.jupiter.api.Tag;
  * the SUNNY_DAY tag which is not desirable.
  */
 @Tag(SUNNY_DAY)
-public class WALSunnyDayIT extends WALSunnyDayBaseIT {
+public class WALSunnyDayIT extends WALSunnyDayITBase {
 
 }

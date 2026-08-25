@@ -93,7 +93,7 @@ import com.google.common.net.HostAndPort;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.context.Scope;
 
-public class ThriftScanner {
+public final class ThriftScanner {
   private static final Logger log = LoggerFactory.getLogger(ThriftScanner.class);
 
   // This set is initially empty when the client starts. The first time this
@@ -152,15 +152,15 @@ public class ThriftScanner {
           serversWaitedForWrites.get(ttype).add(server);
         }
 
-        Key.decompress(isr.result.results);
+        Key.decompress(isr.getResult().getResults());
 
-        for (TKeyValue kv : isr.result.results) {
-          results.put(new Key(kv.key), new Value(kv.value));
+        for (TKeyValue kv : isr.getResult().getResults()) {
+          results.put(new Key(kv.getKey()), new Value(kv.getValue()));
         }
 
-        client.closeScan(tinfo, isr.scanID);
+        client.closeScan(tinfo, isr.getScanID());
 
-        return isr.result.more;
+        return isr.getResult().isMore();
       } finally {
         ThriftUtil.returnClient(client, context);
       }
@@ -170,7 +170,7 @@ public class ThriftScanner {
       log.debug("Tablet ({}) has too many files {} : {}", extent, server, e.getMessage());
     } catch (ThriftSecurityException e) {
       log.warn("Security Violation in scan request to {}: {}", server, e.getMessage());
-      throw new AccumuloSecurityException(e.user, e.code, e);
+      throw new AccumuloSecurityException(e.getUser(), e.getCode(), e);
     } catch (TException e) {
       log.debug("Error getting transport to {}: {}", server, e.getMessage());
     }
@@ -350,6 +350,7 @@ public class ThriftScanner {
         retry.waitForNextAttempt(log, String.format(
             "For tableId %s scan server selector is waiting for '%s'", tableId, description));
       } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
         throw new RuntimeException(e);
       }
 
@@ -448,7 +449,7 @@ public class ThriftScanner {
           delay = actions.getDelay();
           scanState.busyTimeout = Duration.ZERO;
           log.trace("For tablet {} scan server selector chose tablet_server: {}", loc.getExtent(),
-              addr);
+              addr.serverAddress);
         } else {
           log.trace(
               "For tablet {} scan server selector chose tablet_server, but the tablet is not currently hosted",
@@ -627,11 +628,10 @@ public class ThriftScanner {
     return addr;
   }
 
-  public static List<KeyValue> scan(ClientContext context, ScanState scanState, Duration timeOut)
-      throws ScanTimedOutException, AccumuloException, AccumuloSecurityException,
+  public static List<KeyValue> scan(ClientContext context, ScanState scanState, Duration timeOut,
+      Timer scanTimer) throws ScanTimedOutException, AccumuloException, AccumuloSecurityException,
       TableNotFoundException {
 
-    Timer scanTimer = Timer.startNew();
     String lastError = null;
     String error = null;
     int tooManyFilesCount = 0;
@@ -809,6 +809,7 @@ public class ThriftScanner {
 
       return results;
     } catch (InterruptedException ex) {
+      Thread.currentThread().interrupt();
       TraceUtil.setException(parent, ex, true);
       throw new AccumuloException(ex);
     } catch (InvalidTabletHostingRequestException e) {
@@ -873,10 +874,11 @@ public class ThriftScanner {
             + addr.getExtent().tableId());
 
         if (log.isTraceEnabled()) {
-          String msg = "Starting scan server=" + addr.serverAddress + " tablet=" + addr.getExtent()
-              + " range=" + scanState.range + " ssil=" + scanState.serverSideIteratorList + " ssio="
-              + scanState.serverSideIteratorOptions + " context=" + scanState.classLoaderContext;
-          log.trace("tid={} {}", Thread.currentThread().getId(), msg);
+          String msg = "Starting scan server=" + addr.serverAddress + " type=" + addr.serverType
+              + " tablet=" + addr.getExtent() + " range=" + scanState.range + " ssil="
+              + scanState.serverSideIteratorList + " ssio=" + scanState.serverSideIteratorOptions
+              + " context=" + scanState.classLoaderContext;
+          log.trace("{}", msg);
           timer = Timer.startNew();
         }
 
@@ -895,12 +897,12 @@ public class ThriftScanner {
           serversWaitedForWrites.get(ttype).add(addr.serverAddress);
         }
 
-        sr = is.result;
+        sr = is.getResult();
 
-        if (sr.more) {
-          scanState.scanID = is.scanID;
+        if (sr.isMore()) {
+          scanState.scanID = is.getScanID();
         } else {
-          client.closeScan(tinfo, is.scanID);
+          client.closeScan(tinfo, is.getScanID());
         }
 
       } else {
@@ -909,33 +911,31 @@ public class ThriftScanner {
         Thread.currentThread().setName(msg);
 
         if (log.isTraceEnabled()) {
-          log.trace("tid={} {}", Thread.currentThread().getId(), msg);
+          log.trace("{}", msg);
           timer = Timer.startNew();
         }
 
         sr = client.continueScan(tinfo, scanState.scanID, busyTimeout);
-        if (!sr.more) {
+        if (!sr.isMore()) {
           client.closeScan(tinfo, scanState.scanID);
           scanState.scanID = null;
         }
       }
 
-      if (sr.more) {
+      if (sr.isMore()) {
         if (timer != null) {
-          log.trace("tid={} Finished scan in {} #results={} scanid={}",
-              Thread.currentThread().getId(),
-              String.format("%.3f secs", timer.elapsed(MILLISECONDS) / 1000.0), sr.results.size(),
-              scanState.scanID);
+          log.trace("Finished scan in {} #results={} scanid={}",
+              String.format("%.3f secs", timer.elapsed(MILLISECONDS) / 1000.0),
+              sr.getResults().size(), scanState.scanID);
         }
       } else {
         if (addr.getExtent().endRow() == null) {
           scanState.finished = true;
 
           if (timer != null) {
-            log.trace("tid={} Completely finished scan in {} #results={}",
-                Thread.currentThread().getId(),
+            log.trace("Completely finished scan in {} #results={}",
                 String.format("%.3f secs", timer.elapsed(MILLISECONDS) / 1000.0),
-                sr.results.size());
+                sr.getResults().size());
           }
 
         } else if (scanState.range.getEndKey() == null || !scanState.range
@@ -944,38 +944,37 @@ public class ThriftScanner {
           scanState.skipStartRow = true;
 
           if (timer != null) {
-            log.trace("tid={} Finished scanning tablet in {} #results={}",
-                Thread.currentThread().getId(),
+            log.trace("Finished scanning tablet in {} #results={}",
                 String.format("%.3f secs", timer.elapsed(MILLISECONDS) / 1000.0),
-                sr.results.size());
+                sr.getResults().size());
           }
         } else {
           scanState.finished = true;
           if (timer != null) {
-            log.trace("tid={} Completely finished in {} #results={}",
-                Thread.currentThread().getId(),
+            log.trace("Completely finished in {} #results={}",
                 String.format("%.3f secs", timer.elapsed(MILLISECONDS) / 1000.0),
-                sr.results.size());
+                sr.getResults().size());
           }
         }
       }
 
-      Key.decompress(sr.results);
+      Key.decompress(sr.getResults());
 
-      if (!sr.results.isEmpty() && !scanState.finished) {
-        scanState.range = new Range(new Key(sr.results.get(sr.results.size() - 1).key), false,
-            scanState.range.getEndKey(), scanState.range.isEndKeyInclusive());
+      if (!sr.getResults().isEmpty() && !scanState.finished) {
+        scanState.range =
+            new Range(new Key(sr.getResults().get(sr.getResults().size() - 1).getKey()), false,
+                scanState.range.getEndKey(), scanState.range.isEndKeyInclusive());
       }
 
-      List<KeyValue> results = new ArrayList<>(sr.results.size());
-      for (TKeyValue tkv : sr.results) {
-        results.add(new KeyValue(new Key(tkv.key), tkv.value));
+      List<KeyValue> results = new ArrayList<>(sr.getResults().size());
+      for (TKeyValue tkv : sr.getResults()) {
+        results.add(new KeyValue(new Key(tkv.getKey()), tkv.getValue()));
       }
 
       return results;
 
     } catch (ThriftSecurityException e) {
-      throw new AccumuloSecurityException(e.user, e.code, e);
+      throw new AccumuloSecurityException(e.getUser(), e.getCode(), e);
     } finally {
       ThriftUtil.returnClient(client, context);
       Thread.currentThread().setName(old);

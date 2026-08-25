@@ -23,13 +23,14 @@ import java.io.PrintStream;
 import java.util.Map.Entry;
 import java.util.Set;
 
-import org.apache.accumulo.core.cli.ConfigOpts;
-import org.apache.accumulo.core.conf.SiteConfiguration;
+import org.apache.accumulo.core.cli.ClientOpts;
+import org.apache.accumulo.core.file.FileOperations;
 import org.apache.accumulo.core.file.rfile.bcfile.BCFile.MetaIndexEntry;
 import org.apache.accumulo.core.spi.crypto.CryptoService;
 import org.apache.accumulo.core.spi.crypto.NoCryptoServiceFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
@@ -37,18 +38,33 @@ import com.beust.jcommander.Parameter;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
-@SuppressFBWarnings(value = "DM_EXIT",
-    justification = "System.exit is fine here because it's a utility class executed by a main()")
+@SuppressFBWarnings(value = {"DM_EXIT", "CT_CONSTRUCTOR_THROW"},
+    justification = "System.exit is acceptable here as it's a utility class, and constructor validation ensures proper initialization")
 public class PrintBCInfo {
-  SiteConfiguration siteConfig;
   Configuration conf;
   FileSystem fs;
   Path path;
   CryptoService cryptoService = NoCryptoServiceFactory.NONE;
 
+  public PrintBCInfo(String[] args) throws Exception {
+    BCInfoOpts opts = new BCInfoOpts();
+    opts.parseArgs(getClass().getSimpleName(), args);
+    conf = new Configuration();
+    FileSystem hadoopFs = FileSystem.get(conf);
+    FileSystem localFs = FileSystem.getLocal(conf);
+    path = new Path(opts.file);
+    if (opts.file.contains(":")) {
+      fs = path.getFileSystem(conf);
+    } else {
+      fs = hadoopFs.exists(path) ? hadoopFs : localFs; // fall back to local
+    }
+  }
+
   public void printMetaBlockInfo() throws IOException {
-    try (FSDataInputStream fsin = fs.open(path); BCFile.Reader bcfr =
-        new BCFile.Reader(fsin, fs.getFileStatus(path).getLen(), conf, cryptoService)) {
+    FileStatus status = fs.getFileStatus(path);
+
+    try (FSDataInputStream fsin = FileOperations.openFile(fs, path, status);
+        BCFile.Reader bcfr = new BCFile.Reader(fsin, status.getLen(), conf, cryptoService)) {
 
       Set<Entry<String,MetaIndexEntry>> es = bcfr.metaIndex.index.entrySet();
 
@@ -67,8 +83,10 @@ public class PrintBCInfo {
   }
 
   public String getCompressionType() throws IOException {
-    try (FSDataInputStream fsin = fs.open(path); BCFile.Reader bcfr =
-        new BCFile.Reader(fsin, fs.getFileStatus(path).getLen(), conf, cryptoService)) {
+    FileStatus status = fs.getFileStatus(path);
+
+    try (FSDataInputStream fsin = FileOperations.openFile(fs, path, status);
+        BCFile.Reader bcfr = new BCFile.Reader(fsin, status.getLen(), conf, cryptoService)) {
 
       Set<Entry<String,MetaIndexEntry>> es = bcfr.metaIndex.index.entrySet();
 
@@ -77,28 +95,9 @@ public class PrintBCInfo {
     }
   }
 
-  static class Opts extends ConfigOpts {
-    @Parameter(description = " <file>")
+  public static class BCInfoOpts extends ClientOpts {
+    @Parameter(required = true, description = " <file>")
     String file;
-  }
-
-  public PrintBCInfo(String[] args) throws Exception {
-    Opts opts = new Opts();
-    opts.parseArgs("PrintInfo", args);
-    if (opts.file.isEmpty()) {
-      System.err.println("No files were given");
-      System.exit(-1);
-    }
-    siteConfig = opts.getSiteConfiguration();
-    conf = new Configuration();
-    FileSystem hadoopFs = FileSystem.get(conf);
-    FileSystem localFs = FileSystem.getLocal(conf);
-    path = new Path(opts.file);
-    if (opts.file.contains(":")) {
-      fs = path.getFileSystem(conf);
-    } else {
-      fs = hadoopFs.exists(path) ? hadoopFs : localFs; // fall back to local
-    }
   }
 
   public CryptoService getCryptoService() {

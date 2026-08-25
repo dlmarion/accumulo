@@ -25,6 +25,7 @@ import java.net.UnknownHostException;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
 
 import org.apache.accumulo.core.Constants;
 import org.apache.accumulo.core.data.InstanceId;
@@ -49,6 +50,10 @@ import org.slf4j.LoggerFactory;
  * N.B. implementations must be thread safe.
  */
 public interface VolumeManager extends AutoCloseable {
+
+  enum DeleteStatus {
+    ERROR, FALSE, TRUE
+  };
 
   enum FileType {
     TABLE(Constants.TABLE_DIR), WAL(Constants.WAL_DIR), RECOVERY(Constants.RECOVERY_DIR);
@@ -131,6 +136,17 @@ public interface VolumeManager extends AutoCloseable {
   // delete a directory and anything under it
   boolean deleteRecursively(Path path) throws IOException;
 
+  /**
+   * Deletes a collection of files by grouping the files by FileSystem, then either calling
+   * {@code FileSystem#createBulkDelete(Path)} on FileSystem implementations that support it or by
+   * calling {@code #delete(Path)}.
+   *
+   * @param paths paths of files to delete
+   * @return paths map of input path to delete state
+   * @throws IOException on any exception deleting files
+   */
+  Map<Path,DeleteStatus> deleteBulk(Collection<Path> paths) throws IOException;
+
   // forward to the appropriate FileSystem object
   boolean exists(Path path) throws IOException;
 
@@ -159,6 +175,9 @@ public interface VolumeManager extends AutoCloseable {
   // forward to the appropriate FileSystem object
   FSDataInputStream open(Path path) throws IOException;
 
+  // forward to the appropriate FileSystem object
+  FSDataInputStream open(Path path, FileStatus status) throws IOException;
+
   // forward to the appropriate FileSystem object, throws an exception if the paths are in different
   // volumes
   boolean rename(Path path, Path newPath) throws IOException;
@@ -168,7 +187,7 @@ public interface VolumeManager extends AutoCloseable {
    * This operation should be idempotent to allow calling multiple times in the case of a partial
    * completion.
    */
-  void bulkRename(Map<Path,Path> oldToNewPathMap, int poolSize, String poolName, FateId fateId)
+  void bulkRename(Map<Path,Path> oldToNewPathMap, ExecutorService workerPool, FateId fateId)
       throws IOException;
 
   // forward to the appropriate FileSystem object

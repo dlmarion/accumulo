@@ -21,7 +21,7 @@ package org.apache.accumulo.test.fate;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 
-import org.apache.accumulo.core.Constants;
+import org.apache.accumulo.core.data.ResourceGroupId;
 import org.apache.accumulo.core.fate.user.UserFateStore;
 import org.apache.accumulo.core.fate.zookeeper.MetaFateStore;
 import org.apache.accumulo.core.fate.zookeeper.ZooUtil;
@@ -68,9 +68,8 @@ public class TestLock {
     ServiceLock lock = new ServiceLock(zk, slp, uuid);
     TestLockWatcher lw = new TestLockWatcher();
     ServiceLockData.ServiceDescriptors descriptors = new ServiceLockData.ServiceDescriptors();
-    descriptors
-        .addService(new ServiceLockData.ServiceDescriptor(uuid, ServiceLockData.ThriftService.NONE,
-            "fake_test_host", Constants.DEFAULT_RESOURCE_GROUP_NAME));
+    descriptors.addService(new ServiceLockData.ServiceDescriptor(uuid,
+        ServiceLockData.ThriftService.NONE, "fake_test_host", ResourceGroupId.DEFAULT));
     ServiceLockData sld = new ServiceLockData(descriptors);
     String lockPath = slp.toString();
     String parentLockPath = lockPath.substring(0, lockPath.lastIndexOf("/"));
@@ -80,6 +79,9 @@ public class TestLock {
       zrw.putPersistentData(parentLockPath, new byte[0], NodeExistsPolicy.SKIP);
       zrw.putPersistentData(lockPath, new byte[0], NodeExistsPolicy.SKIP);
     } catch (KeeperException | InterruptedException e) {
+      if (e instanceof InterruptedException) {
+        Thread.currentThread().interrupt();
+      }
       throw new IllegalStateException("Error creating path in ZooKeeper", e);
     }
 

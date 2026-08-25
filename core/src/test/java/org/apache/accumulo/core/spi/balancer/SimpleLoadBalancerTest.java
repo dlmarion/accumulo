@@ -33,7 +33,7 @@ import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 
-import org.apache.accumulo.core.Constants;
+import org.apache.accumulo.core.data.ResourceGroupId;
 import org.apache.accumulo.core.data.TableId;
 import org.apache.accumulo.core.data.TabletId;
 import org.apache.accumulo.core.dataImpl.KeyExtent;
@@ -61,16 +61,16 @@ public class SimpleLoadBalancerTest {
     TServerStatus getStatus() {
       org.apache.accumulo.core.manager.thrift.TabletServerStatus result =
           new org.apache.accumulo.core.manager.thrift.TabletServerStatus();
-      result.tableMap = new HashMap<>();
+      result.setTableMap(new HashMap<>());
       for (TabletId tabletId : tablets) {
-        TableInfo info = result.tableMap.get(tabletId.getTable().canonical());
+        TableInfo info = result.getTableMap().get(tabletId.getTable().canonical());
         if (info == null) {
-          result.tableMap.put(tabletId.getTable().canonical(), info = new TableInfo());
+          result.getTableMap().put(tabletId.getTable().canonical(), info = new TableInfo());
         }
-        info.onlineTablets++;
-        info.recs = info.onlineTablets;
-        info.ingestRate = 123.;
-        info.queryRate = 456.;
+        info.setOnlineTablets(info.getOnlineTablets() + 1);
+        info.setRecs(info.getOnlineTablets());
+        info.setIngestRate(123.);
+        info.setQueryRate(456.);
       }
       return new TServerStatusImpl(result);
     }
@@ -204,9 +204,9 @@ public class SimpleLoadBalancerTest {
     while (true) {
       List<TabletMigration> migrationsOut = new ArrayList<>();
       SortedMap<TabletServerId,TServerStatus> tservers = getAssignments(servers);
-      balancer.balance(new BalanceParamsImpl(tservers,
-          Map.of(Constants.DEFAULT_RESOURCE_GROUP_NAME, tservers.keySet()), migrations,
-          migrationsOut, DataLevel.USER, Map.of()));
+      balancer.balance(
+          new BalanceParamsImpl(tservers, Map.of(ResourceGroupId.DEFAULT, tservers.keySet()),
+              migrations, migrationsOut, DataLevel.USER, Map.of()));
       if (migrationsOut.isEmpty()) {
         break;
       }
@@ -249,9 +249,9 @@ public class SimpleLoadBalancerTest {
     while (true) {
       List<TabletMigration> migrationsOut = new ArrayList<>();
       SortedMap<TabletServerId,TServerStatus> tservers = getAssignments(servers);
-      balancer.balance(new BalanceParamsImpl(tservers,
-          Map.of(Constants.DEFAULT_RESOURCE_GROUP_NAME, tservers.keySet()), migrations,
-          migrationsOut, DataLevel.USER, Map.of()));
+      balancer.balance(
+          new BalanceParamsImpl(tservers, Map.of(ResourceGroupId.DEFAULT, tservers.keySet()),
+              migrations, migrationsOut, DataLevel.USER, Map.of()));
       if (migrationsOut.isEmpty()) {
         break;
       }

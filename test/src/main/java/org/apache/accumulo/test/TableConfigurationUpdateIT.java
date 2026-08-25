@@ -38,10 +38,10 @@ import org.apache.accumulo.core.conf.AccumuloConfiguration;
 import org.apache.accumulo.core.conf.DefaultConfiguration;
 import org.apache.accumulo.core.conf.Property;
 import org.apache.accumulo.core.data.TableId;
-import org.apache.accumulo.harness.AccumuloClusterHarness;
 import org.apache.accumulo.server.ServerContext;
 import org.apache.accumulo.server.conf.NamespaceConfiguration;
 import org.apache.accumulo.server.conf.TableConfiguration;
+import org.apache.accumulo.test.harness.AccumuloClusterHarness;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -78,13 +78,14 @@ public class TableConfigurationUpdateIT extends AccumuloClusterHarness {
       ExecutorService svc = Executors.newFixedThreadPool(numThreads);
       CountDownLatch countDown = new CountDownLatch(numThreads);
       ArrayList<Future<Exception>> futures = new ArrayList<>(numThreads);
-
-      for (int i = 0; i < numThreads; i++) {
-        futures.add(svc.submit(new TableConfRunner(randomMax, iterations, tableConf, countDown)));
+      try {
+        for (int i = 0; i < numThreads; i++) {
+          futures.add(svc.submit(new TableConfRunner(randomMax, iterations, tableConf, countDown)));
+        }
+      } finally {
+        svc.shutdown();
+        assertTrue(svc.awaitTermination(60, TimeUnit.MINUTES));
       }
-
-      svc.shutdown();
-      assertTrue(svc.awaitTermination(60, TimeUnit.MINUTES));
 
       for (Future<Exception> fut : futures) {
         Exception e = fut.get();
@@ -103,7 +104,8 @@ public class TableConfigurationUpdateIT extends AccumuloClusterHarness {
     private static final Property prop = Property.TABLE_SPLIT_THRESHOLD;
     private AccumuloConfiguration tableConf;
     private CountDownLatch countDown;
-    private int iterations, randMax;
+    private int iterations;
+    private int randMax;
 
     public TableConfRunner(int randMax, int iterations, AccumuloConfiguration tableConf,
         CountDownLatch countDown) {
