@@ -1817,6 +1817,7 @@ under the License.
                     </include>
                   </elements>
                 </revapi.filter>
+		<!--
                 <revapi.differences>
                   <ignore>true</ignore>
                   <differences>
@@ -1838,8 +1839,9 @@ under the License.
 	                  </item>
                   </differences>
                 </revapi.differences>
+                -->
                 <revapi.reporter.text>
-                  <minSeverity>NON_BREAKING</minSeverity>
+                  <minSeverity>POTENTIALLY_BREAKING</minSeverity>
                   <minCriticality>documented</minCriticality>
                   <output>err</output>
 				  <template>${basedir}/src/main/api/revapi.ftl</template>
@@ -1849,6 +1851,9 @@ under the License.
               </analysisConfiguration>
               <checkDependencies>false</checkDependencies>
               <failBuildOnProblemsFound>false</failBuildOnProblemsFound>
+	      <oldArtifacts>
+		<artifact>${project.groupId}:${project.artifactId}:2.1.6</artifact>
+              </oldArtifacts>
             </configuration>
             <dependencies>
               <dependency>
