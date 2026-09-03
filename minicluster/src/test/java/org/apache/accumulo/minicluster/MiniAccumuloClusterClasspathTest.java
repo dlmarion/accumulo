@@ -29,6 +29,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 
+import org.apache.accumulo.core.classloader.URLContextClassLoaderFactory;
 import org.apache.accumulo.core.client.Accumulo;
 import org.apache.accumulo.core.client.AccumuloClient;
 import org.apache.accumulo.core.client.BatchWriter;
@@ -76,6 +77,7 @@ public class MiniAccumuloClusterClasspathTest extends WithTestNames {
     config.setZooKeeperPort(0);
     HashMap<String,String> site = new HashMap<>();
     site.put(Property.TSERV_WAL_MAX_SIZE.getKey(), "1G");
+    site.put(URLContextClassLoaderFactory.URL_PATTERN_PROPERTY, jarFile.toURI().toString());
     config.setSiteConfig(site);
     accumulo = new MiniAccumuloCluster(config);
     accumulo.start();

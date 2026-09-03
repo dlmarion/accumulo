@@ -19,6 +19,7 @@
 package org.apache.accumulo.core.classloader;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.net.URL;
 import java.net.URLClassLoader;
@@ -37,7 +38,8 @@ import org.junit.jupiter.api.io.TempDir;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
-@SuppressFBWarnings(value = "PATH_TRAVERSAL_IN", justification = "paths not set by user input")
+@SuppressFBWarnings(value = {"PATH_TRAVERSAL_IN", "NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE"},
+    justification = "paths not set by user input")
 public class ContextClassLoaderFactoryTest extends WithTestNames {
 
   @TempDir
@@ -45,6 +47,7 @@ public class ContextClassLoaderFactoryTest extends WithTestNames {
 
   private URL uri1;
   private URL uri2;
+  private String tempFolderPattern;
 
   @BeforeEach
   public void setup() throws Exception {
@@ -70,6 +73,24 @@ public class ContextClassLoaderFactoryTest extends WithTestNames {
         propsFile2.toFile());
     uri2 = propsFile2.toUri().toURL();
 
+    tempFolderPattern = ".*/" + tempFolder.getFileName().toString() + "/.*";
+  }
+
+  @Test
+  public void urlContextPatternNotSet() {
+    ConfigurationCopy cc = new ConfigurationCopy();
+    cc.set(Property.GENERAL_CONTEXT_CLASSLOADER_FACTORY.getKey(),
+        URLContextClassLoaderFactory.class.getName());
+    ClassLoaderUtil.resetContextFactoryForTests();
+    ClassLoaderUtil.initContextFactory(cc);
+    ContextClassLoaderException ex = assertThrows(ContextClassLoaderException.class, () -> {
+      @SuppressWarnings("unused")
+      URLClassLoader classloader =
+          (URLClassLoader) ClassLoaderUtil.getContextFactory().getClassLoader(uri1.toString());
+    });
+    assertEquals(
+        "Error getting classloader for context: Property general.custom.factory.class.loader.url.allowed.patterns not set, no contexts are allowed",
+        ex.getMessage());
   }
 
   @Test
@@ -78,6 +99,7 @@ public class ContextClassLoaderFactoryTest extends WithTestNames {
     ConfigurationCopy cc = new ConfigurationCopy();
     cc.set(Property.GENERAL_CONTEXT_CLASSLOADER_FACTORY.getKey(),
         URLContextClassLoaderFactory.class.getName());
+    cc.set(URLContextClassLoaderFactory.URL_PATTERN_PROPERTY, tempFolderPattern);
     ClassLoaderUtil.resetContextFactoryForTests();
     ClassLoaderUtil.initContextFactory(cc);
 
