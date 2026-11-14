@@ -135,7 +135,7 @@ public class LogSorter implements MetricsProducer {
 
       String formerThreadName = Thread.currentThread().getName();
       try {
-        sort(fs, sortId, providerId, new Path(src), dest);
+        sort(fs, sortId, new Path(src), dest, providerId);
       } catch (Exception t) {
         try {
           // parent dir may not exist
@@ -159,8 +159,8 @@ public class LogSorter implements MetricsProducer {
       }
     }
 
-    public void sort(VolumeManager fs, String name, String providerId, Path srcPath,
-        String destPath) throws IOException {
+    public void sort(VolumeManager fs, String name, Path srcPath, String destPath,
+        String providerId) throws IOException {
       int part = 0;
 
       // check for finished first since another thread may have already done the sort

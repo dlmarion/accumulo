@@ -91,15 +91,13 @@ public class InMemoryWalProvider implements WalProvider {
   }
 
   @Override
-  public Writer create(String serverAddress, UUID id) throws IOException {
+  public Writer create(UUID id) throws IOException {
     requireInitialized();
-    String hostForPath = Objects.requireNonNull(serverAddress).replace(':', '+');
     String reference;
     try {
-      reference =
-          new URI(SCHEME, null, referenceRoot() + hostForPath + "/" + id, null, null).toString();
+      reference = new URI(SCHEME, null, referenceRoot() + id, null, null).toString();
     } catch (URISyntaxException e) {
-      throw new IOException("Invalid TabletServer address for WAL reference: " + serverAddress, e);
+      throw new IOException("Invalid WAL UUID for reference: " + id, e);
     }
     validateReference(reference);
     try (var socket = InMemoryWalStore.connect(host, port);
@@ -179,10 +177,10 @@ public class InMemoryWalProvider implements WalProvider {
         throw new IOException("Invalid in-memory WAL reference: " + reference);
       }
       String[] parts = path.substring(referenceRoot().length()).split("/", -1);
-      if (parts.length != 2 || parts[0].isBlank() || parts[1].isBlank()) {
+      if (parts.length != 1 || parts[0].isBlank()) {
         throw new IOException("Invalid in-memory WAL reference: " + reference);
       }
-      UUID.fromString(parts[1]);
+      UUID.fromString(parts[0]);
     } catch (URISyntaxException | IllegalArgumentException e) {
       throw new IOException("Invalid in-memory WAL reference: " + reference, e);
     }

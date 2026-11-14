@@ -71,8 +71,7 @@ class WalStateManagerTest {
     ZooReaderWriter zoo = createMock(ZooReaderWriter.class);
     TServerInstance server = new TServerInstance("localhost:1234[SESSION]");
     String serverPath = WalStateManager.ZWALS + "/" + server;
-    String reference =
-        "customfs://nn/accumulo/wal/localhost+1234/11111111-1111-1111-1111-111111111111";
+    String reference = "customfs://nn/accumulo/wal/11111111-1111-1111-1111-111111111111";
 
     expect(context.getZooSession()).andReturn(session);
     expect(session.asReaderWriter()).andReturn(zoo);
@@ -85,7 +84,9 @@ class WalStateManagerTest {
 
     replay(context, session, zoo);
     WalStateManager manager = new WalStateManager(context);
-    assertEquals(List.of(LogEntry.fromPath("custom", reference)), manager.getWalsInUse(server));
+    var wal = manager.getWalsInUse(server).get(0);
+    assertEquals(LogEntry.fromPath("custom", reference, server.getHostAndPort()), wal);
+    assertEquals(server.getHostAndPort(), wal.getTServerAddress());
     verify(context, session, zoo);
   }
 }

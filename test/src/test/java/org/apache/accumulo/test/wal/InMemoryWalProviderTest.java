@@ -43,12 +43,13 @@ class InMemoryWalProviderTest {
       WalProvider writerProvider = newProvider(store.getProviderOptions());
       WalProvider readerProvider = newProvider(store.getProviderOptions());
       UUID id = UUID.randomUUID();
-      WalProvider.Writer writer = writerProvider.create("tserver:1234", id);
+      WalProvider.Writer writer = writerProvider.create(id);
       String reference = writer.getReference();
 
-      assertEquals("file:/tmp/accumulo-inmemory-wal-"
-          + store.getProviderOptions().get(InMemoryWalProvider.PORT_OPTION) + "/wal/tserver+1234/"
-          + id, reference);
+      assertEquals(
+          "file:/tmp/accumulo-inmemory-wal-"
+              + store.getProviderOptions().get(InMemoryWalProvider.PORT_OPTION) + "/wal/" + id,
+          reference);
       assertTrue(readerProvider.exists(reference));
 
       writer.getOutputStream().write("header-and-synced-data".getBytes(UTF_8));
@@ -90,7 +91,7 @@ class InMemoryWalProviderTest {
   void rejectsLogDurabilitySyncRequests() throws Exception {
     try (var store = InMemoryWalStore.start()) {
       WalProvider provider = newProvider(store.getProviderOptions());
-      try (WalProvider.Writer writer = provider.create("tserver:1234", UUID.randomUUID())) {
+      try (WalProvider.Writer writer = provider.create(UUID.randomUUID())) {
         assertThrows(IllegalArgumentException.class, () -> writer.sync(Durability.LOG));
       }
     }

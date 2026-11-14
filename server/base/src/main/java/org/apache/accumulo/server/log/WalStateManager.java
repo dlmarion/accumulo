@@ -131,12 +131,13 @@ public class WalStateManager {
   }
 
   public void addNewWalMarker(TServerInstance tsi, LogEntry entry) throws WalMarkerException {
-    updateState(tsi, entry.getProviderId(), entry.getPath(), WalState.OPEN);
+    updateState(tsi, entry, WalState.OPEN);
   }
 
-  private void updateState(TServerInstance tsi, String providerId, Path path, WalState state)
+  private void updateState(TServerInstance tsi, LogEntry entry, WalState state)
       throws WalMarkerException {
-    byte[] data = (state + "," + providerId + "," + path).getBytes(UTF_8);
+    Path path = entry.getPath();
+    byte[] data = (state + "," + entry.getProviderId() + "," + path).getBytes(UTF_8);
     try {
       NodeExistsPolicy policy = NodeExistsPolicy.OVERWRITE;
       if (state == WalState.OPEN) {
@@ -153,11 +154,19 @@ public class WalStateManager {
   }
 
   public void walUnreferenced(TServerInstance tsi, LogEntry entry) throws WalMarkerException {
-    updateState(tsi, entry.getProviderId(), entry.getPath(), WalState.UNREFERENCED);
+    updateState(tsi, entry, WalState.UNREFERENCED);
   }
 
   public void closeWal(TServerInstance tsi, LogEntry entry) throws WalMarkerException {
-    closeWal(tsi, entry.getPath(), entry.getProviderId());
+    try {
+      state(tsi, UUID.fromString(entry.getPath().getName()));
+    } catch (WalMarkerException e) {
+      if (e.getCause() instanceof KeeperException.NoNodeException) {
+        return;
+      }
+      throw e;
+    }
+    updateState(tsi, entry, WalState.CLOSED);
   }
 
   public static WalStatePath parse(byte[] data) {
@@ -189,7 +198,8 @@ public class WalStateManager {
         if (zdata != null) {
           WalStatePath parts = parse(zdata);
           if (parts.state() != WalState.UNREFERENCED) {
-            result.add(LogEntry.fromPath(parts.providerId(), parts.path().toString()));
+            result.add(LogEntry.fromPath(parts.providerId(), parts.path().toString(),
+                tsi.getHostAndPort()));
           }
         }
       }
@@ -289,25 +299,4 @@ public class WalStateManager {
     }
   }
 
-  // tablet server can mark the log as closed (but still needed)
-  // manager can mark a log as unreferenced after it has made log recovery markers on the tablets
-  // that need to be recovered
-  public void closeWal(TServerInstance instance, Path path) throws WalMarkerException {
-    closeWal(instance, path, null);
-  }
-
-  private void closeWal(TServerInstance instance, Path path, String providerId)
-      throws WalMarkerException {
-    WalStatePath existing;
-    try {
-      existing = state(instance, UUID.fromString(path.getName()));
-    } catch (WalMarkerException e) {
-      if (e.getCause() instanceof KeeperException.NoNodeException) {
-        return;
-      }
-      throw e;
-    }
-    updateState(instance, providerId == null ? existing.providerId() : providerId, path,
-        WalState.CLOSED);
-  }
 }

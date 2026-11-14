@@ -52,12 +52,13 @@ public class LogEntryTest {
   @Test
   public void testFromPath() {
     var logEntry = LogEntry.fromPath(PROVIDER_ID, validPath);
-    verifyLogEntry(logEntry, new Text(PROVIDER_ID + "/" + validPath));
+    verifyLogEntry(logEntry,
+        new Text(PROVIDER_ID + "/@" + validHost.replace('+', ':') + "/" + validPath));
   }
 
   @Test
   public void testFromMetadata() {
-    var columnQualifier = "prefix/" + validPath;
+    var columnQualifier = PROVIDER_ID + "/@" + validHost.replace('+', ':') + "/" + validPath;
     var logEntry = LogEntry.fromMetaWalEntry(
         new SimpleImmutableEntry<>(new Key("1<", LogColumnFamily.STR_NAME, columnQualifier), null));
     verifyLogEntry(logEntry, new Text(columnQualifier));
@@ -101,9 +102,8 @@ public class LogEntryTest {
     assertEquals(logEntry, roundTripped);
     assertEquals(logEntry.getPath(), roundTripped.getPath());
     assertEquals(logEntry.getUniqueID(), roundTripped.getUniqueID());
-    assertEquals(logEntry.getTServer(), roundTripped.getTServer());
-    assertEquals(HostAndPort.fromString(validHost.replace('+', ':')), logEntry.getTServer());
-    assertEquals("viewfs:/a/accumulo/wal/" + validHost + "/" + roundTripped.getUniqueID(),
+    assertEquals(HostAndPort.fromString(validHost.replace('+', ':')), logEntry.getTServerAddress());
+    assertEquals("viewfs:/a/accumulo/wal/" + roundTripped.getUniqueID(),
         logEntry.getPath().toString());
   }
 
@@ -117,7 +117,7 @@ public class LogEntryTest {
   private void verifyLogEntry(LogEntry logEntry, Text expectedColumnQualifier) {
     assertEquals(validPath, logEntry.toString());
     assertEquals(validPath, logEntry.getPath().toString());
-    assertEquals(HostAndPort.fromString(validHost.replace('+', ':')), logEntry.getTServer());
+    assertEquals(HostAndPort.fromString(validHost.replace('+', ':')), logEntry.getTServerAddress());
     assertEquals(expectedColumnQualifier, logEntry.getColumnQualifier());
     assertEquals(validUUID, logEntry.getUniqueID());
   }
@@ -130,7 +130,7 @@ public class LogEntryTest {
     assertNotSame(one, two);
     assertEquals(one.toString(), two.toString());
     assertEquals(one.getPath(), two.getPath());
-    assertEquals(one.getTServer(), two.getTServer());
+    assertEquals(one.getTServerAddress(), two.getTServerAddress());
     assertEquals(one.getColumnQualifier(), two.getColumnQualifier());
     assertEquals(one.getUniqueID(), two.getUniqueID());
     assertEquals(one, two);
@@ -159,7 +159,7 @@ public class LogEntryTest {
 
   @Test
   public void testRelativeMetadataPathIsInvalid() {
-    var qualifier = "prefix/" + validHost + "/" + validUUID;
+    var qualifier = "prefix/@" + validHost.replace('+', ':') + "/relative/" + validUUID;
     var entry = new SimpleImmutableEntry<Key,Value>(
         new Key("1<", LogColumnFamily.STR_NAME, qualifier), null);
     assertThrows(IllegalArgumentException.class, () -> LogEntry.fromMetaWalEntry(entry));
@@ -167,30 +167,29 @@ public class LogEntryTest {
 
   @Test
   public void testBadPathLength() {
-    Stream.of("foo", "", validHost).forEach(badPath -> {
-      var e = assertThrows(IllegalArgumentException.class,
-          () -> LogEntry.fromPath(PROVIDER_ID, badPath));
-      assertTrue(e.getMessage().contains("The path should end with tserver/UUID."));
-    });
+    Stream.of("file:///accumulo/wal/foo", "file:///accumulo/wal/", "file:///accumulo/wal")
+        .forEach(badPath -> {
+          var e = assertThrows(IllegalArgumentException.class,
+              () -> LogEntry.fromPath(PROVIDER_ID, badPath));
+          assertTrue(e.getMessage().contains("Expected valid UUID"));
+        });
   }
 
   @Test
-  public void testInvalidHostPort() {
-    Stream.of("default:9997", "default+badPort").forEach(badHostAndPort -> {
-      var badPath = badHostAndPort + "/" + validUUID;
-      var e = assertThrows(IllegalArgumentException.class,
-          () -> LogEntry.fromPath(PROVIDER_ID, badPath));
-      assertTrue(e.getMessage().contains("Expected: host+port. Found '" + badHostAndPort + "'"));
-    });
+  public void testPathDoesNotRequireTserverAddress() {
+    var logEntry =
+        LogEntry.fromPath(PROVIDER_ID, "file:///accumulo/wal/provider-shard/" + validUUID);
+    assertEquals(validUUID, logEntry.getUniqueID());
+    assertTrue(logEntry.getTServerAddress() == null);
   }
 
   @Test
   public void testInvalidUUID() {
     var badUUID = "badUUID";
-    var pathWithBadUUID = validHost + "/" + badUUID;
+    var pathWithBadUUID = "file:///accumulo/wal/" + badUUID;
     var e = assertThrows(IllegalArgumentException.class,
         () -> LogEntry.fromPath(PROVIDER_ID, pathWithBadUUID));
-    assertTrue(e.getMessage().contains("Expected valid UUID. Found '" + badUUID + "'"));
+    assertTrue(e.getMessage().contains("Expected valid UUID as the final path component"));
   }
 
 }

@@ -86,28 +86,23 @@ public class RecoveryManager {
   }
 
   private class LogSortTask implements Runnable {
-    private final String source;
-    private final String destination;
-    private final UUID sortId;
-    private final String providerId;
-    private final WalProvider provider;
+    private final LogEntry logEntry;
 
-    public LogSortTask(WalProvider provider, String providerId, String source, String destination,
-        UUID sortId) {
-      this.provider = provider;
-      this.providerId = providerId;
-      this.source = source;
-      this.destination = destination;
-      this.sortId = sortId;
+    public LogSortTask(LogEntry logEntry) {
+      this.logEntry = logEntry;
     }
 
     @Override
     public void run() {
       boolean rescheduled = false;
       try {
+        WalProvider provider =
+            manager.getContext().getWalProviderRegistry().get(logEntry.getProviderId());
+        String source = logEntry.getPath().toString();
         long time = provider.prepareForRecovery(source);
         if (time < 0) {
-          throw new IllegalArgumentException("Negative recovery retry delay from " + providerId);
+          throw new IllegalArgumentException(
+              "Negative recovery retry delay from " + logEntry.getProviderId());
         }
 
         if (time > 0) {
@@ -115,16 +110,16 @@ public class RecoveryManager {
           ThreadPools.watchNonCriticalScheduledTask(future);
           rescheduled = true;
         } else {
-          initiateSort(sortId, providerId, source, destination);
+          initiateSort(logEntry);
         }
       } catch (FileNotFoundException e) {
-        log.debug("Unable to initiate log sort for " + source + ": " + e);
+        log.debug("Unable to initiate log sort for {}: {}", logEntry.getPath(), e);
       } catch (Exception e) {
-        log.warn("Failed to initiate log sort " + source, e);
+        log.warn("Failed to initiate log sort {}", logEntry.getPath(), e);
       } finally {
         if (!rescheduled) {
           synchronized (RecoveryManager.this) {
-            closeTasksQueued.remove(sortId.toString());
+            closeTasksQueued.remove(logEntry.getUniqueID().toString());
           }
         }
       }
@@ -132,14 +127,16 @@ public class RecoveryManager {
 
   }
 
-  private void initiateSort(UUID sortId, String providerId, String source, final String destination)
-      throws KeeperException, InterruptedException {
-    String work = new LogSortInformation(sortId, providerId, source, destination).serialize();
+  private void initiateSort(LogEntry logEntry) throws KeeperException, InterruptedException {
+    String sortId = logEntry.getUniqueID().toString();
+    String destination = RecoveryPath.getRecoveryPath(logEntry).toString();
+    String work = new LogSortInformation(logEntry.getUniqueID(), logEntry.getProviderId(),
+        logEntry.getPath().toString(), destination).serialize();
     new DistributedWorkQueue(Constants.ZRECOVERY, manager.getConfiguration(), manager)
-        .addWork(sortId.toString(), work.getBytes(UTF_8));
+        .addWork(sortId, work.getBytes(UTF_8));
 
     synchronized (this) {
-      sortsQueued.add(sortId.toString());
+      sortsQueued.add(sortId);
     }
 
     log.info("Created zookeeper entry {} with data {}", Constants.ZRECOVERY + "/" + sortId, work);
@@ -200,7 +197,7 @@ public class RecoveryManager {
     UUID sortId = walog.getUniqueID();
     String sortIdString = sortId.toString();
     String filename = walog.getPath().toString();
-    String dest = RecoveryPath.getRecoveryPath(walog.getPath()).toString();
+    String dest = RecoveryPath.getRecoveryPath(walog).toString();
 
     boolean sortQueued;
     synchronized (this) {
@@ -229,8 +226,6 @@ public class RecoveryManager {
     synchronized (this) {
       if (!closeTasksQueued.contains(sortIdString) && !sortsQueued.contains(sortIdString)) {
         AccumuloConfiguration aconf = manager.getConfiguration();
-        WalProvider provider =
-            manager.getContext().getWalProviderRegistry().get(walog.getProviderId());
         Long delay = recoveryDelay.get(sortIdString);
         if (delay == null) {
           delay = aconf.getTimeInMillis(Property.MANAGER_RECOVERY_DELAY);
@@ -240,9 +235,8 @@ public class RecoveryManager {
 
         log.info("Starting recovery of {} (in : {}s)", filename, (delay / 1000));
 
-        ScheduledFuture<?> future = executor.schedule(
-            new LogSortTask(provider, walog.getProviderId(), filename, dest, sortId), delay,
-            TimeUnit.MILLISECONDS);
+        ScheduledFuture<?> future =
+            executor.schedule(new LogSortTask(walog), delay, TimeUnit.MILLISECONDS);
         ThreadPools.watchNonCriticalScheduledTask(future);
         closeTasksQueued.add(sortIdString);
         recoveryDelay.put(sortIdString, delay);

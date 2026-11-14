@@ -41,8 +41,9 @@ import org.apache.accumulo.core.spi.common.ServiceEnvironment;
  *
  * <p>
  * To keep Accumulo's existing recovery pipeline, log references must be fully qualified Hadoop
- * paths in the standard WAL layout, ending in {@code <host+port>/<uuid>}. Providers may use a
- * custom Hadoop filesystem URI, but must preserve this path layout.
+ * paths ending in the WAL UUID. Providers may use a custom Hadoop filesystem URI, but the path must
+ * remain under the standard {@code wal} directory so Accumulo can locate the corresponding recovery
+ * directory.
  *
  * @since 4.0.0
  */
@@ -93,17 +94,15 @@ public interface WalProvider {
   long prepareForRecovery(String reference) throws IOException;
 
   /**
-   * Creates a new exclusive WAL for the given TabletServer and UUID. The returned reference must be
-   * unique, fully qualified, and end in the supplied server address (with {@code :} replaced by
-   * {@code +}) followed by the supplied UUID. The writer must preserve every byte written to its
-   * output stream in order.
+   * Creates a new exclusive WAL for the given UUID. The returned reference must be unique, fully
+   * qualified, and end with the supplied UUID as its final path component. The writer must preserve
+   * every byte written to its output stream in order.
    *
-   * @param serverAddress advertised TabletServer address in {@code host:port} form
    * @param id globally unique identifier for the WAL
    * @return a new writer whose reference can later be passed to {@link #open(String)} and
    *         {@link #delete(String)}
    */
-  Writer create(String serverAddress, UUID id) throws IOException;
+  Writer create(UUID id) throws IOException;
 
   /**
    * Opens a completed or abandoned WAL for recovery. The returned stream must start at byte zero

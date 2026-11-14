@@ -122,6 +122,7 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.common.net.HostAndPort;
 import com.google.gson.JsonParser;
 
 //TODO when removing this class, also remove MetadataSchema.Upgrader11to12
@@ -924,26 +925,47 @@ public class Upgrader11to12 implements Upgrader {
     int separator = qualifierString.indexOf('/');
     Preconditions.checkArgument(separator > 0, "Malformed write-ahead log %s", qualifierString);
     String providerId = qualifierString.substring(0, separator);
+    String encodedReference = qualifierString.substring(separator + 1);
+    if (encodedReference.startsWith("@")) {
+      // This WAL qualifier may already have been converted if an earlier upgrade attempt failed
+      // partway through. Validate it and leave it unchanged so the operation is safe to retry.
+      LogEntry.fromMetaWalEntry(entry);
+      return;
+    }
     if (providerId.equals("-")) {
       providerId = DfsWalProvider.PROVIDER_ID;
     }
-    String reference = qualifierString.substring(separator + 1);
+    String reference = encodedReference;
+    HostAndPort tserverAddress = getLegacyTserverAddress(new Path(reference));
     LogEntry logEntry;
     try {
-      logEntry = LogEntry.fromPath(providerId, reference);
+      logEntry = LogEntry.fromPath(providerId, reference, tserverAddress);
     } catch (IllegalArgumentException e) {
       if (!providerId.equals(DfsWalProvider.PROVIDER_ID) || !e.getMessage()
           .startsWith("Invalid path format. The path must be an absolute URI: ")) {
         throw e;
       }
       Path qualifiedPath = qualifyWalPath(new Path(reference), volumes);
-      logEntry = LogEntry.fromPath(providerId, qualifiedPath.toString());
+      logEntry = LogEntry.fromPath(providerId, qualifiedPath.toString(), tserverAddress);
     }
     Text newQualifier = logEntry.getColumnQualifier();
     if (!newQualifier.equals(qualifier)) {
       mutation.at().family(LogColumnFamily.NAME).qualifier(newQualifier).put(value);
       mutation.at().family(LogColumnFamily.NAME).qualifier(qualifier).delete();
     }
+  }
+
+  private static HostAndPort getLegacyTserverAddress(Path walPath) {
+    Path parent = walPath.getParent();
+    Preconditions.checkArgument(parent != null,
+        "Legacy WAL path must end with TabletServer and UUID: %s", walPath);
+    String encodedAddress = parent.getName();
+    Preconditions.checkArgument(encodedAddress.contains("+"),
+        "Legacy WAL path is missing its TabletServer address: %s", walPath);
+    HostAndPort address = HostAndPort.fromString(encodedAddress.replace('+', ':'));
+    Preconditions.checkArgument(address.hasPort(),
+        "Legacy WAL path has an invalid TabletServer address: %s", walPath);
+    return address;
   }
 
   private static Path qualifyWalPath(Path walPath, Collection<Volume> volumes) throws IOException {
@@ -1048,10 +1070,13 @@ public class Upgrader11to12 implements Upgrader {
   }
 
   private static void verifyNoLegacyWalReference(Key key, String source) {
-    if (key.getColumnFamily().equals(LogColumnFamily.NAME)
-        && key.getColumnQualifier().toString().startsWith("-/")) {
-      throw new IllegalStateException(
-          "Legacy WAL reference remains after upgrade in " + source + ": " + key);
+    if (key.getColumnFamily().equals(LogColumnFamily.NAME)) {
+      try {
+        LogEntry.fromMetaWalEntry(Map.entry(key, new Value()));
+      } catch (IllegalArgumentException e) {
+        throw new IllegalStateException(
+            "Legacy or malformed WAL reference remains after upgrade in " + source + ": " + key, e);
+      }
     }
   }
 

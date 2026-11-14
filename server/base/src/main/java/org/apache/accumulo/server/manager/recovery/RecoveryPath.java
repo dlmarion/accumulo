@@ -18,41 +18,44 @@
  */
 package org.apache.accumulo.server.manager.recovery;
 
+import org.apache.accumulo.core.tabletserver.log.LogEntry;
 import org.apache.accumulo.server.fs.VolumeManager.FileType;
 import org.apache.hadoop.fs.Path;
 
 public class RecoveryPath {
 
-  // given a wal path, transform it to a recovery path
-  public static Path getRecoveryPath(Path walPath) {
-    if (walPath.depth() >= 3 && walPath.toUri().getScheme() != null) {
-      // its a fully qualified path
-      String uuid = walPath.getName();
-      // drop uuid
-      walPath = walPath.getParent();
-
-      // expect and drop the server component
-      if (walPath.getName().equals(FileType.WAL.getDirectory())) {
-        throw new IllegalArgumentException("Bath path " + walPath + " (missing server component)");
-      }
-      walPath = walPath.getParent();
-
-      // expect and drop the wal component
-      if (!walPath.getName().equals(FileType.WAL.getDirectory())) {
-        throw new IllegalArgumentException(
-            "Bad path " + walPath + " (missing wal directory component)");
-      }
-      walPath = walPath.getParent();
-
-      // create new path in recovery directory that is a sibling to the wal directory (same volume),
-      // without the server component
-      walPath = new Path(walPath, FileType.RECOVERY.getDirectory());
-      walPath = new Path(walPath, uuid);
-
-      return walPath;
+  // given a WAL entry, transform it to a recovery path
+  public static Path getRecoveryPath(LogEntry logEntry) {
+    Path walPath = logEntry.getPath();
+    if (walPath.toUri().getScheme() == null || !walPath.isAbsolute()
+        || !walPath.getName().equals(logEntry.getUniqueID().toString())) {
+      throw new IllegalArgumentException("Bad WAL path " + walPath);
     }
 
-    throw new IllegalArgumentException("Bad path " + walPath);
+    Path parent = walPath.getParent();
+    if (parent == null) {
+      throw new IllegalArgumentException("Bad WAL path " + walPath);
+    }
+
+    Path walDir;
+    if (parent.getName().equals(FileType.WAL.getDirectory())) {
+      // New paths are <volume>/wal/<uuid>.
+      walDir = parent;
+    } else {
+      // Legacy paths are <volume>/wal/<tserver>/<uuid>. The tserver component is not needed
+      // to determine the recovery path.
+      walDir = parent.getParent();
+      if (walDir == null || !walDir.getName().equals(FileType.WAL.getDirectory())) {
+        throw new IllegalArgumentException("Bad WAL path " + walPath);
+      }
+    }
+
+    Path volume = walDir.getParent();
+    if (volume == null) {
+      throw new IllegalArgumentException("Bad WAL path " + walPath);
+    }
+    return new Path(new Path(volume, FileType.RECOVERY.getDirectory()),
+        logEntry.getUniqueID().toString());
   }
 
 }

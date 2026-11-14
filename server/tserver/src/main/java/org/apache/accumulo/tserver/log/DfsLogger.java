@@ -74,6 +74,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Preconditions;
+import com.google.common.net.HostAndPort;
 
 /**
  * Wrap a connection to a logger.
@@ -287,17 +288,22 @@ public final class DfsLogger implements Comparable<DfsLogger> {
   /**
    * Create a new DfsLogger with the provided characteristics.
    */
-  public static DfsLogger createNew(ServerContext context, WalProvider provider,
-      AtomicLong syncCounter, AtomicLong flushCounter, String address) throws IOException {
+  public static DfsLogger createNew(ServerContext context, AtomicLong syncCounter,
+      AtomicLong flushCounter, HostAndPort address, WalProvider provider) throws IOException {
 
-    WalProvider.Writer writer = provider.create(address, UUID.randomUUID());
+    UUID id = UUID.randomUUID();
+    WalProvider.Writer writer = provider.create(id);
     DfsLogger dfsLogger = null;
     try {
-      LogEntry log = LogEntry.fromPath(provider.getId(), writer.getReference());
+      LogEntry log = LogEntry.fromPath(provider.getId(), writer.getReference(), address);
+      if (!id.equals(log.getUniqueID())) {
+        throw new IllegalArgumentException("WAL reference " + writer.getReference()
+            + " does not end with the requested UUID " + id);
+      }
       dfsLogger = new DfsLogger(log);
       long slowFlushMillis =
           context.getConfiguration().getTimeInMillis(Property.TSERV_SLOW_FLUSH_MILLIS);
-      dfsLogger.open(context, writer, address, syncCounter, flushCounter, slowFlushMillis);
+      dfsLogger.open(context, writer, syncCounter, flushCounter, slowFlushMillis);
       return dfsLogger;
     } catch (IOException | RuntimeException e) {
       try {
@@ -381,9 +387,9 @@ public final class DfsLogger implements Comparable<DfsLogger> {
    * exception is thrown from this method, it is the callers responsibility to ensure that
    * {@link #close()} is called to prevent leaking the file handle and/or syncing thread.
    */
-  private synchronized void open(ServerContext context, WalProvider.Writer writer, String address,
+  private synchronized void open(ServerContext context, WalProvider.Writer writer,
       AtomicLong syncCounter, AtomicLong flushCounter, long slowFlushMillis) throws IOException {
-    log.debug("Address is {}", address);
+    log.debug("Address is {}", logEntry.getTServerAddress());
 
     log.debug("DfsLogger.open() begin");
 

@@ -81,13 +81,11 @@ public class DfsWalProvider implements WalProvider {
   }
 
   @Override
-  public Writer create(String serverAddress, UUID id) throws IOException {
-    String addressForFilename = serverAddress.replace(':', '+');
+  public Writer create(UUID id) throws IOException {
     var chooserEnv =
         new VolumeChooserEnvironmentImpl(VolumeChooserEnvironment.Scope.LOGGER, context);
-    String logPath =
-        context.getVolumeManager().choose(chooserEnv, context.getBaseUris()) + Path.SEPARATOR
-            + Constants.WAL_DIR + Path.SEPARATOR + addressForFilename + Path.SEPARATOR + id;
+    String logPath = context.getVolumeManager().choose(chooserEnv, context.getBaseUris())
+        + Path.SEPARATOR + Constants.WAL_DIR + Path.SEPARATOR + id;
     var path = new Path(logPath);
     VolumeManager fs = context.getVolumeManager();
     short replication = (short) context.getConfiguration().getCount(Property.TSERV_WAL_REPLICATION);

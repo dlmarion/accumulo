@@ -223,12 +223,12 @@ public class Upgrader11to12Test extends WithTestNames {
     assertEquals(2, updates.size());
     var added = updates.stream().filter(update -> !update.isDeleted()).findFirst().orElseThrow();
     var deleted = updates.stream().filter(ColumnUpdate::isDeleted).findFirst().orElseThrow();
-    assertEquals(DfsWalProvider.PROVIDER_ID + "/" + path,
-        new Text(added.getColumnQualifier()).toString());
+    String newQualifier = DfsWalProvider.PROVIDER_ID + "/@host:1234/" + path;
+    assertEquals(newQualifier, new Text(added.getColumnQualifier()).toString());
     assertEquals("-/" + path, new Text(deleted.getColumnQualifier()).toString());
 
-    Key upgradedKey = Key.builder().row("123").family(LogColumnFamily.NAME)
-        .qualifier(DfsWalProvider.PROVIDER_ID + "/" + path).build();
+    Key upgradedKey =
+        Key.builder().row("123").family(LogColumnFamily.NAME).qualifier(newQualifier).build();
     ArrayList<Mutation> retryMutations = new ArrayList<>();
     new Upgrader11to12().processReferences(retryMutations::add,
         List.of(Map.entry(upgradedKey, value)), "accumulo.metadata", List.of());
@@ -305,7 +305,7 @@ public class Upgrader11to12Test extends WithTestNames {
             .qualifier(oldQualifier).build();
         scanData.put(walKey, new Value("wal-value"));
         oldQualifiers.add(oldQualifier);
-        expectedQualifiers.add(DfsWalProvider.PROVIDER_ID + "/" + existingWal);
+        expectedQualifiers.add(DfsWalProvider.PROVIDER_ID + "/@localhost:9997/" + existingWal);
       }
 
       ArrayList<Mutation> mutations = new ArrayList<>();
@@ -947,7 +947,7 @@ public class Upgrader11to12Test extends WithTestNames {
     upgrader.updateRootTabletFileReferences(context);
     var entries = new RootTabletMetadata(new String(persisted.getValue(), UTF_8)).toKeyValues();
     assertEquals(1, entries.size());
-    assertEquals("dfs/" + reference, entries.firstKey().getColumnQualifier().toString());
+    assertEquals("dfs/@host:1234/" + reference, entries.firstKey().getColumnQualifier().toString());
     verify(context, volumes, session, zoo);
   }
 

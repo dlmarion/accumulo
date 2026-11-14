@@ -31,49 +31,48 @@ import org.apache.accumulo.core.spi.wal.WalProvider;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Text;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.net.HostAndPort;
 
 public final class LogEntry {
 
   private static final String LOG_PATH =
-      "%s" + Path.SEPARATOR + Constants.WAL_DIR + Path.SEPARATOR + "%s" + Path.SEPARATOR + "%s";
+      "%s" + Path.SEPARATOR + Constants.WAL_DIR + Path.SEPARATOR + "%s";
+  private static final String ADDRESS_QUALIFIER_PREFIX = "@";
 
   private final Path path;
   private final String providerId;
-  private final HostAndPort tserver;
+  private final @Nullable HostAndPort tserverAddress;
   private final UUID uniqueId;
   private final Text columnQualifier;
 
-  private LogEntry(Path path, String providerId, HostAndPort tserver, UUID uniqueId,
-      Text columnQualifier) {
+  private LogEntry(Path path, String providerId, @Nullable HostAndPort tserverAddress,
+      UUID uniqueId, Text columnQualifier) {
     this.path = path;
     this.providerId = providerId;
-    this.tserver = tserver;
+    this.tserverAddress = tserverAddress;
     this.uniqueId = uniqueId;
     this.columnQualifier = columnQualifier;
   }
 
   public static LogEntry withSwitchedVolume(LogEntry entry, Path newPath) {
-    return new LogEntry(validatePath(newPath), entry.getProviderId(), entry.getTServer(),
-        entry.getUniqueID(), entry.getColumnQualifier());
+    return new LogEntry(validatePath(newPath), entry.getProviderId(), entry.getTServerAddress(),
+        entry.getUniqueID(), entry.columnQualifier);
   }
 
   public static LogEntry forServer(String providerId, String volume, HostAndPort address) {
-    UUID filename = UUID.randomUUID();
-    String addressForFilename = address.toString().replace(':', '+');
-    String filePath = LOG_PATH.formatted(volume, addressForFilename, filename);
-    return fromPath(providerId, filePath);
+    UUID id = UUID.randomUUID();
+    String filePath = LOG_PATH.formatted(volume, id);
+    return fromPath(providerId, filePath, address);
   }
 
   /**
-   * Creates a new LogEntry object after validating the expected format of the path. The path must
-   * be an absolute filesystem URI and contain a tserver (host+port) followed by a UUID as the file
-   * name as the last two components.<br>
-   * For example, file:///some/dir/path/localhost+1234/927ba659-d109-4bce-b0a5-bcbbcb9942a2 is a
-   * valid path.
+   * Creates a new LogEntry object after validating the path. The path must be an absolute
+   * filesystem URI whose final component is a UUID. When possible, the TabletServer address is
+   * inferred from the penultimate component of legacy WAL paths; new references do not need to
+   * contain it.
    *
    * @param providerId provider that owns this WAL
    * @param path path to validate
@@ -81,36 +80,28 @@ public final class LogEntry {
    * @throws IllegalArgumentException if the path is invalid
    */
   public static LogEntry fromPath(String providerId, String path) {
-    return validatedLogEntry(path, providerId, null);
+    return validatedLogEntry(path, providerId, getLegacyTserverAddress(path), null);
   }
 
-  private static LogEntry validatedLogEntry(String path, String providerId, Text columnQualifier) {
+  /**
+   * Creates a LogEntry using an explicitly known TabletServer address.
+   *
+   * @param providerId provider that owns this WAL
+   * @param path fully qualified reference returned by the provider
+   * @param tserverAddress TabletServer address that created this WAL
+   */
+  public static LogEntry fromPath(String providerId, String path, HostAndPort tserverAddress) {
+    return validatedLogEntry(path, providerId, validateTserverAddress(tserverAddress), null);
+  }
+
+  private static LogEntry validatedLogEntry(String path, String providerId,
+      @Nullable HostAndPort tserverAddress, Text columnQualifier) {
     Preconditions.checkArgument(
         providerId != null && providerId.matches(WalProvider.PROVIDER_ID_REGEX),
         "Invalid WAL provider ID: %s", providerId);
-    String[] parts = path.split("/");
-
-    if (parts.length < 2) {
-      throw new IllegalArgumentException(
-          "Invalid path format. The path should end with tserver/UUID.");
-    }
-
-    String tserverPart = parts[parts.length - 2];
-    String uuidPart = parts[parts.length - 1];
-
-    String badTServerMsg =
-        "Invalid tserver in path. Expected: host+port. Found '" + tserverPart + "'";
-    if (tserverPart.contains(":") || !tserverPart.contains("+")) {
-      throw new IllegalArgumentException(badTServerMsg);
-    }
-    HostAndPort tserver;
-    try {
-      tserver = HostAndPort.fromString(tserverPart.replace("+", ":"));
-    } catch (IllegalArgumentException e) {
-      throw new IllegalArgumentException(badTServerMsg);
-    }
-
-    String badUuidMsg = "Expected valid UUID. Found '" + uuidPart + "'";
+    Path logPath = validatePath(new Path(path));
+    String uuidPart = logPath.getName();
+    String badUuidMsg = "Expected valid UUID as the final path component. Found '" + uuidPart + "'";
     UUID uuid;
     try {
       uuid = UUID.fromString(uuidPart);
@@ -120,9 +111,30 @@ public final class LogEntry {
     if (!uuid.toString().equals(uuidPart)) {
       throw new IllegalArgumentException(badUuidMsg);
     }
+    return new LogEntry(logPath, providerId, tserverAddress, uuid, columnQualifier);
+  }
 
-    Path logPath = validatePath(new Path(path));
-    return new LogEntry(logPath, providerId, tserver, uuid, columnQualifier);
+  private static HostAndPort validateTserverAddress(HostAndPort address) {
+    Preconditions.checkArgument(address != null && address.hasPort(),
+        "TabletServer address must include a port");
+    return address;
+  }
+
+  @Nullable
+  private static HostAndPort getLegacyTserverAddress(String path) {
+    Path parent = new Path(path).getParent();
+    if (parent == null) {
+      return null;
+    }
+    String address = parent.getName();
+    if (!address.contains("+")) {
+      return null;
+    }
+    try {
+      return validateTserverAddress(HostAndPort.fromString(address.replace('+', ':')));
+    } catch (IllegalArgumentException e) {
+      return null;
+    }
   }
 
   private static Path validatePath(Path path) {
@@ -147,15 +159,31 @@ public final class LogEntry {
         "The provided metadata entry's column family is %s instead of %s", fam,
         LogColumnFamily.NAME);
     Text qualifier = entry.getKey().getColumnQualifier();
-    String[] parts = qualifier.toString().split("/", 2);
-    Preconditions.checkArgument(parts.length == 2, "Malformed write-ahead log %s", qualifier);
-    return validatedLogEntry(parts[1], parts[0], qualifier);
+    String qualifierString = qualifier.toString();
+    int providerSeparator = qualifierString.indexOf('/');
+    Preconditions.checkArgument(providerSeparator > 0, "Malformed write-ahead log %s", qualifier);
+    String providerId = qualifierString.substring(0, providerSeparator);
+    String rest = qualifierString.substring(providerSeparator + 1);
+    Preconditions.checkArgument(rest.startsWith(ADDRESS_QUALIFIER_PREFIX),
+        "WAL qualifier does not contain a TabletServer address: %s", qualifier);
+    int addressSeparator = rest.indexOf('/', ADDRESS_QUALIFIER_PREFIX.length());
+    Preconditions.checkArgument(addressSeparator > ADDRESS_QUALIFIER_PREFIX.length(),
+        "Malformed WAL TabletServer address in qualifier %s", qualifier);
+    HostAndPort address;
+    try {
+      address = validateTserverAddress(HostAndPort
+          .fromString(rest.substring(ADDRESS_QUALIFIER_PREFIX.length(), addressSeparator)));
+    } catch (IllegalArgumentException e) {
+      throw new IllegalArgumentException(
+          "Malformed WAL TabletServer address in qualifier " + qualifier, e);
+    }
+    String path = rest.substring(addressSeparator + 1);
+    return validatedLogEntry(path, providerId, address, qualifier);
   }
 
-  @NonNull
-  @VisibleForTesting
-  public HostAndPort getTServer() {
-    return tserver;
+  @Nullable
+  public HostAndPort getTServerAddress() {
+    return tserverAddress;
   }
 
   @NonNull
@@ -202,7 +230,9 @@ public final class LogEntry {
   }
 
   private Text newCQ() {
-    return new Text(providerId + "/" + getPath());
+    HostAndPort address = Objects.requireNonNull(tserverAddress,
+        "TabletServer address is required to write a WAL metadata qualifier");
+    return new Text(providerId + "/" + ADDRESS_QUALIFIER_PREFIX + address + "/" + getPath());
   }
 
   /**

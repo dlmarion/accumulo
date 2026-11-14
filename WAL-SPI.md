@@ -50,12 +50,12 @@ For a provider with options, put string-valued options in its map, for example
 [Property.java][property].
 
 `DfsWalProvider` accepts an optional `logCloser` option naming a public no-argument implementation
-of `org.apache.accumulo.server.manager.recovery.LogCloser`. It defaults to
-`org.apache.accumulo.server.manager.recovery.HadoopLogCloser`. For a filesystem that needs no lease
-recovery, configure the existing `NoOpLogCloser`:
+of `org.apache.accumulo.server.log.LogCloser`. It defaults to
+`org.apache.accumulo.server.log.HadoopLogCloser`. For a filesystem that needs no lease recovery,
+configure the existing `NoOpLogCloser`:
 
 ```properties
-instance.wal.providers={"org.apache.accumulo.server.log.DfsWalProvider":{"logCloser":"org.apache.accumulo.server.manager.recovery.NoOpLogCloser"}}
+instance.wal.providers={"org.apache.accumulo.server.log.DfsWalProvider":{"logCloser":"org.apache.accumulo.server.log.NoOpLogCloser"}}
 ```
 
 Closer implementations must support repeated calls and concurrent preparation of different WALs.
@@ -78,19 +78,20 @@ them. Provider IDs and configuration must remain consistent across server proces
 The [11-to-12 upgrader][upgrader] assigns the built-in provider ID `dfs` to pre-SPI filesystem
 WALs without moving or rewriting the WAL files:
 
-- Legacy tablet log qualifiers `-/<reference>` become `dfs/<reference>`: the upgrader adds the new
-  qualifier and deletes the old one. This covers the root tablet metadata stored in ZooKeeper,
-  metadata-tablet references, and user-tablet references. Already converted qualifiers are left
-  alone.
+- Legacy tablet log qualifiers `-/<reference>` become `dfs/@<host:port>/<reference>`: the upgrader
+  assigns the `dfs` provider ID and extracts the creator address from the legacy WAL path. It adds
+  the new qualifier and deletes the old one. This covers root tablet metadata stored in ZooKeeper,
+  metadata-tablet references, and user-tablet references. Already converted qualifiers are
+  validated and left alone.
 - Legacy ZooKeeper WAL marker data `<state>,<reference>` becomes `<state>,dfs,<reference>`.
   Markers already containing a provider ID are retained. The upgrader checks marker format and
   verifies that an updated marker was persisted.
 - Legacy recovery work `source|destination` becomes `sortId|dfs|source|destination`, using the
   recovery node's UUID as `sortId`. Converted work is validated and retained on retries; the `locks`
   node is skipped. Invalid provider IDs, blank paths, mismatched IDs, or failed writes stop the upgrade.  
-- The upgrader checks for remaining legacy `-/` log qualifiers in the metadata tables; it also
-  verifies the root tablet's WAL references. Malformed markers or leftover legacy qualifiers cause
-  the upgrade to fail rather than silently treating them as another provider's logs.
+- The upgrader verifies that root, metadata-tablet, and user-tablet WAL qualifiers all use the new
+  format. Malformed markers or leftover legacy qualifiers cause the upgrade to fail rather than
+  silently treating them as another provider's logs.
 
 Configure `DfsWalProvider` in `instance.wal.providers` during the upgrade and retain it while old
 WAL references or markers exist, even if a different class is selected in `instance.wal.provider`
@@ -111,7 +112,7 @@ recovery behavior.
 
 | Method                              | Use                                                   |
 | ----------------------------------- | ----------------------------------------------------- |
-| `create(serverAddress, UUID)`       | Exclusively create a WAL and return its `Writer`.      |
+| `create(UUID)`                      | Exclusively create a WAL and return its `Writer`.      |
 | `prepareForRecovery(reference)`     | Make an abandoned WAL consistently readable for sorting. |
 | `open(reference)`                   | Read a WAL from byte zero for sorting/recovery.        |
 | `exists(reference)`                 | Check a WAL, including while it may still be written. |
@@ -134,12 +135,12 @@ TabletServer process failure, `SYNC` must provide the synchronization guarantee 
 WAL writes, and `LOG` does not invoke `Writer.sync()`. Closing a writer must be idempotent.
 
 The reference returned by `Writer.getReference()` is persisted and must stay usable by that
-provider's `open()` and `delete()`. It must be a fully qualified Hadoop path in the standard WAL
-layout, with a final `<host+port>/<uuid>` suffix (the address's `:` becomes `+`). The current
-[recovery path conversion][rpath] also expects a `wal` directory immediately before the
-server component; it maps `<volume>/wal/<host+port>/<uuid>` to `<volume>/recovery/<uuid>`. A custom
-provider can use a custom Hadoop filesystem URI, but this path structure and access to the
-corresponding recovery destination are current integration constraints.
+provider's `open()` and `delete()`. It must be a fully qualified Hadoop path ending in the UUID
+passed to `create()`. The built-in provider uses `<volume>/wal/<uuid>`; legacy WALs may still use
+`<volume>/wal/<host+port>/<uuid>`. The [recovery path conversion][rpath] accepts both layouts and
+maps them to `<volume>/recovery/<uuid>`. A custom provider can use a custom Hadoop filesystem URI,
+but the WAL directory and corresponding recovery destination must be accessible through
+`VolumeManager`.
 
 ## Writing and tracking a WAL
 
@@ -152,14 +153,15 @@ corresponding recovery destination are current integration constraints.
    compaction events use the existing WAL serialization. A background sync task batches durability
    requests and calls `Writer.sync(FLUSH)` or `Writer.sync(SYNC)`; after slow syncs it calls
    `getDiagnostics()` and `isHealthy()`.
-3. `LogEntry` associates the provider ID with the path. Tablet metadata stores it as a log-column
-   qualifier of the form `<providerId>/<reference>`. [`WalStateManager`][wal-state] records the WAL
-   state (`OPEN`, `CLOSED`, or `UNREFERENCED`), provider ID, and path in ZooKeeper WAL markers. This
-   lets recovery and GC identify which provider created a given log, independently of the provider
-   currently selected for new writes.
+3. `LogEntry` associates the provider ID, creator address, and path. Tablet metadata stores them
+   as a log-column qualifier of the form `<providerId>/@<host:port>/<reference>`.
+   [`WalStateManager`][wal-state] records the WAL state (`OPEN`, `CLOSED`, or `UNREFERENCED`),
+   provider ID, and path in ZooKeeper WAL markers; the marker's parent node identifies the
+   TabletServer. This lets recovery and GC identify which provider created a given log,
+   independently of the provider currently selected for new writes.
 
 [`DfsWalProvider`][dfs-provider] is the built-in implementation. It chooses an Accumulo volume and
-creates a filesystem-backed WAL under `wal/<host+port>/<uuid>` using `VolumeManager`; its writer
+creates a filesystem-backed WAL under `wal/<uuid>` using `VolumeManager`; its writer
 uses `hflush()` for `FLUSH` and `hsync()` for `SYNC`. It opens and checks files through
 `VolumeManager`, and uses the filesystem trash or recursive deletion for cleanup. Where the
 underlying stream is a replicated HDFS `DFSOutputStream`, its writer records the observed replication
